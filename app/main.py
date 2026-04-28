@@ -41,6 +41,13 @@ def get_remaining_months(soa_date_str):
 
 
 def parse_drugs(drugs_input):
+    """
+    Accepts:
+    - Array of objects: [{"name": "Metformin", "dosage": "500mg"}]
+    - Comma string with dosage: "Eliquis 5mg,Metformin 500mg,Lisinopril 10mg"
+    - Comma string name only: "Eliquis,Metformin,Lisinopril"
+    """
+    import re
     if isinstance(drugs_input, list):
         result = []
         for d in drugs_input:
@@ -50,22 +57,55 @@ def parse_drugs(drugs_input):
                 result.append({"name": d.strip(), "dosage": ""})
         return result
     elif isinstance(drugs_input, str):
-        return [{"name": p.strip(), "dosage": ""} for p in drugs_input.split(",") if p.strip()]
+        result = []
+        for part in drugs_input.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            # Try to split "DrugName 500mg" into name + dosage
+            # Dosage pattern: number + optional decimal + unit (mg, mcg, ml, units, etc.)
+            match = re.search(r"(\d+\.?\d*\s*(?:mg|mcg|ml|units?|iu|g|%))", part, re.IGNORECASE)
+            if match:
+                dosage = match.group(1).strip()
+                name = part[:match.start()].strip()
+                result.append({"name": name, "dosage": dosage})
+            else:
+                result.append({"name": part, "dosage": ""})
+        return result
     return []
 
 
-def lookup_rxcuis(drug_name):
+def lookup_rxcuis(drug_name, dosage=""):
+    """
+    Look up product-level RXCUIs for a drug name + optional dosage.
+    When dosage is provided, searches with full string (e.g. "metformin 500 mg")
+    for dosage-specific pricing. Falls back to name-only if no results.
+    """
     rxcuis = []
-    try:
-        url = f"https://rxnav.nlm.nih.gov/REST/drugs.json?name={requests.utils.quote(drug_name)}"
-        resp = requests.get(url, timeout=8)
-        data = resp.json()
-        for group in data.get("drugGroup", {}).get("conceptGroup", []):
-            if group.get("tty", "") in ["SCD", "SBD", "GPCK", "BPCK"]:
-                for concept in group.get("conceptProperties", []):
-                    rxcuis.append(concept["rxcui"])
-    except Exception:
-        pass
+
+    def fetch_rxcuis(search_str):
+        found = []
+        try:
+            url = f"https://rxnav.nlm.nih.gov/REST/drugs.json?name={requests.utils.quote(search_str)}"
+            resp = requests.get(url, timeout=8)
+            data = resp.json()
+            for group in data.get("drugGroup", {}).get("conceptGroup", []):
+                if group.get("tty", "") in ["SCD", "SBD", "GPCK", "BPCK"]:
+                    for concept in group.get("conceptProperties", []):
+                        found.append(concept["rxcui"])
+        except Exception:
+            pass
+        return found
+
+    # Try name + dosage first for specificity
+    if dosage:
+        rxcuis = fetch_rxcuis(f"{drug_name} {dosage}")
+
+    # Fall back to name only
+    if not rxcuis:
+        rxcuis = fetch_rxcuis(drug_name)
+
+    # Last resort: ingredient RXCUI
     if not rxcuis:
         try:
             url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={requests.utils.quote(drug_name)}&search=2"
@@ -74,6 +114,7 @@ def lookup_rxcuis(drug_name):
             rxcuis = list(data.get("idGroup", {}).get("rxnormId", []))
         except Exception:
             pass
+
     return rxcuis
 
 
@@ -176,7 +217,7 @@ def compute_drug_costs(drugs_input, zip_code, soa_date):
     results = []
     for drug in drugs:
         drug_name = drug["name"]
-        rxcuis = lookup_rxcuis(drug_name)
+        rxcuis = lookup_rxcuis(drug_name, drug.get("dosage", ""))
         drug_result = {"drug_name": drug_name, "dosage": drug["dosage"], "plans": {}}
         if not rxcuis:
             drug_result["error"] = "Not found"
@@ -250,21 +291,21 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=16, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=20)
-    h2        = S("h2",  fontSize=7,  textColor=colors.HexColor("#64748b"), leading=10)
-    sec_title = S("sec", fontSize=9,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
-    col_hdr   = S("ch",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    row_lbl   = S("rl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
-    cell      = S("c",   fontSize=7,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
+    h1        = S("h1",  fontSize=13, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=20)
+    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=10)
+    sec_title = S("sec", fontSize=8,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
+    col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+    cell      = S("c",   fontSize=6,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
     badge_txt = S("bt",  fontSize=6,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=8)
     gen_txt   = S("gt",  fontSize=6,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=8)
     footer    = S("ft",  fontSize=6,  textColor=colors.HexColor("#94a3b8"), alignment=TA_CENTER, leading=8)
-    drug_lbl  = S("dl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+    drug_lbl  = S("dl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
     nc_style  = S("nc",  fontSize=6,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=8)
-    green_val = S("gv",  fontSize=7,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    bold_cell = S("bc",  fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    month_lbl = S("ml",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
-    ph_hdr    = S("ph",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    green_val = S("gv",  fontSize=6,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    bold_cell = S("bc",  fontSize=6,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    month_lbl = S("ml",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+    ph_hdr    = S("ph",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
 
     def tier_badge(tier):
         configs = {
@@ -295,8 +336,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                            rightMargin=12*mm, leftMargin=12*mm,
-                            topMargin=10*mm, bottomMargin=10*mm)
+                            rightMargin=8*mm, leftMargin=8*mm,
+                            topMargin=6*mm, bottomMargin=6*mm)
     elements = []
 
     # ══════════════════════════════════════════════════════════════════
@@ -316,7 +357,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=4*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
@@ -366,8 +407,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
@@ -390,17 +431,17 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     # ══════════════════════════════════════════════════════════════════
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.5*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 5*mm))
+        elements.append(Spacer(1, 0.5*mm))
 
     # ══════════════════════════════════════════════════════════════════
     # SECTION 2 — DRUG FORMULARY TIERS
     # ══════════════════════════════════════════════════════════════════
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.5*mm))
 
         carriers = list(ma_plans.keys())
         label_w = 50*mm
@@ -430,8 +471,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -451,110 +492,95 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 5*mm))
+        elements.append(Spacer(1, 0.5*mm))
 
     # ══════════════════════════════════════════════════════════════════
-    # SECTION 3 — MONTHLY DRUG COST BREAKDOWN (recommended MA plan)
+    # SECTION 3 — MONTHLY DRUG COST BREAKDOWN (all MA plans)
     # ══════════════════════════════════════════════════════════════════
     if ma_plans and drug_detail and months_remaining:
-        best_plan_data = ma_plans.get(ma_best, {})
+        carriers = list(ma_plans.keys())
+        elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN", sec_title))
+        elements.append(Spacer(1, 0.5*mm))
         elements.append(Paragraph(
-            f"SECTION 3 — ESTIMATED MONTHLY DRUG COSTS — {ma_best.upper()} (RECOMMENDED PLAN)",
-            sec_title))
-        elements.append(Spacer(1, 1*mm))
-        elements.append(Paragraph(
-            "Preferred Retail = in-network preferred pharmacy (e.g. Walgreens, Cub).  "
-            "Non-Preferred = out-of-network or non-preferred pharmacy.  "
-            "Mail Order = 90-day supply by mail.",
+            "Monthly totals shown at preferred retail pharmacy. Costs may vary by deductible phase.",
             S("note", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)))
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.5*mm))
 
-        # Columns: Month | drug1 pref | drug1 nonpref | drug1 mail | drug2 ...
-        # Simplified: Month | Preferred Retail | Non-Preferred | Mail Order (totals across all drugs)
-        drug_names = [d.get("drug_name","") for d in drug_detail]
-
-        # Build header
-        ph_cols = ["Preferred Retail", "Non-Preferred", "Mail Order"]
         month_col_w = 22*mm
-        drug_col_w = (274*mm - month_col_w) / (len(drug_names) * 2 + 1)
+        col_w = (274*mm - month_col_w) / len(carriers)
 
-        # Simple approach: show monthly cost per drug at preferred retail + total
-        num_drugs = len(drug_names)
-        total_col_w = 25*mm
-        drug_col_w = (274*mm - month_col_w - total_col_w) / num_drugs
-
-        hdr_row = [Paragraph("Month", ph_hdr)]
-        for d in drug_names:
-            hdr_row.append(Paragraph(d, ph_hdr))
-        hdr_row.append(Paragraph("Monthly Total", ph_hdr))
-
+        # Header row
+        hdr_row = [Paragraph("Month", ph_hdr)] + [
+            Paragraph(c + (" ★" if c == ma_best else ""), ph_hdr) for c in carriers
+        ]
         rows = [hdr_row]
 
+        # Monthly rows
         for month in months_remaining:
             row = [Paragraph(month, month_lbl)]
-            monthly_total = 0
-            for drug in drug_detail:
-                plan_costs = drug.get("plans", {}).get(ma_best, {})
-                month_costs = plan_costs.get("monthly_costs", [])
-                cost = next((m["cost"] for m in month_costs if m["month"] == month), None)
-                if cost is not None:
-                    monthly_total += cost
-                    row.append(Paragraph(f"${cost:.2f}", cell))
-                else:
-                    row.append(Paragraph("—", cell))
-            row.append(Paragraph(f"${monthly_total:.2f}",
-                                  S("mt", fontSize=7, textColor=TEAL, fontName="Helvetica-Bold",
-                                    alignment=TA_CENTER, leading=9)))
+            for c in carriers:
+                monthly_total = 0
+                for drug in drug_detail:
+                    plan_costs = drug.get("plans", {}).get(c, {})
+                    month_costs = plan_costs.get("monthly_costs", [])
+                    cost = next((m["cost"] for m in month_costs if m["month"] == month), 0)
+                    monthly_total += cost or 0
+                row.append(Paragraph(f"${monthly_total:.2f}", cell))
             rows.append(row)
 
         # Annual total row
         annual_row = [Paragraph("Annual Total", S("at", fontSize=7, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9))]
-        grand_total = 0
-        for drug in drug_detail:
-            plan_costs = drug.get("plans", {}).get(ma_best, {})
-            annual = plan_costs.get("annual_total", 0) or 0
-            grand_total += annual
-            annual_row.append(Paragraph(f"${annual:.2f}",
-                                         S("av", fontSize=7, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
-                                           alignment=TA_CENTER, leading=9)))
-        annual_row.append(Paragraph(f"${grand_total:.2f}",
-                                     S("gv2", fontSize=7, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
-                                       alignment=TA_CENTER, leading=9)))
+        for c in carriers:
+            grand_total = sum(
+                (drug.get("plans", {}).get(c, {}).get("annual_total") or 0)
+                for drug in drug_detail
+            )
+            annual_row.append(Paragraph(f"${grand_total:.2f}",
+                S("av", fontSize=7, textColor=CHARCOAL, fontName="Helvetica-Bold",
+                  alignment=TA_CENTER, leading=9)))
         rows.append(annual_row)
 
-        col_widths = [month_col_w] + [drug_col_w] * num_drugs + [total_col_w]
+        col_widths = [month_col_w] + [col_w] * len(carriers)
         t = Table(rows, colWidths=col_widths)
-        t.setStyle(TableStyle([
+        ts = [
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
-            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
+            ("BACKGROUND", (0,-1), (-1,-1), LIGHT_GRAY),
             ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
-            ("BACKGROUND", (-1,0), (-1,-1), TEAL_LIGHT),
-        ]))
+        ]
+        # Highlight recommended plan column
+        if ma_best in carriers:
+            ci = carriers.index(ma_best) + 1
+            ts += [
+                ("BACKGROUND", (ci,0), (ci,0), TEAL),
+                ("LINEAFTER",  (ci,0), (ci,-1), 1.5, TEAL),
+                ("LINEBEFORE", (ci,0), (ci,-1), 1.5, TEAL),
+            ]
+        t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 5*mm))
+        elements.append(Spacer(1, 0.5*mm))
 
     # ══════════════════════════════════════════════════════════════════
     # SECTION 4 — PART D STANDALONE
     # ══════════════════════════════════════════════════════════════════
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.5*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 5*mm))
+        elements.append(Spacer(1, 0.5*mm))
 
     # ══════════════════════════════════════════════════════════════════
     # FOOTER
     # ══════════════════════════════════════════════════════════════════
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY,
-                                spaceBefore=2*mm, spaceAfter=2*mm))
+                                spaceBefore=1*mm, spaceAfter=1*mm))
     elements.append(Paragraph(
         "Internal Use Only — Not for Distribution  |  Generated for agent reference only  |  "
         "Data sourced from CMS Medicare Formulary Files Q1 2026  |  "
