@@ -1,7 +1,8 @@
 """
-Medicare Drug Cost API v4
-Single endpoint architecture:
-- POST /process-soa: accepts PDF binary, calls Claude, looks up drug costs, returns PDF report
+Medicare Drug Cost API v5
+Endpoints:
+- POST /process-soa: accepts flat fields from Make, normalizes drugs via Claude,
+  looks up drug costs, returns PDF report
 - POST /drug-costs: JSON endpoint for testing
 - GET /health: health check
 """
@@ -44,78 +45,74 @@ def get_remaining_months(soa_date_str):
     return list(range(soa.month, 13))
 
 
-def extract_soa_with_claude(pdf_bytes):
-    """Send PDF to Claude API and extract SOA fields as JSON."""
-    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
+def normalize_drugs(drugs):
+    """
+    Uses Claude API to normalize drug names before RxNav lookup.
+    Handles misspellings, generic/brand confusion, nicknames like 'water pill'.
+    Returns list of {"original": str, "normalized": str, "dosage": str, "confidence": float, "flag": str}
+    """
+    if not drugs:
+        return []
 
-    prompt = """CRITICAL: Return only a valid JSON object. No explanation, no markdown, no code blocks. Start your response with { and end with }.
+    drug_list = "\n".join([
+        f"- {d.get('name', '')} {d.get('dosage', '')}".strip()
+        for d in drugs if d.get('name', '').strip()
+    ])
 
-You are processing a Medicare Scope of Appointment form for an insurance agency. Extract all fields exactly as they appear. Return null for any field that is missing or illegible.
+    if not drug_list:
+        return []
 
-{
-  "client_first_name": "",
-  "client_last_name": "",
-  "date_of_birth": "MM/DD/YYYY",
-  "address": "",
-  "city": "",
-  "state": "",
-  "zip_code": "",
-  "phone_number": "",
-  "soa_date": "MM/DD/YYYY",
-  "appointment_date": "MM/DD/YYYY",
-  "coverage_types": [],
-  "drugs": [
-    {
-      "name": "",
-      "dosage": "",
-      "frequency": ""
-    }
-  ],
-  "signature_present": true,
-  "confidence": 0.0,
-  "flags": []
-}
+    prompt = f"""You are a Medicare drug formulary expert. I have a list of medications from a handwritten Medicare SOA form. Some may be misspelled, use nicknames, generic names, or brand names.
 
-For coverage_types extract all items listed or checked such as Medicare Advantage, Part D Drug Coverage, Medicare Supplement, etc.
-For flags note anything unusual such as: Signature missing, Date missing or illegible, Any section appears incomplete, Handwriting unclear on specific fields."""
+For each drug, return the most commonly used name in Medicare Part D formularies.
 
-    response = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 2000,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "document",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "application/pdf",
-                                "data": pdf_b64,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": prompt,
-                        },
-                    ],
-                }
-            ],
-        },
-        timeout=30,
-    )
+Drug list:
+{drug_list}
 
-    response.raise_for_status()
-    data = response.json()
-    text = data["content"][0]["text"]
-    return json.loads(text)
+CRITICAL: Return only a valid JSON array. No explanation, no markdown, no code blocks. Start with [ and end with ].
+
+Return this exact format:
+[
+  {{
+    "original": "exact name as written",
+    "normalized": "correct formulary name",
+    "dosage": "dosage if provided or empty string",
+    "confidence": 0.95,
+    "flag": "any concern or empty string"
+  }}
+]
+
+Rules:
+- Fix misspellings (Xarelts -> Xarelto)
+- Map nicknames (water pill -> Furosemide, blood thinner -> use context or flag)
+- Map generics to their most common formulary name
+- Keep dosage separate from name
+- If completely unrecognizable, set confidence below 0.5 and explain in flag
+- Never guess wildly — if unsure set confidence low and flag it"""
+
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["content"][0]["text"].strip()
+        return json.loads(text)
+    except Exception:
+        # If normalization fails, return originals unchanged
+        return [{"original": d.get("name", ""), "normalized": d.get("name", ""),
+                 "dosage": d.get("dosage", ""), "confidence": 1.0, "flag": ""} for d in drugs]
 
 
 def lookup_rxcuis(drug_name, dosage=""):
@@ -225,7 +222,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
 def compute_drug_costs(drugs, zip_code, soa_date):
     """
     drugs: list of {"name": str, "dosage": str}
-    Returns full plan comparison dict.
+    Normalizes drug names via Claude first, then looks up costs.
     """
     months_remaining = get_remaining_months(soa_date)
     month_names = [datetime(2026, m, 1).strftime("%B") for m in months_remaining]
@@ -243,18 +240,51 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                 "premium": row["premium"], "deductible": row["deductible"],
             }
 
+    # Normalize drug names via Claude
+    normalized = normalize_drugs(drugs)
+
     results = []
-    for drug in drugs:
-        drug_name = drug.get("name", "").strip()
-        dosage = drug.get("dosage", "").strip()
+    warnings = []
+
+    for item in normalized:
+        drug_name = item.get("normalized", "").strip()
+        original_name = item.get("original", "").strip()
+        dosage = item.get("dosage", "").strip()
+        flag = item.get("flag", "")
+        norm_confidence = item.get("confidence", 1.0)
+
         if not drug_name:
             continue
+
+        # Collect warnings for low confidence normalizations
+        if norm_confidence < 0.7 or flag:
+            warnings.append({
+                "drug": original_name,
+                "normalized_to": drug_name,
+                "flag": flag or f"Low normalization confidence ({norm_confidence:.0%})"
+            })
+
         rxcuis = lookup_rxcuis(drug_name, dosage)
-        drug_result = {"drug_name": drug_name, "dosage": dosage, "plans": {}}
+
+        drug_result = {
+            "drug_name": drug_name,
+            "original_name": original_name,
+            "dosage": dosage,
+            "flag": flag,
+            "normalization_confidence": norm_confidence,
+            "plans": {}
+        }
+
         if not rxcuis:
-            drug_result["error"] = "Not found"
+            drug_result["error"] = "Drug not found in formulary"
+            warnings.append({
+                "drug": original_name,
+                "normalized_to": drug_name,
+                "flag": "Not found in RxNav — verify drug name"
+            })
             results.append(drug_result)
             continue
+
         for carrier, plan in plan_details.items():
             drug_result["plans"][carrier] = get_drug_cost_for_plan(
                 conn, plan["formulary_id"], plan["contract_id"],
@@ -285,11 +315,13 @@ def compute_drug_costs(drugs, zip_code, soa_date):
     return {
         "zip_code": zip_code, "soa_date": soa_date,
         "months_remaining": month_names,
-        "plan_summaries": plan_summaries, "drug_detail": results,
+        "plan_summaries": plan_summaries,
+        "drug_detail": results,
+        "warnings": warnings,
     }
 
 
-def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining):
+def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None):
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
@@ -313,6 +345,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     AMBER_TEXT = colors.HexColor("#854d0e")
     RED_BG     = colors.HexColor("#fee2e2")
     RED_TEXT   = colors.HexColor("#991b1b")
+    WARN_BG    = colors.HexColor("#fff7ed")
+    WARN_TEXT  = colors.HexColor("#9a3412")
 
     def S(name, **kw):
         defaults = dict(fontName="Helvetica", fontSize=8, textColor=DARK_GRAY, leading=10)
@@ -334,6 +368,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     bold_cell = S("bc",  fontSize=6,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     month_lbl = S("ml",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
     ph_hdr    = S("ph",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+    warn_s    = S("ws",  fontSize=6,  textColor=WARN_TEXT, leading=8)
 
     def tier_badge(tier):
         configs = {
@@ -368,11 +403,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     elements = []
 
     # Header
+    conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
     header_left = [[Paragraph(client_name, h1)],
                    [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)]]
     header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
-                    [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)]]
+                    [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
+                    [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))]]
     tl = Table([[Table(header_left, colWidths=[200*mm]),
                  Table(header_right, colWidths=[80*mm])]],
                colWidths=[200*mm, 80*mm])
@@ -383,6 +420,32 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     ]))
     elements.append(tl)
     elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
+
+    # Warnings banner
+    if warnings:
+        warn_rows = [[Paragraph("⚠ Drug Verification Required", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
+                      Paragraph("Please verify the following before client meeting:", warn_s)]]
+        for w in warnings:
+            drug = w.get("drug", "")
+            normalized = w.get("normalized_to", "")
+            flag = w.get("flag", "")
+            note = f"{drug}"
+            if normalized and normalized.lower() != drug.lower():
+                note += f" → interpreted as {normalized}"
+            if flag:
+                note += f" — {flag}"
+            warn_rows.append([Paragraph("", warn_s), Paragraph(note, warn_s)])
+        wt = Table(warn_rows, colWidths=[50*mm, 230*mm])
+        wt.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), WARN_BG),
+            ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#fed7aa")),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("LEFTPADDING", (0,0), (-1,-1), 4),
+            ("SPAN", (0,0), (0,0)),
+        ]))
+        elements.append(wt)
+        elements.append(Spacer(1, 1*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
@@ -462,7 +525,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         for drug in drug_detail:
             name = drug.get("drug_name","")
             dosage = drug.get("dosage","")
+            original = drug.get("original_name", "")
             label = f"{name} {dosage}".strip() if dosage else name
+            # Show original name if different from normalized
+            if original and original.lower() != name.lower():
+                label += f"\n(written: {original})"
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
                 pd = drug.get("plans",{}).get(c,{})
@@ -576,18 +643,8 @@ def health():
 @app.route("/process-soa", methods=["POST"])
 def process_soa():
     """
-    Accepts flat fields from Make (already extracted by Claude module).
-    Looks up drug costs and returns PDF binary.
-
-    Expected JSON body:
-    {
-        "client_name": "John Smith",
-        "dob": "06/15/1958",
-        "zip_code": "55441",
-        "soa_date": "05/03/2026",
-        "drug_names": "Eliquis,Metformin,Lisinopril,Atorvastatin",
-        "drug_dosages": "5mg,500mg,10mg,20mg"
-    }
+    Accepts flat fields from Make. Normalizes drugs via Claude,
+    looks up costs, returns PDF binary.
     """
     data = request.get_json(force=True, silent=True) or {}
 
@@ -597,8 +654,12 @@ def process_soa():
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
     drug_names = data.get("drug_names", "")
     drug_dosages = data.get("drug_dosages", "")
+    confidence = data.get("confidence")
+    try:
+        confidence = float(confidence) if confidence else None
+    except Exception:
+        confidence = None
 
-    # Build drugs list from separate name + dosage comma strings
     names = [n.strip() for n in drug_names.split(",") if n.strip()]
     dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
     drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
@@ -617,7 +678,9 @@ def process_soa():
             client_name, dob, zip_code, soa_date,
             result["plan_summaries"],
             result["drug_detail"],
-            result["months_remaining"]
+            result["months_remaining"],
+            confidence=confidence,
+            warnings=result.get("warnings", [])
         )
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
@@ -632,7 +695,7 @@ def process_soa():
 
 @app.route("/drug-costs", methods=["POST"])
 def drug_costs():
-    """JSON endpoint for testing drug cost lookup."""
+    """JSON endpoint for testing."""
     data = request.get_json(force=True, silent=True) or {}
     drugs_input = data.get("drugs", "")
     if isinstance(drugs_input, str):
