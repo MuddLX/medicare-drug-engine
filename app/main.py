@@ -40,14 +40,13 @@ def get_remaining_months(soa_date_str):
     return list(range(soa.month, 13))
 
 
-def parse_drugs(drugs_input):
+def parse_drugs(drugs_input, dosages_input=""):
     """
     Accepts:
     - Array of objects: [{"name": "Metformin", "dosage": "500mg"}]
-    - Comma string with dosage: "Eliquis 5mg,Metformin 500mg,Lisinopril 10mg"
-    - Comma string name only: "Eliquis,Metformin,Lisinopril"
+    - Comma string of names: "Eliquis,Metformin,Lisinopril"
+    - Plus optional separate dosages string: "5mg,500mg,10mg"
     """
-    import re
     if isinstance(drugs_input, list):
         result = []
         for d in drugs_input:
@@ -57,20 +56,12 @@ def parse_drugs(drugs_input):
                 result.append({"name": d.strip(), "dosage": ""})
         return result
     elif isinstance(drugs_input, str):
+        names = [n.strip() for n in drugs_input.split(",") if n.strip()]
+        dosages = [d.strip() for d in dosages_input.split(",")] if dosages_input else []
         result = []
-        for part in drugs_input.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            # Try to split "DrugName 500mg" into name + dosage
-            # Dosage pattern: number + optional decimal + unit (mg, mcg, ml, units, etc.)
-            match = re.search(r"(\d+\.?\d*\s*(?:mg|mcg|ml|units?|iu|g|%))", part, re.IGNORECASE)
-            if match:
-                dosage = match.group(1).strip()
-                name = part[:match.start()].strip()
-                result.append({"name": name, "dosage": dosage})
-            else:
-                result.append({"name": part, "dosage": ""})
+        for i, name in enumerate(names):
+            dosage = dosages[i] if i < len(dosages) else ""
+            result.append({"name": name, "dosage": dosage})
         return result
     return []
 
@@ -192,9 +183,9 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     }
 
 
-def compute_drug_costs(drugs_input, zip_code, soa_date):
+def compute_drug_costs(drugs_input, zip_code, soa_date, dosages_input=""):
     """Core logic — shared by /drug-costs and /html-to-pdf"""
-    drugs = parse_drugs(drugs_input)
+    drugs = parse_drugs(drugs_input, dosages_input)
     if not drugs:
         return None, "No drugs provided"
 
@@ -625,7 +616,8 @@ def html_to_pdf():
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
     drugs_input = data.get("drugs", "")
 
-    result, err = compute_drug_costs(drugs_input, zip_code, soa_date)
+    dosages_input = data.get("dosages", "")
+    result, err = compute_drug_costs(drugs_input, zip_code, soa_date, dosages_input)
     if err:
         return jsonify({"error": err}), 400
 
