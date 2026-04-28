@@ -614,9 +614,23 @@ def html_to_pdf():
     dob = data.get("dob", "")
     zip_code = data.get("zip_code", "55441")
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
-    drugs_input = data.get("drugs", "")
 
+    # Accept raw_json from Claude module output and parse drugs from it
+    import json as _json
+    raw_json = data.get("raw_json", "")
+    drugs_input = data.get("drugs", "")
     dosages_input = data.get("dosages", "")
+
+    if raw_json:
+        try:
+            parsed = _json.loads(raw_json)
+            drugs_list = parsed.get("drugs", [])
+            if drugs_list:
+                drugs_input = ",".join(d.get("name", "") for d in drugs_list)
+                dosages_input = ",".join(d.get("dosage", "") or "" for d in drugs_list)
+        except Exception:
+            pass
+
     result, err = compute_drug_costs(drugs_input, zip_code, soa_date, dosages_input)
     if err:
         return jsonify({"error": err}), 400
