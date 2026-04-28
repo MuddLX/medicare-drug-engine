@@ -576,45 +576,42 @@ def health():
 @app.route("/process-soa", methods=["POST"])
 def process_soa():
     """
-    Main endpoint. Accepts PDF binary directly.
-    Calls Claude to extract SOA data, looks up drug costs, returns PDF report.
-    Make sends: raw PDF bytes in request body, client name in header optional.
+    Accepts flat fields from Make (already extracted by Claude module).
+    Looks up drug costs and returns PDF binary.
+
+    Expected JSON body:
+    {
+        "client_name": "John Smith",
+        "dob": "06/15/1958",
+        "zip_code": "55441",
+        "soa_date": "05/03/2026",
+        "drug_names": "Eliquis,Metformin,Lisinopril,Atorvastatin",
+        "drug_dosages": "5mg,500mg,10mg,20mg"
+    }
     """
-    pdf_bytes = request.get_data()
-    if not pdf_bytes:
-        return jsonify({"error": "No PDF data received"}), 400
+    data = request.get_json(force=True, silent=True) or {}
 
-    # Extract SOA data with Claude
-    try:
-        soa_data = extract_soa_with_claude(pdf_bytes)
-    except Exception as e:
-        return jsonify({"error": f"Claude extraction failed: {str(e)}"}), 500
+    client_name = data.get("client_name", "Client")
+    dob = data.get("dob", "")
+    zip_code = data.get("zip_code", "55441")
+    soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
+    drug_names = data.get("drug_names", "")
+    drug_dosages = data.get("drug_dosages", "")
 
-    client_first = soa_data.get("client_first_name", "")
-    client_last = soa_data.get("client_last_name", "")
-    client_name = f"{client_first} {client_last}".strip() or "Client"
-    dob = soa_data.get("date_of_birth", "")
-    zip_code = soa_data.get("zip_code", "55441")
-    soa_date = soa_data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
-    drugs = soa_data.get("drugs", [])
-    confidence = soa_data.get("confidence", 0)
+    # Build drugs list from separate name + dosage comma strings
+    names = [n.strip() for n in drug_names.split(",") if n.strip()]
+    dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
+    drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
+             for i in range(len(names))]
 
-    # Return SOA JSON as header for Make to use for logging
-    # Low confidence — return JSON with flag instead of PDF
-    if confidence < 0.75:
-        return jsonify({
-            "status": "low_confidence",
-            "confidence": confidence,
-            "soa_data": soa_data
-        }), 200
+    if not drugs:
+        return jsonify({"error": "No drugs provided"}), 400
 
-    # Compute drug costs
     try:
         result = compute_drug_costs(drugs, zip_code, soa_date)
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
-    # Build PDF
     try:
         pdf_bytes_out = build_pdf(
             client_name, dob, zip_code, soa_date,
@@ -629,12 +626,7 @@ def process_soa():
     return Response(
         pdf_bytes_out,
         mimetype="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "X-Client-Name": client_name,
-            "X-SOA-Date": soa_date,
-            "X-Confidence": str(confidence),
-        }
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 
