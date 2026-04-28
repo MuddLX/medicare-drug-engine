@@ -14,7 +14,6 @@ Body: {
 from flask import Flask, request, jsonify
 import sqlite3
 import os
-import re
 from datetime import datetime, date
 import requests
 
@@ -41,43 +40,65 @@ def get_db():
 
 
 def get_remaining_months(soa_date_str):
-    """Calculate months remaining in the plan year from SOA date."""
     try:
         soa = datetime.strptime(soa_date_str, "%m/%d/%Y").date()
     except Exception:
         soa = date.today()
-    current_month = soa.month
-    remaining = list(range(current_month, 13))  # e.g. [5,6,7,8,9,10,11,12]
-    return remaining
+    return list(range(soa.month, 13))
 
 
-def lookup_rxcui(drug_name):
-    """Look up RXCUI from RxNav API (free NIH service) for a drug name."""
+def lookup_rxcuis(drug_name):
+    """
+    Returns a list of product-level RXCUIs (SCD/SBD) for a drug name.
+    These match what the CMS formulary file stores.
+    Falls back to ingredient RXCUI if nothing found.
+    """
+    rxcuis = []
     try:
-        url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={requests.utils.quote(drug_name)}&search=2"
-        resp = requests.get(url, timeout=5)
+        url = f"https://rxnav.nlm.nih.gov/REST/drugs.json?name={requests.utils.quote(drug_name)}"
+        resp = requests.get(url, timeout=8)
         data = resp.json()
-        ids = data.get("idGroup", {}).get("rxnormId", [])
-        if ids:
-            return ids[0]
+        groups = data.get("drugGroup", {}).get("conceptGroup", [])
+        for group in groups:
+            tty = group.get("tty", "")
+            if tty in ["SCD", "SBD", "GPCK", "BPCK"]:
+                for concept in group.get("conceptProperties", []):
+                    rxcuis.append(concept["rxcui"])
     except Exception:
         pass
-    return None
+
+    # Fallback: ingredient-level RXCUI
+    if not rxcuis:
+        try:
+            url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={requests.utils.quote(drug_name)}&search=2"
+            resp = requests.get(url, timeout=5)
+            data = resp.json()
+            ids = data.get("idGroup", {}).get("rxnormId", [])
+            rxcuis = list(ids)
+        except Exception:
+            pass
+
+    return rxcuis
 
 
-def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcui, deductible, months_remaining):
+def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining):
     """
     Calculate monthly drug costs for a specific drug on a specific plan.
-    Returns dict with tier, monthly_costs list, and annual_total.
+    rxcuis is now a LIST — we check all of them against the formulary.
     """
     plan_id_padded = plan_id.zfill(3)
 
-    # Step 1: Find tier for this drug on this formulary
-    tier_row = conn.execute("""
-        SELECT tier, ndc FROM formulary
-        WHERE formulary_id = ? AND rxcui = ?
-        ORDER BY tier ASC LIMIT 1
-    """, (formulary_id, rxcui)).fetchone()
+    # Step 1: Find tier — check all rxcuis, take lowest tier found
+    tier_row = None
+    for rxcui in rxcuis:
+        row = conn.execute("""
+            SELECT tier, ndc FROM formulary
+            WHERE formulary_id = ? AND rxcui = ?
+            ORDER BY tier ASC LIMIT 1
+        """, (formulary_id, rxcui)).fetchone()
+        if row:
+            if tier_row is None or row["tier"] < tier_row["tier"]:
+                tier_row = row
 
     if not tier_row:
         return {"tier": None, "covered": False, "monthly_costs": [], "annual_total": None}
@@ -96,7 +117,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcui, dedu
     if not cost_row:
         return {"tier": tier, "covered": True, "monthly_costs": [], "annual_total": None}
 
-    cost_type = cost_row["cost_type_pref"]   # 0=no charge, 1=copay, 2=coinsurance
+    cost_type = cost_row["cost_type_pref"]
     cost_amt = cost_row["cost_amt_pref"]
     ded_applies = cost_row["ded_applies"]
 
@@ -117,31 +138,25 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcui, dedu
         month_name = datetime(2026, month_num, 1).strftime("%B")
 
         if ded_applies == "N" or deductible_remaining <= 0:
-            # Post-deductible: pay copay/coinsurance
             if cost_type == 0:
                 monthly_cost = 0.0
             elif cost_type == 1:
-                monthly_cost = cost_amt
+                monthly_cost = float(cost_amt)
             elif cost_type == 2:
-                # Coinsurance — need unit cost
-                monthly_cost = round((unit_cost or 0) * cost_amt, 2)
+                monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
             else:
-                monthly_cost = cost_amt
+                monthly_cost = float(cost_amt)
         else:
-            # In deductible phase: patient pays unit cost (or negotiated price)
             if unit_cost:
                 drug_cost_this_month = unit_cost
                 if drug_cost_this_month >= deductible_remaining:
-                    # Deductible met partway through month
-                    # Simplified: charge deductible remainder + copay for rest
-                    monthly_cost = round(deductible_remaining + (cost_amt if cost_type == 1 else 0), 2)
+                    monthly_cost = round(deductible_remaining + (float(cost_amt) if cost_type == 1 else 0), 2)
                     deductible_remaining = 0
                 else:
                     monthly_cost = round(drug_cost_this_month, 2)
                     deductible_remaining -= drug_cost_this_month
             else:
-                # No pricing data — use copay as fallback
-                monthly_cost = cost_amt
+                monthly_cost = float(cost_amt)
                 deductible_remaining = 0
 
         monthly_costs.append({"month": month_name, "cost": monthly_cost})
@@ -154,7 +169,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcui, dedu
         "ndc": ndc,
         "monthly_costs": monthly_costs,
         "annual_total": annual_total,
-        "steady_state_copay": cost_amt if cost_type == 1 else None,
+        "steady_state_copay": float(cost_amt) if cost_type == 1 else None,
     }
 
 
@@ -185,8 +200,7 @@ def drug_costs():
     plan_details = {}
     for plan in PLANS:
         row = conn.execute("""
-            SELECT * FROM plans
-            WHERE contract_id = ? AND plan_id = ?
+            SELECT * FROM plans WHERE contract_id = ? AND plan_id = ?
         """, (plan["contract_id"], plan["plan_id"].zfill(3))).fetchone()
         if row:
             plan_details[plan["carrier"]] = {
@@ -206,17 +220,16 @@ def drug_costs():
         drug_name = drug.get("name", "").strip()
         dosage = drug.get("dosage", "").strip()
 
-        # Look up RXCUI
-        rxcui = lookup_rxcui(drug_name)
+        rxcuis = lookup_rxcuis(drug_name)
 
         drug_result = {
             "drug_name": drug_name,
             "dosage": dosage,
-            "rxcui": rxcui,
+            "rxcui_count": len(rxcuis),
             "plans": {}
         }
 
-        if not rxcui:
+        if not rxcuis:
             drug_result["error"] = "Drug not found in RxNav"
             results.append(drug_result)
             continue
@@ -227,7 +240,7 @@ def drug_costs():
                 plan["formulary_id"],
                 plan["contract_id"],
                 plan["plan_id"],
-                rxcui,
+                rxcuis,
                 plan["deductible"],
                 months_remaining
             )
@@ -235,7 +248,7 @@ def drug_costs():
 
         results.append(drug_result)
 
-    # Build plan summary (premium + total drug cost per plan)
+    # Build plan summary
     plan_summaries = {}
     for carrier, plan in plan_details.items():
         total_drug_cost = 0
