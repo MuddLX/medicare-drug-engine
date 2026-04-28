@@ -285,3 +285,27 @@ def drug_costs():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
+
+@app.route("/html-to-pdf", methods=["POST"])
+def html_to_pdf():
+    """Convert HTML to PDF using WeasyPrint and return binary PDF."""
+    from weasyprint import HTML
+    import io
+
+    data = request.get_json(force=True, silent=True)
+    if not data or "html" not in data:
+        return jsonify({"error": "No html provided"}), 400
+
+    html_content = data["html"]
+
+    try:
+        pdf_bytes = HTML(string=html_content).write_pdf()
+        from flask import Response
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=drug_comparison.pdf"}
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
