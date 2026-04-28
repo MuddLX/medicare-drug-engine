@@ -399,25 +399,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=8*mm, leftMargin=8*mm,
-                            topMargin=3*mm, bottomMargin=6*mm)
+                            topMargin=6*mm, bottomMargin=6*mm)
     elements = []
 
-<<<<<<< HEAD
-    # Header — compact single-row layout
-    conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
-    # Left: name on one line, details on the next
-    header_left = [
-        [Paragraph(client_name, h1)],
-        [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)],
-    ]
-    # Right: all meta info stacked tightly
-    right_lines = [
-        [Paragraph("INTERNAL USE ONLY", badge_txt)],
-        [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}  ·  Data: CMS Medicare Formulary Q1 2026", gen_txt)],
-    ]
-    if conf_text:
-        right_lines.append([Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))])
-=======
     # Header
     conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
     header_left = [[Paragraph(client_name, h1)],
@@ -426,45 +410,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
                     [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
                     [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))]]
->>>>>>> 627bd4249cd438e51633f7b1d22fc747ab3ab071
     tl = Table([[Table(header_left, colWidths=[200*mm]),
-                 Table(right_lines, colWidths=[80*mm])]],
+                 Table(header_right, colWidths=[80*mm])]],
                colWidths=[200*mm, 80*mm])
     tl.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING", (0,0), (-1,-1), 0),
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceBefore=1*mm, spaceAfter=1.5*mm))
-
-    # Warnings banner
-    if warnings:
-        warn_rows = [[Paragraph("⚠ Drug Verification Required", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
-                      Paragraph("Please verify the following before client meeting:", warn_s)]]
-        for w in warnings:
-            drug = w.get("drug", "")
-            normalized = w.get("normalized_to", "")
-            flag = w.get("flag", "")
-            note = f"{drug}"
-            if normalized and normalized.lower() != drug.lower():
-                note += f" → interpreted as {normalized}"
-            if flag:
-                note += f" — {flag}"
-            warn_rows.append([Paragraph("", warn_s), Paragraph(note, warn_s)])
-        wt = Table(warn_rows, colWidths=[50*mm, 230*mm])
-        wt.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), WARN_BG),
-            ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#fed7aa")),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
-            ("LEFTPADDING", (0,0), (-1,-1), 4),
-            ("SPAN", (0,0), (0,0)),
-        ]))
-        elements.append(wt)
-        elements.append(Spacer(1, 1*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
 
     # Warnings banner
     if warnings:
@@ -572,15 +527,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             dosage = drug.get("dosage","")
             original = drug.get("original_name", "")
             label = f"{name} {dosage}".strip() if dosage else name
-<<<<<<< HEAD
-            # Only show "(written: ...)" when the original name meaningfully differs
-            if original and original.strip().lower() != name.strip().lower():
-                label += f'<br/><font size="5" color="#64748b">(written: {original})</font>'
-=======
             # Show original name if different from normalized
             if original and original.lower() != name.lower():
                 label += f"\n(written: {original})"
->>>>>>> 627bd4249cd438e51633f7b1d22fc747ab3ab071
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
                 pd = drug.get("plans",{}).get(c,{})
