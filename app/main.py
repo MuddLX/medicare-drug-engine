@@ -13,6 +13,7 @@ import os
 import json
 import base64
 import requests
+import re
 from datetime import datetime, date
 
 app = Flask(__name__)
@@ -353,8 +354,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=13, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=16)
-    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=8)
+    h1        = S("h1",  fontSize=11, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=13)
+    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=7)
     sec_title = S("sec", fontSize=8,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=10)
     col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
@@ -399,27 +400,35 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=8*mm, leftMargin=8*mm,
-                            topMargin=6*mm, bottomMargin=6*mm)
+                            topMargin=2*mm, bottomMargin=6*mm)
     elements = []
 
-    # Header
+    # Header — compact single-row layout
     conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
-    header_left = [[Paragraph(client_name, h1)],
-                   [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)]]
-    header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
-                    [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
-                    [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
-                    [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))]]
+    # Left: name on one line, details on the next
+    header_left = [
+        [Paragraph(client_name, h1)],
+        [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)],
+    ]
+    # Right: all meta info stacked tightly
+    right_lines = [
+        [Paragraph("INTERNAL USE ONLY", badge_txt)],
+        [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}  ·  Data: CMS Medicare Formulary Q1 2026", gen_txt)],
+    ]
+    if conf_text:
+        right_lines.append([Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))])
     tl = Table([[Table(header_left, colWidths=[200*mm]),
-                 Table(header_right, colWidths=[80*mm])]],
+                 Table(right_lines, colWidths=[80*mm])]],
                colWidths=[200*mm, 80*mm])
     tl.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING", (0,0), (-1,-1), 0),
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ("TOPPADDING", (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceBefore=0.5*mm, spaceAfter=1*mm))
 
     # Warnings banner
     if warnings:
@@ -527,9 +536,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             dosage = drug.get("dosage","")
             original = drug.get("original_name", "")
             label = f"{name} {dosage}".strip() if dosage else name
-            # Show original name if different from normalized
-            if original and original.lower() != name.lower():
-                label += f"\n(written: {original})"
+            # Only show "(written: ...)" when the drug name genuinely differs
+            # Strip dosage from original before comparing (original includes dosage, name does not)
+            orig_name_only = re.sub(r'[\s,]+[\d\.]+\s*(mg|mcg|ml|units?\/ml|units?|g|iu|%|meq).*$', '', original, flags=re.IGNORECASE).strip()
+            if original and orig_name_only.strip().lower() != name.strip().lower():
+                label += f'<br/><font size="5" color="#64748b">(written: {original})</font>'
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
                 pd = drug.get("plans",{}).get(c,{})
