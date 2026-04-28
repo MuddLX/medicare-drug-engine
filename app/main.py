@@ -216,148 +216,326 @@ def compute_drug_costs(drugs_input, zip_code, soa_date):
     }, None
 
 
+
 def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining):
-    """Build PDF using ReportLab from structured drug cost data."""
     from reportlab.lib.pagesizes import landscape, A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.platypus import KeepTogether
     import io
 
-    NAVY = colors.HexColor("#1a3a5c")
-    GREEN = colors.HexColor("#92D050")
-    LIGHT_BLUE = colors.HexColor("#e8f0fe")
+    # ── Color palette ──────────────────────────────────────────────────
+    NAVY       = colors.HexColor("#1c1917")  # Warm charcoal
+    TEAL       = colors.HexColor("#0d9488")  # Teal accent
+    LIGHT_GRAY = colors.HexColor("#f8fafc")
+    MID_GRAY   = colors.HexColor("#e2e8f0")
+    DARK_GRAY  = colors.HexColor("#292524")
+    WHITE      = colors.white
+    GREEN_BG   = colors.HexColor("#dcfce7")
+    GREEN_TEXT = colors.HexColor("#166534")
+    BLUE_BG    = colors.HexColor("#dbeafe")
+    BLUE_TEXT  = colors.HexColor("#1e40af")
+    AMBER_BG   = colors.HexColor("#fef9c3")
+    AMBER_TEXT = colors.HexColor("#854d0e")
+    RED_BG     = colors.HexColor("#fee2e2")
+    RED_TEXT   = colors.HexColor("#991b1b")
+    TEAL_LIGHT = colors.HexColor("#e0f2fe")
+    GOLD       = colors.HexColor("#f59e0b")
 
-    title_style = ParagraphStyle("title", fontSize=11, textColor=colors.white, alignment=TA_CENTER, fontName="Helvetica-Bold")
-    header_style = ParagraphStyle("hdr", fontSize=7, textColor=colors.white, alignment=TA_CENTER, fontName="Helvetica-Bold")
-    cell_style = ParagraphStyle("cell", fontSize=7, alignment=TA_CENTER, fontName="Helvetica")
-    label_style = ParagraphStyle("lbl", fontSize=7, alignment=TA_LEFT, fontName="Helvetica-Bold")
-    footer_style = ParagraphStyle("ftr", fontSize=6, textColor=colors.grey, alignment=TA_CENTER)
-    nc_style = ParagraphStyle("nc", fontSize=7, textColor=colors.red, alignment=TA_CENTER)
+    # ── Styles ─────────────────────────────────────────────────────────
+    def S(name, **kw):
+        defaults = dict(fontName="Helvetica", fontSize=8, textColor=DARK_GRAY, leading=10)
+        defaults.update(kw)
+        return ParagraphStyle(name, **defaults)
+
+    h1        = S("h1", fontSize=16, textColor=NAVY, fontName="Helvetica-Bold", leading=20)
+    h2        = S("h2", fontSize=7,  textColor=colors.HexColor("#64748b"), leading=10)
+    sec_title = S("sec", fontSize=9, textColor=NAVY, fontName="Helvetica-Bold", leading=12)
+    col_hdr   = S("ch",  fontSize=7, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    row_lbl   = S("rl",  fontSize=7, textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+    cell      = S("c",   fontSize=7, textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
+    cell_sm   = S("csm", fontSize=6, textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)
+    badge_txt = S("bt",  fontSize=6, textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=8)
+    gen_txt   = S("gt",  fontSize=6, textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=8)
+    footer    = S("ft",  fontSize=6, textColor=colors.HexColor("#94a3b8"), alignment=TA_CENTER, leading=8)
+    drug_lbl  = S("dl",  fontSize=7, textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+    nc_style  = S("nc",  fontSize=6, textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=8)
+    green_val = S("gv",  fontSize=7, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    bold_cell = S("bc",  fontSize=7, textColor=NAVY, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+
+    def tier_badge(tier):
+        """Return a styled Paragraph for a tier badge."""
+        if tier == 1:
+            return Paragraph(f'<font color="#166534">● Tier 1</font>', S("t1", fontSize=6, fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=GREEN_TEXT, leading=8))
+        elif tier == 2:
+            return Paragraph(f'<font color="#1e40af">● Tier 2</font>', S("t2", fontSize=6, fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=BLUE_TEXT, leading=8))
+        elif tier == 3:
+            return Paragraph(f'<font color="#854d0e">● Tier 3</font>', S("t3", fontSize=6, fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=AMBER_TEXT, leading=8))
+        elif tier == 4:
+            return Paragraph(f'<font color="#991b1b">● Tier 4</font>', S("t4", fontSize=6, fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=RED_TEXT, leading=8))
+        else:
+            return Paragraph(f"Tier {tier}", cell_sm)
+
+    def tier_bg(tier):
+        if tier == 1: return GREEN_BG
+        if tier == 2: return BLUE_BG
+        if tier == 3: return AMBER_BG
+        if tier == 4: return RED_BG
+        return WHITE
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                            rightMargin=8*mm, leftMargin=8*mm,
-                            topMargin=8*mm, bottomMargin=8*mm)
+                            rightMargin=12*mm, leftMargin=12*mm,
+                            topMargin=10*mm, bottomMargin=10*mm)
     elements = []
 
-    # Header banner
-    header_data = [[
-        Paragraph(f"Medicare Drug Comparison — {client_name}", title_style),
-        Paragraph(f"DOB: {dob}  |  ZIP: {zip_code}  |  SOA Date: {soa_date}  |  Generated: {datetime.today().strftime('%m/%d/%Y')}", header_style),
-        Paragraph("⚠ INTERNAL USE ONLY", ParagraphStyle("badge", fontSize=8, textColor=colors.HexColor("#FFD700"), alignment=TA_CENTER, fontName="Helvetica-Bold"))
-    ]]
-    ht = Table(header_data, colWidths=[110*mm, 130*mm, 50*mm])
-    ht.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), NAVY),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING", (0,0), (-1,-1), 5),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+    # ══════════════════════════════════════════════════════════════════
+    # HEADER
+    # ══════════════════════════════════════════════════════════════════
+    header_left = [
+        [Paragraph(client_name, h1)],
+        [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)],
+    ]
+    header_right = [
+        [Paragraph("INTERNAL USE ONLY", badge_txt)],
+        [Paragraph(f"Generated: {__import__('datetime').datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
+        [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
+    ]
+    tl = Table([[Table(header_left, colWidths=[200*mm]),
+                 Table(header_right, colWidths=[80*mm])]],
+               colWidths=[200*mm, 80*mm])
+    tl.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("LEFTPADDING", (0,0), (-1,-1), 0),
+        ("RIGHTPADDING", (0,0), (-1,-1), 0),
     ]))
-    elements.append(ht)
-    elements.append(Spacer(1, 3*mm))
+    elements.append(tl)
+    elements.append(HRFlowable(width="100%", thickness=2, color=NAVY, spaceAfter=4*mm))
 
-    def build_plan_table(plans_dict, plan_type_label):
-        carriers = list(plans_dict.keys())
-        if not carriers:
-            return None
-        lowest = min(carriers, key=lambda c: plans_dict[c].get("total_drug_plus_premium", 9999))
+    ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
+    pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
 
-        label_w = 48*mm
-        col_w = (290*mm - label_w) / len(carriers)
+    def best_carrier(plans):
+        return min(plans.keys(), key=lambda c: plans[c].get("total_drug_plus_premium", 9999))
+
+    # ══════════════════════════════════════════════════════════════════
+    # SECTION 1 — PLAN OVERVIEW
+    # ══════════════════════════════════════════════════════════════════
+    if ma_plans:
+        elements.append(Paragraph("PLAN OVERVIEW — MEDICARE ADVANTAGE", sec_title))
+        elements.append(Spacer(1, 2*mm))
+
+        carriers = list(ma_plans.keys())
+        best = best_carrier(ma_plans)
+        label_w = 44*mm
+        col_w = (274*mm - label_w) / len(carriers)
+
+        def carrier_header(c):
+            plan = ma_plans[c]
+            name = plan["plan_name"].replace("(PPO)","").replace("(HMO-POS)","").replace("(HMO)","").strip()
+            # Shorten long names
+            if len(name) > 28:
+                name = name[:26] + "…"
+            star = " ★" if c == best else ""
+            return Paragraph(f"{c}{star}<br/><font size='5'>{name}</font>", col_hdr)
 
         rows = []
-        # Header row
-        rows.append([Paragraph(plan_type_label, header_style)] +
-                    [Paragraph(c, header_style) for c in carriers])
-        # Plan name
-        rows.append([Paragraph("Plan Name", label_style)] +
-                    [Paragraph(plans_dict[c]["plan_name"].replace("(PPO)","").replace("(HMO-POS)","").replace("(PDP)","").strip(), cell_style) for c in carriers])
-        # Premium
-        rows.append([Paragraph("Monthly Premium", label_style)] +
-                    [Paragraph(f"${plans_dict[c]['premium_monthly']:.2f}", cell_style) for c in carriers])
-        # Deductible
-        rows.append([Paragraph("Drug Deductible", label_style)] +
-                    [Paragraph(f"${plans_dict[c]['deductible']:.0f}", cell_style) for c in carriers])
-
-        # Each drug
-        for drug in drug_detail:
-            drug_name = drug.get("drug_name", "")
-            row = [Paragraph(drug_name, label_style)]
+        # Column headers
+        rows.append([Paragraph("", col_hdr)] + [carrier_header(c) for c in carriers])
+        # Data rows
+        data_rows = [
+            ("Monthly Premium",    lambda c: f"${ma_plans[c]['premium_monthly']:.2f}"),
+            ("Drug Deductible",    lambda c: f"${ma_plans[c]['deductible']:.0f}"),
+            ("Est. Annual Drug Cost", lambda c: f"${ma_plans[c]['total_drug_cost']:.2f}"),
+            ("Est. Total (Drug + Premium)", lambda c: f"${ma_plans[c]['total_drug_plus_premium']:.2f}"),
+        ]
+        for i, (label, fn) in enumerate(data_rows):
+            is_total = label.startswith("Est. Total")
+            row = [Paragraph(label, row_lbl if not is_total else S("rlb", fontSize=7, textColor=NAVY, fontName="Helvetica-Bold", leading=9))]
             for c in carriers:
-                pd = drug.get("plans", {}).get(c, {})
-                if not pd.get("covered", False):
-                    row.append(Paragraph("Not Covered", nc_style))
-                else:
-                    tier = pd.get("tier", "")
-                    copay = pd.get("steady_state_copay")
-                    if copay is not None:
-                        row.append(Paragraph(f"${copay:.2f} (T{tier})", cell_style))
+                val = fn(c)
+                if is_total:
+                    if c == best:
+                        row.append(Paragraph(val, green_val))
                     else:
-                        annual = pd.get("annual_total")
-                        n = len(months_remaining) or 1
-                        row.append(Paragraph(f"~${annual/n:.2f} (T{tier})", cell_style) if annual else Paragraph(f"T{tier}", cell_style))
+                        row.append(Paragraph(val, bold_cell))
+                else:
+                    row.append(Paragraph(val, cell))
             rows.append(row)
-
-        # Total drug cost
-        rows.append([Paragraph("Total Drug Cost (yr)", label_style)] +
-                    [Paragraph(f"${plans_dict[c]['total_drug_cost']:.2f}", cell_style) for c in carriers])
-        # Total drug + premium — highlight lowest
-        total_row = [Paragraph("Total Drug + Premium ★", ParagraphStyle("tb", fontSize=7, fontName="Helvetica-Bold"))]
-        for c in carriers:
-            s = ParagraphStyle("gbold", fontSize=7, alignment=TA_CENTER, fontName="Helvetica-Bold") if c == lowest else cell_style
-            total_row.append(Paragraph(f"${plans_dict[c]['total_drug_plus_premium']:.2f}", s))
-        rows.append(total_row)
 
         col_widths = [label_w] + [col_w] * len(carriers)
         t = Table(rows, colWidths=col_widths)
 
         ts = [
+            # Header row
             ("BACKGROUND", (0,0), (-1,0), NAVY),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("GRID", (0,0), (-1,-1), 0.3, colors.grey),
+            ("TEXTCOLOR", (0,0), (-1,0), WHITE),
+            ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
-            ("ROWBACKGROUNDS", (0,1), (-1,-2), [colors.white, LIGHT_BLUE]),
-            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#e8f5e9")),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("LEFTPADDING", (0,0), (-1,-1), 4),
+            ("RIGHTPADDING", (0,0), (-1,-1), 4),
+            # Alternating rows
+            ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
+            # Total row
+            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
+            ("LINEABOVE", (0,-1), (-1,-1), 1, NAVY),
         ]
-        if lowest in carriers:
-            ci = carriers.index(lowest) + 1
-            ts.append(("BACKGROUND", (ci, -1), (ci, -1), GREEN))
+        # Highlight best column
+        if best in carriers:
+            ci = carriers.index(best) + 1
+            ts += [
+                ("BACKGROUND", (ci,0), (ci,0), TEAL),
+                ("LINEAFTER", (ci,0), (ci,-1), 1.5, TEAL),
+                ("LINEBEFORE", (ci,0), (ci,-1), 1.5, TEAL),
+                ("BACKGROUND", (ci,-1), (ci,-1), GREEN_BG),
+            ]
         t.setStyle(TableStyle(ts))
-        return t
+        elements.append(t)
+        elements.append(Spacer(1, 5*mm))
 
-    ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
-    pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
-
-    if ma_plans:
-        elements.append(Paragraph("Section 1 — Medicare Advantage Plans",
-                                   ParagraphStyle("sec", fontSize=9, fontName="Helvetica-Bold", textColor=NAVY)))
+    # ══════════════════════════════════════════════════════════════════
+    # SECTION 2 — DRUG FORMULARY TIERS
+    # ══════════════════════════════════════════════════════════════════
+    if ma_plans and drug_detail:
+        elements.append(Paragraph("DRUG FORMULARY TIERS", sec_title))
         elements.append(Spacer(1, 2*mm))
-        t = build_plan_table(ma_plans, "Plan Feature")
-        if t:
-            elements.append(t)
-        elements.append(Spacer(1, 4*mm))
 
+        carriers = list(ma_plans.keys())
+        best = best_carrier(ma_plans)
+        label_w = 44*mm
+        col_w = (274*mm - label_w) / len(carriers)
+
+        rows = []
+        rows.append([Paragraph("Medication", S("mh", fontSize=7, textColor=WHITE, fontName="Helvetica-Bold", leading=9))] +
+                    [Paragraph(c, col_hdr) for c in carriers])
+
+        for drug in drug_detail:
+            drug_name = drug.get("drug_name", "")
+            dosage = drug.get("dosage", "")
+            label = f"{drug_name}" + (f" {dosage}" if dosage else "")
+            row = [Paragraph(label, drug_lbl)]
+            for c in carriers:
+                pd = drug.get("plans", {}).get(c, {})
+                if not pd.get("covered", False):
+                    row.append(Paragraph("Not Covered", nc_style))
+                else:
+                    tier = pd.get("tier")
+                    if tier:
+                        row.append(tier_badge(tier))
+                    else:
+                        row.append(Paragraph("—", cell))
+            rows.append(row)
+
+        col_widths = [label_w] + [col_w] * len(carriers)
+        t = Table(rows, colWidths=col_widths)
+
+        # Build per-cell tier backgrounds
+        ts = [
+            ("BACKGROUND", (0,0), (-1,0), NAVY),
+            ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("LEFTPADDING", (0,0), (-1,-1), 4),
+            ("RIGHTPADDING", (0,0), (-1,-1), 4),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
+        ]
+        # Color tier cells
+        for ri, drug in enumerate(drug_detail, start=1):
+            for ci, c in enumerate(carriers, start=1):
+                pd = drug.get("plans", {}).get(c, {})
+                tier = pd.get("tier")
+                if tier and pd.get("covered"):
+                    ts.append(("BACKGROUND", (ci, ri), (ci, ri), tier_bg(tier)))
+        # Highlight best column header
+        if best in carriers:
+            ci = carriers.index(best) + 1
+            ts += [
+                ("BACKGROUND", (ci,0), (ci,0), TEAL),
+                ("LINEAFTER", (ci,0), (ci,-1), 1.5, TEAL),
+                ("LINEBEFORE", (ci,0), (ci,-1), 1.5, TEAL),
+            ]
+        t.setStyle(TableStyle(ts))
+        elements.append(t)
+        elements.append(Spacer(1, 5*mm))
+
+    # ══════════════════════════════════════════════════════════════════
+    # SECTION 3 — PART D PLANS
+    # ══════════════════════════════════════════════════════════════════
     if pd_plans:
-        elements.append(Paragraph("Section 2 — Part D Standalone Plans",
-                                   ParagraphStyle("sec2", fontSize=9, fontName="Helvetica-Bold", textColor=NAVY)))
+        elements.append(Paragraph("PART D STANDALONE PLANS", sec_title))
         elements.append(Spacer(1, 2*mm))
-        t = build_plan_table(pd_plans, "Plan Feature")
-        if t:
-            elements.append(t)
-        elements.append(Spacer(1, 4*mm))
 
+        carriers = list(pd_plans.keys())
+        best_pd = best_carrier(pd_plans)
+        label_w = 44*mm
+        col_w = (274*mm - label_w) / len(carriers)
+
+        rows = []
+        rows.append([Paragraph("", col_hdr)] + [
+            Paragraph(c + (" ★" if c == best_pd else ""), col_hdr) for c in carriers
+        ])
+        for label, fn in [
+            ("Monthly Premium",       lambda c: f"${pd_plans[c]['premium_monthly']:.2f}"),
+            ("Drug Deductible",       lambda c: f"${pd_plans[c]['deductible']:.0f}"),
+            ("Est. Annual Drug Cost", lambda c: f"${pd_plans[c]['total_drug_cost']:.2f}"),
+            ("Est. Total (Drug + Premium)", lambda c: f"${pd_plans[c]['total_drug_plus_premium']:.2f}"),
+        ]:
+            is_total = label.startswith("Est. Total")
+            row = [Paragraph(label, row_lbl if not is_total else S("rlb2", fontSize=7, textColor=NAVY, fontName="Helvetica-Bold", leading=9))]
+            for c in carriers:
+                val = fn(c)
+                if is_total and c == best_pd:
+                    row.append(Paragraph(val, green_val))
+                else:
+                    row.append(Paragraph(val, cell))
+            rows.append(row)
+
+        col_widths = [label_w] + [col_w] * len(carriers)
+        t = Table(rows, colWidths=col_widths)
+        ts = [
+            ("BACKGROUND", (0,0), (-1,0), NAVY),
+            ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("LEFTPADDING", (0,0), (-1,-1), 4),
+            ("RIGHTPADDING", (0,0), (-1,-1), 4),
+            ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
+            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
+            ("LINEABOVE", (0,-1), (-1,-1), 1, NAVY),
+        ]
+        if best_pd in carriers:
+            ci = carriers.index(best_pd) + 1
+            ts += [
+                ("BACKGROUND", (ci,0), (ci,0), TEAL),
+                ("LINEAFTER", (ci,0), (ci,-1), 1.5, TEAL),
+                ("LINEBEFORE", (ci,0), (ci,-1), 1.5, TEAL),
+                ("BACKGROUND", (ci,-1), (ci,-1), GREEN_BG),
+            ]
+        t.setStyle(TableStyle(ts))
+        elements.append(t)
+        elements.append(Spacer(1, 5*mm))
+
+    # ══════════════════════════════════════════════════════════════════
+    # FOOTER
+    # ══════════════════════════════════════════════════════════════════
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=2*mm, spaceAfter=2*mm))
     elements.append(Paragraph(
-        "Internal Use Only — Not for Distribution | Generated for agent reference only | Data sourced from CMS Medicare formulary files Q1 2026",
-        footer_style))
+        "Internal Use Only — Not for Distribution  |  Generated for agent reference only  |  "
+        "Data sourced from CMS Medicare Formulary Files Q1 2026  |  "
+        "Verify current pricing before presenting to client",
+        footer))
 
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
+
 
 
 @app.route("/health", methods=["GET"])
