@@ -289,23 +289,241 @@ if __name__ == "__main__":
 
 @app.route("/html-to-pdf", methods=["POST"])
 def html_to_pdf():
-    """Convert HTML to PDF using WeasyPrint and return binary PDF."""
-    from weasyprint import HTML
+    """
+    Convert HTML report data to PDF using ReportLab.
+    Accepts the full drug cost JSON and builds a structured PDF directly.
+    """
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
     import io
+    import json
 
     data = request.get_json(force=True, silent=True)
-    if not data or "html" not in data:
-        return jsonify({"error": "No html provided"}), 400
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
 
-    html_content = data["html"]
+    # Accept either raw drug cost JSON or html field
+    # We rebuild the PDF from structured data for best results
+    client_name = data.get("client_name", "Client")
+    dob = data.get("dob", "")
+    zip_code = data.get("zip_code", "")
+    soa_date = data.get("soa_date", "")
+    plan_summaries = data.get("plan_summaries", {})
+    drug_detail = data.get("drug_detail", [])
+    months_remaining = data.get("months_remaining", [])
 
-    try:
-        pdf_bytes = HTML(string=html_content).write_pdf()
-        from flask import Response
-        return Response(
-            pdf_bytes,
-            mimetype="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=drug_comparison.pdf"}
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=10*mm,
+        leftMargin=10*mm,
+        topMargin=10*mm,
+        bottomMargin=10*mm
+    )
+
+    styles = getSampleStyleSheet()
+    NAVY = colors.HexColor("#1a3a5c")
+    GREEN = colors.HexColor("#92D050")
+    LIGHT_BLUE = colors.HexColor("#e8f0fe")
+    WHITE = colors.white
+
+    title_style = ParagraphStyle("title", fontSize=14, textColor=WHITE, alignment=TA_CENTER, fontName="Helvetica-Bold")
+    header_style = ParagraphStyle("header", fontSize=8, textColor=WHITE, alignment=TA_CENTER, fontName="Helvetica-Bold")
+    cell_style = ParagraphStyle("cell", fontSize=7, alignment=TA_CENTER, fontName="Helvetica")
+    label_style = ParagraphStyle("label", fontSize=7, alignment=TA_LEFT, fontName="Helvetica-Bold")
+    footer_style = ParagraphStyle("footer", fontSize=6, textColor=colors.grey, alignment=TA_CENTER)
+
+    elements = []
+
+    # Header
+    header_data = [[
+        Paragraph(f"Medicare Drug Comparison Report", title_style),
+        Paragraph(f"Client: {client_name} | DOB: {dob} | ZIP: {zip_code} | SOA: {soa_date}", header_style),
+        Paragraph("INTERNAL USE ONLY", ParagraphStyle("badge", fontSize=8, textColor=colors.red, alignment=TA_CENTER, fontName="Helvetica-Bold"))
+    ]]
+    header_table = Table(header_data, colWidths=[100*mm, 130*mm, 60*mm])
+    header_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), NAVY),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0,0), (-1,-1), [NAVY]),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 4*mm))
+
+    # Section 1: MA Plans
+    ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
+    pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
+
+    if ma_plans:
+        elements.append(Paragraph("Medicare Advantage Plan Comparison", ParagraphStyle("sec", fontSize=9, fontName="Helvetica-Bold", textColor=NAVY)))
+        elements.append(Spacer(1, 2*mm))
+
+        carriers = list(ma_plans.keys())
+        # Find lowest total for green highlight
+        lowest_carrier = min(carriers, key=lambda c: ma_plans[c].get("total_drug_plus_premium", 9999))
+
+        col_width = 40*mm
+        label_width = 50*mm
+
+        # Build header row
+        header_row = [Paragraph("Plan Feature", header_style)] + [Paragraph(c, header_style) for c in carriers]
+
+        rows = [header_row]
+
+        # Plan name row
+        rows.append([Paragraph("Plan Name", label_style)] + [
+            Paragraph(ma_plans[c]["plan_name"].replace("(PPO)", "").replace("(HMO-POS)", "").strip(), cell_style)
+            for c in carriers
+        ])
+
+        # Premium
+        rows.append([Paragraph("Monthly Premium", label_style)] + [
+            Paragraph(f"${ma_plans[c]['premium_monthly']:.2f}", cell_style) for c in carriers
+        ])
+
+        # Deductible
+        rows.append([Paragraph("Drug Deductible", label_style)] + [
+            Paragraph(f"${ma_plans[c]['deductible']:.0f}", cell_style) for c in carriers
+        ])
+
+        # Each drug
+        for drug in drug_detail:
+            drug_name = drug.get("drug_name", "")
+            row = [Paragraph(f"{drug_name}", label_style)]
+            for c in carriers:
+                plan_data = drug.get("plans", {}).get(c, {})
+                if not plan_data.get("covered", False):
+                    row.append(Paragraph("Not Covered", ParagraphStyle("nc", fontSize=7, textColor=colors.red, alignment=TA_CENTER)))
+                else:
+                    tier = plan_data.get("tier", "")
+                    copay = plan_data.get("steady_state_copay")
+                    if copay is not None:
+                        row.append(Paragraph(f"${copay:.2f} (T{tier})", cell_style))
+                    else:
+                        annual = plan_data.get("annual_total")
+                        if annual is not None and len(months_remaining) > 0:
+                            monthly = annual / len(months_remaining)
+                            row.append(Paragraph(f"~${monthly:.2f} (T{tier})", cell_style))
+                        else:
+                            row.append(Paragraph(f"T{tier}", cell_style))
+            rows.append(row)
+
+        # Total drug cost
+        rows.append([Paragraph("Total Drug Cost (yr)", label_style)] + [
+            Paragraph(f"${ma_plans[c]['total_drug_cost']:.2f}", cell_style) for c in carriers
+        ])
+
+        # Total drug + premium
+        total_row = [Paragraph("Total Drug + Premium", ParagraphStyle("bold_label", fontSize=7, fontName="Helvetica-Bold"))]
+        for c in carriers:
+            style = ParagraphStyle("green_cell", fontSize=7, alignment=TA_CENTER, fontName="Helvetica-Bold") if c == lowest_carrier else cell_style
+            total_row.append(Paragraph(f"${ma_plans[c]['total_drug_plus_premium']:.2f}", style))
+        rows.append(total_row)
+
+        col_widths = [label_width] + [col_width] * len(carriers)
+        ma_table = Table(rows, colWidths=col_widths)
+
+        # Build style
+        ts = [
+            ("BACKGROUND", (0,0), (-1,0), NAVY),
+            ("TEXTCOLOR", (0,0), (-1,0), WHITE),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("BACKGROUND", (0,1), (-1,1), LIGHT_BLUE),
+            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#e8f5e9")),
+        ]
+        # Highlight lowest column
+        if lowest_carrier in carriers:
+            col_idx = carriers.index(lowest_carrier) + 1
+            ts.append(("BACKGROUND", (col_idx, -1), (col_idx, -1), GREEN))
+
+        ma_table.setStyle(TableStyle(ts))
+        elements.append(ma_table)
+        elements.append(Spacer(1, 4*mm))
+
+    # Section 2: Part D Plans
+    if pd_plans:
+        elements.append(Paragraph("Part D Standalone Plans", ParagraphStyle("sec", fontSize=9, fontName="Helvetica-Bold", textColor=NAVY)))
+        elements.append(Spacer(1, 2*mm))
+
+        carriers = list(pd_plans.keys())
+        lowest_pd = min(carriers, key=lambda c: pd_plans[c].get("total_drug_plus_premium", 9999))
+
+        header_row = [Paragraph("Plan Feature", header_style)] + [Paragraph(c, header_style) for c in carriers]
+        rows = [header_row]
+
+        rows.append([Paragraph("Plan Name", label_style)] + [
+            Paragraph(pd_plans[c]["plan_name"], cell_style) for c in carriers
+        ])
+        rows.append([Paragraph("Monthly Premium", label_style)] + [
+            Paragraph(f"${pd_plans[c]['premium_monthly']:.2f}", cell_style) for c in carriers
+        ])
+        rows.append([Paragraph("Drug Deductible", label_style)] + [
+            Paragraph(f"${pd_plans[c]['deductible']:.0f}", cell_style) for c in carriers
+        ])
+
+        for drug in drug_detail:
+            drug_name = drug.get("drug_name", "")
+            row = [Paragraph(f"{drug_name}", label_style)]
+            for c in carriers:
+                plan_data = drug.get("plans", {}).get(c, {})
+                if not plan_data.get("covered", False):
+                    row.append(Paragraph("Not Covered", ParagraphStyle("nc2", fontSize=7, textColor=colors.red, alignment=TA_CENTER)))
+                else:
+                    tier = plan_data.get("tier", "")
+                    copay = plan_data.get("steady_state_copay")
+                    if copay is not None:
+                        row.append(Paragraph(f"${copay:.2f} (T{tier})", cell_style))
+                    else:
+                        annual = plan_data.get("annual_total")
+                        if annual and len(months_remaining) > 0:
+                            row.append(Paragraph(f"~${annual/len(months_remaining):.2f} (T{tier})", cell_style))
+                        else:
+                            row.append(Paragraph(f"T{tier}", cell_style))
+            rows.append(row)
+
+        rows.append([Paragraph("Total Drug + Premium", label_style)] + [
+            Paragraph(f"${pd_plans[c]['total_drug_plus_premium']:.2f}", cell_style) for c in carriers
+        ])
+
+        col_widths = [80*mm] + [80*mm] * len(carriers)
+        pd_table = Table(rows, colWidths=col_widths)
+        ts = [
+            ("BACKGROUND", (0,0), (-1,0), NAVY),
+            ("TEXTCOLOR", (0,0), (-1,0), WHITE),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ]
+        if lowest_pd in carriers:
+            col_idx = carriers.index(lowest_pd) + 1
+            ts.append(("BACKGROUND", (col_idx, -1), (col_idx, -1), GREEN))
+        pd_table.setStyle(TableStyle(ts))
+        elements.append(pd_table)
+        elements.append(Spacer(1, 4*mm))
+
+    # Footer
+    elements.append(Paragraph(
+        "Internal Use Only — Not for Distribution | Generated for agent reference only | Data sourced from CMS Medicare formulary files",
+        footer_style
+    ))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    from flask import Response
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=drug_comparison.pdf"}
+    )
