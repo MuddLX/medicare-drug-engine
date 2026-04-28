@@ -1,14 +1,8 @@
 """
-Medicare Drug Cost API
-Receives drug names + zip code from Make.com
-Returns cost comparison across 7 MN plans (5 MA + 2 Part D)
-
-Endpoint: POST /drug-costs
-Body: {
-    "drugs": [{"name": "Metformin", "dosage": "500mg"}, ...],
-    "zip_code": "55441",
-    "soa_date": "05/03/2026"
-}
+Medicare Drug Cost API v2
+Accepts drugs as either:
+- Array of objects: [{"name": "Metformin", "dosage": "500mg"}]
+- Simple string: "Metformin,Lisinopril,Eliquis"
 """
 
 from flask import Flask, request, jsonify
@@ -21,7 +15,6 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
 
-# MN plans config — update each AEP season
 PLANS = [
     {"carrier": "HealthPartners", "contract_id": "H4882", "plan_id": "009", "type": "MA"},
     {"carrier": "Blue Cross",     "contract_id": "H5959", "plan_id": "009", "type": "MA"},
@@ -47,12 +40,36 @@ def get_remaining_months(soa_date_str):
     return list(range(soa.month, 13))
 
 
+def parse_drugs(drugs_input):
+    """
+    Accepts multiple formats:
+    1. Array of objects: [{"name": "Metformin", "dosage": "500mg"}]
+    2. Simple string: "Metformin,Lisinopril,Eliquis"
+    3. String with dosages: "Metformin 500mg,Lisinopril 10mg"
+    Returns list of {"name": str, "dosage": str}
+    """
+    if isinstance(drugs_input, list):
+        result = []
+        for d in drugs_input:
+            if isinstance(d, dict):
+                result.append({
+                    "name": d.get("name", "").strip(),
+                    "dosage": d.get("dosage", "").strip()
+                })
+            elif isinstance(d, str):
+                result.append({"name": d.strip(), "dosage": ""})
+        return result
+    elif isinstance(drugs_input, str):
+        result = []
+        for part in drugs_input.split(","):
+            part = part.strip()
+            if part:
+                result.append({"name": part, "dosage": ""})
+        return result
+    return []
+
+
 def lookup_rxcuis(drug_name):
-    """
-    Returns a list of product-level RXCUIs (SCD/SBD) for a drug name.
-    These match what the CMS formulary file stores.
-    Falls back to ingredient RXCUI if nothing found.
-    """
     rxcuis = []
     try:
         url = f"https://rxnav.nlm.nih.gov/REST/drugs.json?name={requests.utils.quote(drug_name)}"
@@ -60,21 +77,18 @@ def lookup_rxcuis(drug_name):
         data = resp.json()
         groups = data.get("drugGroup", {}).get("conceptGroup", [])
         for group in groups:
-            tty = group.get("tty", "")
-            if tty in ["SCD", "SBD", "GPCK", "BPCK"]:
+            if group.get("tty", "") in ["SCD", "SBD", "GPCK", "BPCK"]:
                 for concept in group.get("conceptProperties", []):
                     rxcuis.append(concept["rxcui"])
     except Exception:
         pass
 
-    # Fallback: ingredient-level RXCUI
     if not rxcuis:
         try:
             url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={requests.utils.quote(drug_name)}&search=2"
             resp = requests.get(url, timeout=5)
             data = resp.json()
-            ids = data.get("idGroup", {}).get("rxnormId", [])
-            rxcuis = list(ids)
+            rxcuis = list(data.get("idGroup", {}).get("rxnormId", []))
         except Exception:
             pass
 
@@ -82,13 +96,8 @@ def lookup_rxcuis(drug_name):
 
 
 def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining):
-    """
-    Calculate monthly drug costs for a specific drug on a specific plan.
-    rxcuis is now a LIST — we check all of them against the formulary.
-    """
     plan_id_padded = plan_id.zfill(3)
 
-    # Step 1: Find tier — check all rxcuis, take lowest tier found
     tier_row = None
     for rxcui in rxcuis:
         row = conn.execute("""
@@ -106,7 +115,6 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     tier = tier_row["tier"]
     ndc = tier_row["ndc"]
 
-    # Step 2: Get copay for this tier (30-day supply, preferred retail)
     cost_row = conn.execute("""
         SELECT cost_type_pref, cost_amt_pref, ded_applies
         FROM beneficiary_cost
@@ -121,7 +129,6 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     cost_amt = cost_row["cost_amt_pref"]
     ded_applies = cost_row["ded_applies"]
 
-    # Step 3: Get unit cost for deductible phase math
     pricing_row = conn.execute("""
         SELECT unit_cost FROM pricing
         WHERE contract_id = ? AND plan_id = ? AND ndc = ? AND days_supply = 30
@@ -130,7 +137,6 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
 
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
 
-    # Step 4: Calculate monthly costs
     monthly_costs = []
     deductible_remaining = deductible
 
@@ -148,13 +154,12 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
                 monthly_cost = float(cost_amt)
         else:
             if unit_cost:
-                drug_cost_this_month = unit_cost
-                if drug_cost_this_month >= deductible_remaining:
+                if unit_cost >= deductible_remaining:
                     monthly_cost = round(deductible_remaining + (float(cost_amt) if cost_type == 1 else 0), 2)
                     deductible_remaining = 0
                 else:
-                    monthly_cost = round(drug_cost_this_month, 2)
-                    deductible_remaining -= drug_cost_this_month
+                    monthly_cost = round(unit_cost, 2)
+                    deductible_remaining -= unit_cost
             else:
                 monthly_cost = float(cost_amt)
                 deductible_remaining = 0
@@ -180,13 +185,18 @@ def health():
 
 @app.route("/drug-costs", methods=["POST"])
 def drug_costs():
-    data = request.get_json()
+    data = request.get_json(force=True, silent=True)
     if not data:
-        return jsonify({"error": "No JSON body"}), 400
+        # Try form data fallback
+        data = request.form.to_dict()
+    if not data:
+        return jsonify({"error": "No data received"}), 400
 
-    drugs = data.get("drugs", [])
+    drugs_input = data.get("drugs", "")
     zip_code = data.get("zip_code", "55441")
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
+
+    drugs = parse_drugs(drugs_input)
 
     if not drugs:
         return jsonify({"error": "No drugs provided"}), 400
@@ -196,7 +206,6 @@ def drug_costs():
 
     conn = get_db()
 
-    # Load plan details
     plan_details = {}
     for plan in PLANS:
         row = conn.execute("""
@@ -214,12 +223,10 @@ def drug_costs():
                 "deductible": row["deductible"],
             }
 
-    # Process each drug
     results = []
     for drug in drugs:
-        drug_name = drug.get("name", "").strip()
-        dosage = drug.get("dosage", "").strip()
-
+        drug_name = drug["name"]
+        dosage = drug["dosage"]
         rxcuis = lookup_rxcuis(drug_name)
 
         drug_result = {
@@ -235,28 +242,21 @@ def drug_costs():
             continue
 
         for carrier, plan in plan_details.items():
-            cost_data = get_drug_cost_for_plan(
-                conn,
-                plan["formulary_id"],
-                plan["contract_id"],
-                plan["plan_id"],
-                rxcuis,
-                plan["deductible"],
-                months_remaining
+            drug_result["plans"][carrier] = get_drug_cost_for_plan(
+                conn, plan["formulary_id"], plan["contract_id"],
+                plan["plan_id"], rxcuis, plan["deductible"], months_remaining
             )
-            drug_result["plans"][carrier] = cost_data
 
         results.append(drug_result)
 
-    # Build plan summary
     plan_summaries = {}
     for carrier, plan in plan_details.items():
         total_drug_cost = 0
         all_covered = True
-        for drug_result in results:
-            plan_cost = drug_result["plans"].get(carrier, {})
-            if plan_cost.get("annual_total") is not None:
-                total_drug_cost += plan_cost["annual_total"]
+        for dr in results:
+            pc = dr["plans"].get(carrier, {})
+            if pc.get("annual_total") is not None:
+                total_drug_cost += pc["annual_total"]
             else:
                 all_covered = False
 
