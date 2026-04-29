@@ -189,7 +189,7 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
 
 
 def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
-                               unit_cost, ded_applies,
+                               unit_cost,
                                pharmacy, deductible_remaining):
     """
     Calculate drug cost at a specific pharmacy.
@@ -571,7 +571,7 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                             month_name = datetime(2026, month_num, 1).strftime("%B")
                             cost, ded_used = get_drug_cost_at_pharmacy(
                                 conn, plan["contract_id"], plan["plan_id"],
-                                ndc, tier, unit_cost, ded_applies,
+                                ndc, tier, unit_cost,
                                 pharmacy, ded_remaining
                             )
                             ded_remaining = max(0, ded_remaining - ded_used)
