@@ -260,7 +260,10 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
             patient_cost = round((unit_cost or 0) * float(cost_amt), 2)
         else:
             patient_cost = float(cost_amt)
-        return round(patient_cost + disp_fee, 2), 0
+        # Only add dispensing fee if there is an actual drug cost (not $0 copay generics)
+        if patient_cost > 0:
+            patient_cost = round(patient_cost + disp_fee, 2)
+        return patient_cost, 0
     else:
         if unit_cost:
             drug_cost = unit_cost + disp_fee
@@ -270,7 +273,10 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
             else:
                 return round(drug_cost, 2), drug_cost - disp_fee
         else:
-            return round(float(cost_amt) + disp_fee, 2), 0
+            patient_cost = float(cost_amt)
+            if patient_cost > 0:
+                patient_cost = round(patient_cost + disp_fee, 2)
+            return patient_cost, 0
 
 
 
