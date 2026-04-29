@@ -33,11 +33,9 @@ PLANS = [
 
 
 # ===== CMS NEGOTIATED MAXIMUM FAIR PRICES (MFP) FOR 2026 =====
-# These are the federally negotiated prices that plans must use for these drugs
 # Source: CMS Medicare Drug Price Negotiation Program, effective January 1, 2026
-# Patient pays coinsurance % × MFP (plan-specific coinsurance in beneficiary_cost table)
+# Patient pays 25% coinsurance × MFP
 MFP_2026 = {
-    # Drug name (lowercase) -> MFP per 30-day supply
     "apixaban": 231.00,       # Eliquis
     "eliquis": 231.00,
     "rivaroxaban": 197.00,    # Xarelto
@@ -56,6 +54,23 @@ MFP_2026 = {
     "novolog": 119.00,
     "fiasp": 119.00,
 }
+
+# ===== INSULIN KEYWORDS FOR $35 CAP =====
+# IRA 2022: All insulins under Medicare Part D capped at $35/month
+# No deductible applies to insulins - flat $35 max regardless of plan
+INSULIN_KEYWORDS = [
+    "insulin", "glargine", "lantus", "basaglar", "toujeo", "semglee", "rezvoglar",
+    "lispro", "humalog", "admelog", "aspart", "novolog", "fiasp", "novorapid",
+    "detemir", "levemir", "degludec", "tresiba", "glulisine", "apidra",
+    "nph insulin", "regular insulin", "humulin", "novolin"
+]
+
+def is_insulin(drug_name):
+    """Check if a drug is an insulin - subject to $35/month Medicare cap."""
+    if not drug_name:
+        return False
+    name_lower = drug_name.lower()
+    return any(kw in name_lower for kw in INSULIN_KEYWORDS)
 
 def get_mfp(drug_name):
     """Return CMS negotiated MFP for a drug, or None if not in program."""
@@ -222,8 +237,12 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
     
     ded_applies_db = cost_row[4]
 
-    # Apply MFP override for federally negotiated drugs (2026)
+    # Apply insulin $35 cap first (overrides everything)
     drug_name_base = drug_name.split()[0] if drug_name else ""
+    if is_insulin(drug_name) or is_insulin(drug_name_base):
+        return 35.00, 0  # Flat $35, no deductible
+
+    # Apply MFP override for federally negotiated drugs (2026)
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     if mfp is not None:
         unit_cost = mfp
@@ -413,10 +432,24 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     """, (contract_id, plan_id_padded, ndc)).fetchone()
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
     
+    # Check for insulin $35 cap (IRA 2022 - applies to all Medicare Part D insulins)
+    drug_name_base = drug_name.split()[0] if drug_name else ""
+    if is_insulin(drug_name) or is_insulin(drug_name_base):
+        # Insulin: flat $35/month cap, no deductible applies
+        monthly_costs = []
+        for month_num in months_remaining:
+            month_name = datetime(2026, month_num, 1).strftime("%B")
+            monthly_costs.append({"month": month_name, "cost": 35.00})
+        return {
+            "tier": tier, "covered": True, "ndc": ndc,
+            "monthly_costs": monthly_costs,
+            "annual_total": round(35.00 * len(months_remaining), 2),
+            "steady_state_copay": 35.00,
+            "insulin_cap": True
+        }
+
     # Override with CMS negotiated MFP if available (more accurate for 2026)
     # MFP drugs use 25% coinsurance per 2026 standard benefit design
-    # Strip dosage from drug_name before lookup (e.g. "rivaroxaban 20mg" -> "rivaroxaban")
-    drug_name_base = drug_name.split()[0] if drug_name else ""
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     if mfp is not None:
         unit_cost = mfp
