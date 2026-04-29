@@ -79,7 +79,8 @@ Return this exact format:
     "normalized": "correct formulary name",
     "dosage": "dosage if provided or empty string",
     "confidence": 0.95,
-    "flag": "any concern or empty string"
+    "flag": "any concern or empty string",
+    "is_injectable": false
   }}
 ]
 
@@ -89,7 +90,8 @@ Rules:
 - Map generics to their most common formulary name
 - Keep dosage separate from name
 - If completely unrecognizable, set confidence below 0.5 and explain in flag
-- Never guess wildly — if unsure set confidence low and flag it"""
+- Never guess wildly — if unsure set confidence low and flag it
+- Set is_injectable to true if the drug is administered by injection, infusion, or subcutaneous pen (e.g. insulin, biologics, vaccines, IV drugs). Set false for oral tablets, capsules, patches, drops, and topical creams."""
 
     try:
         response = requests.post(
@@ -246,8 +248,24 @@ def compute_drug_costs(drugs, zip_code, soa_date):
         dosage = item.get("dosage", "").strip()
         flag = item.get("flag", "")
         norm_confidence = item.get("confidence", 1.0)
+        is_injectable = item.get("is_injectable", False)
 
         if not drug_name:
+            continue
+
+        # INJECTABLE EXCLUSION — skip cost lookup, mark for display only
+        # To enable injectables in the future, remove or comment out this block
+        if is_injectable:
+            drug_result = {
+                "drug_name": drug_name,
+                "original_name": original_name,
+                "dosage": dosage,
+                "flag": flag,
+                "normalization_confidence": norm_confidence,
+                "is_injectable": True,
+                "plans": {}
+            }
+            results.append(drug_result)
             continue
 
         # Collect warnings for low confidence normalizations
@@ -528,20 +546,28 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             name = drug.get("drug_name","")
             dosage = drug.get("dosage","")
             original = drug.get("original_name", "")
+            is_injectable = drug.get("is_injectable", False)
             label = f"{name} {dosage}".strip() if dosage else name
             # Only show "(written: ...)" when the drug name genuinely differs
             # Strip dosage from original before comparing (original includes dosage, name does not)
             orig_name_only = re.sub(r'[\s,]+[\d\.]+\s*(mg|mcg|ml|units?\/ml|units?|g|iu|%|meq).*$', '', original, flags=re.IGNORECASE).strip()
             if original and orig_name_only.strip().lower() != name.strip().lower():
                 label += f'<br/><font size="5" color="#64748b">(written: {original})</font>'
+            if is_injectable:
+                label += f'<br/><font size="5" color="#b45309">(injectable)</font>'
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
-                pd = drug.get("plans",{}).get(c,{})
-                if not pd.get("covered", False):
-                    row.append(Paragraph("Not Covered", nc_style))
+                if is_injectable:
+                    # Injectable — no formulary lookup performed
+                    # To enable injectable cost lookup, remove the is_injectable block in compute_drug_costs
+                    row.append(Paragraph("Verify coverage", S("inj", fontSize=5, textColor=colors.HexColor("#b45309"), alignment=TA_CENTER, leading=7)))
                 else:
-                    tier = pd.get("tier")
-                    row.append(tier_badge(tier) if tier else Paragraph("—", cell))
+                    pd = drug.get("plans",{}).get(c,{})
+                    if not pd.get("covered", False):
+                        row.append(Paragraph("Not Covered", nc_style))
+                    else:
+                        tier = pd.get("tier")
+                        row.append(tier_badge(tier) if tier else Paragraph("—", cell))
             rows.append(row)
         t = Table(rows, colWidths=[label_w] + [col_w]*len(carriers))
         ts = [
