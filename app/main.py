@@ -13,7 +13,6 @@ import os
 import json
 import base64
 import requests
-import re
 from datetime import datetime, date
 
 app = Flask(__name__)
@@ -44,6 +43,179 @@ def get_remaining_months(soa_date_str):
     except Exception:
         soa = date.today()
     return list(range(soa.month, 13))
+
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """Calculate distance in miles between two lat/lon points."""
+    import math
+    R = 3958.8
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+def get_client_coords(conn, zip_code):
+    """Get lat/lon for client zip code."""
+    row = conn.execute(
+        "SELECT lat, lon, city FROM zip_coords WHERE zip = ?", (zip_code,)
+    ).fetchone()
+    if row and row[0] and row[1]:
+        return row[0], row[1], row[2]
+    return None, None, None
+
+
+def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30):
+    """
+    Find closest preferred retail pharmacies to client zip for a specific plan.
+    Prioritizes mainstream chains, falls back to any preferred pharmacy within radius.
+    Returns list of {"npi", "name", "address", "city", "distance_miles", "preferred"}
+    """
+    plan_id_padded = plan_id.zfill(3)
+    
+    # Get client coordinates
+    client_lat, client_lon, client_city = get_client_coords(conn, client_zip)
+    
+    # Get all preferred retail pharmacies for this plan
+    rows = conn.execute("""
+        SELECT pn.npi, pn.pharmacy_zip, pn.preferred_retail,
+               pn.generic_fee_30, pn.brand_fee_30, pn.selected_fee_30,
+               pn.floor_price,
+               nm.name, nm.address, nm.city, nm.is_chain
+        FROM pharmacy_network pn
+        LEFT JOIN pharmacy_names nm ON pn.npi = nm.npi
+        WHERE pn.contract_id = ? AND pn.plan_id = ?
+        AND pn.is_retail = 1
+        AND pn.preferred_retail = 'Y'
+    """, (contract_id, plan_id_padded)).fetchall()
+    
+    if not rows:
+        # Fall back to any retail pharmacy
+        rows = conn.execute("""
+            SELECT pn.npi, pn.pharmacy_zip, pn.preferred_retail,
+                   pn.generic_fee_30, pn.brand_fee_30, pn.selected_fee_30,
+                   pn.floor_price,
+                   nm.name, nm.address, nm.city, nm.is_chain
+            FROM pharmacy_network pn
+            LEFT JOIN pharmacy_names nm ON pn.npi = nm.npi
+            WHERE pn.contract_id = ? AND pn.plan_id = ?
+            AND pn.is_retail = 1
+        """, (contract_id, plan_id_padded)).fetchall()
+    
+    # Calculate distances if we have client coords
+    pharmacies = []
+    for row in rows:
+        npi, pharm_zip, pref, generic_fee, brand_fee, selected_fee, floor_price, name, address, city, is_chain = row
+        
+        distance = None
+        if client_lat and client_lon and pharm_zip:
+            pharm_coords = conn.execute(
+                "SELECT lat, lon FROM zip_coords WHERE zip = ?", (pharm_zip.zfill(5),)
+            ).fetchone()
+            if pharm_coords and pharm_coords[0]:
+                distance = haversine_distance(client_lat, client_lon, pharm_coords[0], pharm_coords[1])
+        
+        if distance is not None and distance > max_miles:
+            continue
+            
+        pharmacies.append({
+            "npi": npi,
+            "name": name or "Unknown Pharmacy",
+            "address": address or "",
+            "city": city or "",
+            "distance_miles": round(distance, 1) if distance is not None else 999,
+            "preferred": pref == "Y",
+            "is_chain": bool(is_chain),
+            "generic_fee": float(generic_fee or 0),
+            "brand_fee": float(brand_fee or 0),
+            "selected_fee": float(selected_fee or 0),
+            "floor_price": float(floor_price or 0),
+        })
+    
+    # Sort: chains first by distance, then non-chains by distance
+    chains = sorted([p for p in pharmacies if p["is_chain"]], key=lambda x: x["distance_miles"])
+    non_chains = sorted([p for p in pharmacies if not p["is_chain"]], key=lambda x: x["distance_miles"])
+    
+    # Deduplicate by name (keep closest of each name)
+    seen_names = {}
+    for p in chains + non_chains:
+        base_name = p["name"].split("#")[0].strip()
+        if base_name not in seen_names:
+            seen_names[base_name] = p
+        elif p["distance_miles"] < seen_names[base_name]["distance_miles"]:
+            seen_names[base_name] = p
+    
+    sorted_pharmacies = sorted(seen_names.values(), key=lambda x: (not x["is_chain"], x["distance_miles"]))
+    return sorted_pharmacies[:max_results]
+
+
+def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier, 
+                               unit_cost, cost_type, cost_amt, ded_applies,
+                               pharmacy, deductible_remaining, is_brand):
+    """
+    Calculate drug cost at a specific pharmacy using their dispensing fee.
+    
+    Patient cost = copay/coinsurance + dispensing_fee
+    During deductible: patient pays unit_cost + dispensing_fee
+    """
+    plan_id_padded = plan_id.zfill(3)
+    
+    # Get dispensing fee for this pharmacy
+    if is_brand:
+        disp_fee = pharmacy.get("brand_fee", 0)
+    else:
+        disp_fee = pharmacy.get("generic_fee", 0)
+    
+    if disp_fee == 0:
+        disp_fee = pharmacy.get("selected_fee", 0)
+    
+    if ded_applies == "N" or deductible_remaining <= 0:
+        # Post-deductible
+        if cost_type == 0:
+            patient_cost = float(unit_cost or 0) * 1.0  # use unit cost
+        elif cost_type == 1:
+            patient_cost = float(cost_amt)
+        elif cost_type == 2:
+            patient_cost = round((unit_cost or 0) * float(cost_amt), 2)
+        else:
+            patient_cost = float(cost_amt)
+        return round(patient_cost + disp_fee, 2), 0
+    else:
+        # In deductible phase
+        if unit_cost:
+            drug_cost = unit_cost + disp_fee
+            if drug_cost >= deductible_remaining:
+                # Deductible met this month
+                remaining_after = max(0, deductible_remaining - unit_cost)
+                post_ded_portion = float(cost_amt) if cost_type == 1 else 0
+                return round(deductible_remaining + disp_fee + post_ded_portion, 2), deductible_remaining
+            else:
+                return round(drug_cost, 2), drug_cost - disp_fee
+        else:
+            return round(float(cost_amt) + disp_fee, 2), 0
+
+
+
+def get_mail_order_cost(conn, contract_id, plan_id, tier, cost_type_mail, cost_amt_mail, unit_cost, ded_applies, months_remaining):
+    """Calculate mail order costs (90-day supply)."""
+    monthly_costs = []
+    deductible_remaining = 0  # Mail order typically post-deductible pricing
+    
+    for month_num in months_remaining:
+        month_name = datetime(2026, month_num, 1).strftime("%B")
+        if cost_type_mail == 0:
+            monthly_cost = 0.0
+        elif cost_type_mail == 1:
+            monthly_cost = float(cost_amt_mail) / 3  # 90-day divided by 3
+        elif cost_type_mail == 2:
+            monthly_cost = round((unit_cost or 0) * float(cost_amt_mail) / 3, 2)
+        else:
+            monthly_cost = float(cost_amt_mail) / 3
+        monthly_costs.append({"month": month_name, "cost": monthly_cost})
+    
+    return monthly_costs
+
 
 
 def normalize_drugs(drugs):
@@ -79,8 +251,7 @@ Return this exact format:
     "normalized": "correct formulary name",
     "dosage": "dosage if provided or empty string",
     "confidence": 0.95,
-    "flag": "any concern or empty string",
-    "is_injectable": false
+    "flag": "any concern or empty string"
   }}
 ]
 
@@ -90,8 +261,7 @@ Rules:
 - Map generics to their most common formulary name
 - Keep dosage separate from name
 - If completely unrecognizable, set confidence below 0.5 and explain in flag
-- Never guess wildly — if unsure set confidence low and flag it
-- Set is_injectable to true if the drug is administered by injection, infusion, or subcutaneous pen (e.g. insulin, biologics, vaccines, IV drugs). Set false for oral tablets, capsules, patches, drops, and topical creams."""
+- Never guess wildly — if unsure set confidence low and flag it"""
 
     try:
         response = requests.post(
@@ -188,22 +358,30 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
 
     monthly_costs = []
+    deductible_remaining = deductible
 
     for month_num in months_remaining:
         month_name = datetime(2026, month_num, 1).strftime("%B")
-        # CMS pricing data contains negotiated plan costs, not retail drug prices,
-        # so we cannot accurately calculate deductible phase costs. Show flat cost.
-        if cost_type == 0:
-            # cost_type=0 means cost is based on unit_cost from pricing table (no fixed copay)
-            monthly_cost = round(unit_cost, 2) if unit_cost else 0.0
-        elif cost_type == 1:
-            # cost_type=1 means fixed copay amount
-            monthly_cost = float(cost_amt)
-        elif cost_type == 2:
-            # cost_type=2 means coinsurance (% of unit_cost)
-            monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
+        if ded_applies == "N" or deductible_remaining <= 0:
+            if cost_type == 0:
+                monthly_cost = 0.0
+            elif cost_type == 1:
+                monthly_cost = float(cost_amt)
+            elif cost_type == 2:
+                monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
+            else:
+                monthly_cost = float(cost_amt)
         else:
-            monthly_cost = round(unit_cost, 2) if unit_cost else float(cost_amt)
+            if unit_cost:
+                if unit_cost >= deductible_remaining:
+                    monthly_cost = round(deductible_remaining + (float(cost_amt) if cost_type == 1 else 0), 2)
+                    deductible_remaining = 0
+                else:
+                    monthly_cost = round(unit_cost, 2)
+                    deductible_remaining -= unit_cost
+            else:
+                monthly_cost = float(cost_amt)
+                deductible_remaining = 0
         monthly_costs.append({"month": month_name, "cost": monthly_cost})
 
     annual_total = round(sum(m["cost"] for m in monthly_costs), 2)
@@ -211,7 +389,6 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         "tier": tier, "covered": True, "ndc": ndc,
         "monthly_costs": monthly_costs, "annual_total": annual_total,
         "steady_state_copay": float(cost_amt) if cost_type == 1 else None,
-        "ded_applies": ded_applies,
     }
 
 
@@ -242,6 +419,15 @@ def compute_drug_costs(drugs, zip_code, soa_date):
     results = []
     warnings = []
 
+    # Get nearby pharmacies per plan (keyed by carrier)
+    pharmacy_map = {}  # carrier -> list of nearby pharmacies
+    for carrier, plan in plan_details.items():
+        nearby = get_nearby_pharmacies(
+            conn, plan["contract_id"], plan["plan_id"], zip_code,
+            max_results=4, max_miles=30
+        )
+        pharmacy_map[carrier] = nearby
+
     for item in normalized:
         drug_name = item.get("normalized", "").strip()
         original_name = item.get("original", "").strip()
@@ -253,30 +439,12 @@ def compute_drug_costs(drugs, zip_code, soa_date):
         if not drug_name:
             continue
 
-        # INJECTABLE EXCLUSION — skip cost lookup, mark for display only
-        # To enable injectables in the future, remove or comment out this block
-        if is_injectable:
-            drug_result = {
-                "drug_name": drug_name,
-                "original_name": original_name,
-                "dosage": dosage,
-                "flag": flag,
-                "normalization_confidence": norm_confidence,
-                "is_injectable": True,
-                "plans": {}
-            }
-            results.append(drug_result)
-            continue
-
-        # Collect warnings for low confidence normalizations
         if norm_confidence < 0.7 or flag:
             warnings.append({
                 "drug": original_name,
                 "normalized_to": drug_name,
-                "flag": flag or f"Low normalization confidence ({norm_confidence:.0%})"
+                "flag": flag or "Low normalization confidence ({:.0%})".format(norm_confidence)
             })
-
-        rxcuis = lookup_rxcuis(drug_name, dosage)
 
         drug_result = {
             "drug_name": drug_name,
@@ -284,8 +452,20 @@ def compute_drug_costs(drugs, zip_code, soa_date):
             "dosage": dosage,
             "flag": flag,
             "normalization_confidence": norm_confidence,
+            "is_injectable": is_injectable,
             "plans": {}
         }
+
+        if is_injectable:
+            for carrier in plan_details:
+                drug_result["plans"][carrier] = {
+                    "covered": False, "injectable": True,
+                    "tier": None, "monthly_costs": [], "annual_total": None
+                }
+            results.append(drug_result)
+            continue
+
+        rxcuis = lookup_rxcuis(drug_name, dosage)
 
         if not rxcuis:
             drug_result["error"] = "Drug not found in formulary"
@@ -297,10 +477,70 @@ def compute_drug_costs(drugs, zip_code, soa_date):
             results.append(drug_result)
             continue
 
+        # Determine if brand name drug
+        is_brand = drug_name.lower() != original_name.lower() and bool(original_name)
+
         for carrier, plan in plan_details.items():
-            drug_result["plans"][carrier] = get_drug_cost_for_plan(
+            plan_cost = get_drug_cost_for_plan(
                 conn, plan["formulary_id"], plan["contract_id"],
                 plan["plan_id"], rxcuis, plan["deductible"], months_remaining)
+            
+            # Add pharmacy-specific costs if we found nearby pharmacies
+            nearby_pharmacies = pharmacy_map.get(carrier, [])
+            if nearby_pharmacies and plan_cost.get("covered") and plan_cost.get("tier"):
+                tier = plan_cost["tier"]
+                # Get cost structure for this tier
+                cost_row = conn.execute("""
+                    SELECT cost_type_pref, cost_amt_pref, ded_applies,
+                           cost_type_mail_pref, cost_amt_mail_pref
+                    FROM beneficiary_cost
+                    WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
+                    ORDER BY coverage_level ASC LIMIT 1
+                """, (plan["contract_id"], plan["plan_id"].zfill(3), tier)).fetchone()
+                
+                ndc = plan_cost.get("ndc")
+                unit_cost = None
+                if ndc:
+                    pricing = conn.execute("""
+                        SELECT unit_cost FROM pricing
+                        WHERE contract_id = ? AND plan_id = ? AND ndc = ? AND days_supply = 30
+                        LIMIT 1
+                    """, (plan["contract_id"], plan["plan_id"].zfill(3), ndc)).fetchone()
+                    if pricing:
+                        unit_cost = pricing[0]
+                
+                pharmacy_costs = []
+                if cost_row:
+                    cost_type = cost_row[0]
+                    cost_amt = cost_row[1]
+                    ded_applies = cost_row[2]
+                    
+                    for pharmacy in nearby_pharmacies:
+                        pharm_monthly = []
+                        ded_remaining = plan["deductible"]
+                        for month_num in months_remaining:
+                            month_name = datetime(2026, month_num, 1).strftime("%B")
+                            cost, ded_used = get_drug_cost_at_pharmacy(
+                                conn, plan["contract_id"], plan["plan_id"],
+                                ndc, tier, unit_cost, cost_type, cost_amt,
+                                ded_applies, pharmacy, ded_remaining, is_brand
+                            )
+                            ded_remaining = max(0, ded_remaining - ded_used)
+                            pharm_monthly.append({"month": month_name, "cost": cost})
+                        
+                        pharmacy_costs.append({
+                            "name": pharmacy["name"],
+                            "address": pharmacy["address"],
+                            "city": pharmacy["city"],
+                            "distance_miles": pharmacy["distance_miles"],
+                            "preferred": pharmacy["preferred"],
+                            "monthly_costs": pharm_monthly,
+                            "annual_total": round(sum(m["cost"] for m in pharm_monthly), 2)
+                        })
+                
+                plan_cost["pharmacy_costs"] = pharmacy_costs
+            
+            drug_result["plans"][carrier] = plan_cost
         results.append(drug_result)
 
     plan_summaries = {}
@@ -333,7 +573,7 @@ def compute_drug_costs(drugs, zip_code, soa_date):
     }
 
 
-def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None):
+def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None):
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
@@ -365,8 +605,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=11, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=13)
-    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=7)
+    h1        = S("h1",  fontSize=13, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=16)
+    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=8)
     sec_title = S("sec", fontSize=8,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=10)
     col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
@@ -411,35 +651,27 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=8*mm, leftMargin=8*mm,
-                            topMargin=2*mm, bottomMargin=6*mm)
+                            topMargin=6*mm, bottomMargin=6*mm)
     elements = []
 
-    # Header — compact single-row layout
+    # Header
     conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
-    # Left: name on one line, details on the next
-    header_left = [
-        [Paragraph(client_name, h1)],
-        [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)],
-    ]
-    # Right: all meta info stacked tightly
-    right_lines = [
-        [Paragraph("INTERNAL USE ONLY", badge_txt)],
-        [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}  ·  Data: CMS Medicare Formulary Q1 2026", gen_txt)],
-    ]
-    if conf_text:
-        right_lines.append([Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))])
+    header_left = [[Paragraph(client_name, h1)],
+                   [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)]]
+    header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
+                    [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
+                    [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
+                    [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))]]
     tl = Table([[Table(header_left, colWidths=[200*mm]),
-                 Table(right_lines, colWidths=[80*mm])]],
+                 Table(header_right, colWidths=[80*mm])]],
                colWidths=[200*mm, 80*mm])
     tl.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING", (0,0), (-1,-1), 0),
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceBefore=0.5*mm, spaceAfter=1*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
 
     # Warnings banner
     if warnings:
@@ -529,14 +761,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 0.5*mm))
+        elements.append(Spacer(1, 1*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 1.5*mm))
+        elements.append(Spacer(1, 2*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 0.5*mm))
+        elements.append(Spacer(1, 1*mm))
         carriers = list(ma_plans.keys())
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
@@ -546,36 +778,26 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             name = drug.get("drug_name","")
             dosage = drug.get("dosage","")
             original = drug.get("original_name", "")
-            is_injectable = drug.get("is_injectable", False)
             label = f"{name} {dosage}".strip() if dosage else name
-            # Only show "(written: ...)" when the drug name genuinely differs
-            # Strip dosage from original before comparing (original includes dosage, name does not)
-            orig_name_only = re.sub(r'[\s,]+[\d\.]+\s*(mg|mcg|ml|units?\/ml|units?|g|iu|%|meq).*$', '', original, flags=re.IGNORECASE).strip()
-            if original and orig_name_only.strip().lower() != name.strip().lower():
-                label += f'<br/><font size="5" color="#64748b">(written: {original})</font>'
-            if is_injectable:
-                label += f'<br/><font size="5" color="#b45309">(injectable)</font>'
+            # Show original name if different from normalized
+            if original and original.lower() != name.lower():
+                label += f"\n(written: {original})"
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
-                if is_injectable:
-                    # Injectable — no formulary lookup performed
-                    # To enable injectable cost lookup, remove the is_injectable block in compute_drug_costs
-                    row.append(Paragraph("Verify coverage", S("inj", fontSize=5, textColor=colors.HexColor("#b45309"), alignment=TA_CENTER, leading=7)))
+                pd = drug.get("plans",{}).get(c,{})
+                if not pd.get("covered", False):
+                    row.append(Paragraph("Not Covered", nc_style))
                 else:
-                    pd = drug.get("plans",{}).get(c,{})
-                    if not pd.get("covered", False):
-                        row.append(Paragraph("Not Covered", nc_style))
-                    else:
-                        tier = pd.get("tier")
-                        row.append(tier_badge(tier) if tier else Paragraph("—", cell))
+                    tier = pd.get("tier")
+                    row.append(tier_badge(tier) if tier else Paragraph("—", cell))
             rows.append(row)
         t = Table(rows, colWidths=[label_w] + [col_w]*len(carriers))
         ts = [
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 1),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -595,66 +817,144 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 1.5*mm))
+        elements.append(Spacer(1, 2*mm))
 
     if ma_plans and drug_detail and months_remaining:
-        carriers = list(ma_plans.keys())
-        elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN (PLAN COPAY RATES)", sec_title))
-        elements.append(Spacer(1, 0.5*mm))
-        elements.append(Paragraph(
-            "Costs shown are plan negotiated copay rates at preferred retail pharmacy — not retail/cash prices. Costs during deductible phase and at non-preferred pharmacies may differ. Verify with plan before client meeting.",
-            S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=6)))
-        elements.append(Spacer(1, 0.5*mm))
-        month_col_w = 20*mm
-        col_w = (274*mm - month_col_w) / len(carriers)
-        rows = [[Paragraph("Month", ph_hdr)] +
-                [Paragraph(c + (" ★" if c == ma_best else ""), ph_hdr) for c in carriers]]
-        for month in months_remaining:
-            row = [Paragraph(month, month_lbl)]
-            for c in carriers:
-                total = sum(
-                    next((m["cost"] for m in drug.get("plans",{}).get(c,{}).get("monthly_costs",[]) if m["month"]==month), 0) or 0
-                    for drug in drug_detail
-                )
-                row.append(Paragraph(f"${total:.2f}", cell))
-            rows.append(row)
-        annual_row = [Paragraph("Annual Total", S("at", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8))]
-        for c in carriers:
-            gt = sum((drug.get("plans",{}).get(c,{}).get("annual_total") or 0) for drug in drug_detail)
-            annual_row.append(Paragraph(f"${gt:.2f}", S("av", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
-        rows.append(annual_row)
-        t = Table(rows, colWidths=[month_col_w] + [col_w]*len(carriers))
-        ts = [
-            ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
-            ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 1),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-            ("LEFTPADDING", (0,0), (-1,-1), 4),
-            ("RIGHTPADDING", (0,0), (-1,-1), 4),
-            ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
-            ("BACKGROUND", (0,-1), (-1,-1), LIGHT_GRAY),
-            ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
-        ]
-        if ma_best in carriers:
-            ci = carriers.index(ma_best) + 1
-            ts += [
-                ("BACKGROUND", (ci,0), (ci,0), TEAL),
-                ("LINEAFTER",  (ci,0), (ci,-1), 1.5, TEAL),
-                ("LINEBEFORE", (ci,0), (ci,-1), 1.5, TEAL),
+        # Get pharmacies for recommended plan
+        best_drug = next((d for d in drug_detail if d.get("plans", {}).get(ma_best, {}).get("pharmacy_costs")), None)
+        best_pharmacies = []
+        if best_drug:
+            best_pharmacies = best_drug["plans"][ma_best].get("pharmacy_costs", [])
+        
+        if best_pharmacies:
+            # Section 3A: Pharmacy-specific costs for recommended plan
+            elements.append(Paragraph(
+                "SECTION 3 — ESTIMATED MONTHLY DRUG COSTS — " + ma_best.upper() + " (RECOMMENDED PLAN)",
+                sec_title))
+            elements.append(Spacer(1, 0.5*mm))
+            elements.append(Paragraph(
+                "Costs shown at preferred retail pharmacies nearest to client ZIP " + zip_code + ". " +
+                "Includes deductible phase. Mail order typically available for 90-day supply.",
+                S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
+            elements.append(Spacer(1, 1*mm))
+
+            # Build pharmacy columns
+            pharm_names = [p["name"] + "\n(" + str(p["distance_miles"]) + " mi)" for p in best_pharmacies]
+            month_col_w = 18*mm
+            drug_name_col_w = 28*mm
+            pharm_col_w = (274*mm - month_col_w - drug_name_col_w) / len(best_pharmacies)
+
+            # Header
+            hdr = [Paragraph("Month", ph_hdr), Paragraph("Drug", ph_hdr)] + [
+                Paragraph(n.replace("\n", "\n"), S("ph2", fontSize=5, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=7))
+                for n in pharm_names
             ]
-        t.setStyle(TableStyle(ts))
-        elements.append(t)
-        elements.append(Spacer(1, 1.5*mm))
+            rows = [hdr]
+
+            # Monthly rows per drug
+            drug_colors = [WHITE, LIGHT_GRAY]
+            for di, drug in enumerate(drug_detail):
+                drug_name = drug.get("drug_name", "")
+                dosage = drug.get("dosage", "")
+                label = (drug_name + " " + dosage).strip() if dosage else drug_name
+                pharm_costs = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
+                
+                if not pharm_costs:
+                    continue
+                
+                # One row per month
+                for mi, month in enumerate(months_remaining):
+                    month_label = Paragraph(month if mi == 0 or True else "", month_lbl)
+                    drug_label = Paragraph(label if mi == 0 else "", S("dl2", fontSize=5, textColor=DARK_GRAY, fontName="Helvetica-Bold" if mi==0 else "Helvetica", leading=7))
+                    row = [month_label, drug_label]
+                    for pharm in pharm_costs:
+                        cost = next((m["cost"] for m in pharm["monthly_costs"] if m["month"] == month), 0) or 0
+                        row.append(Paragraph("$" + "{:.2f}".format(cost), cell))
+                    rows.append(row)
+
+            # Annual total row
+            annual_row = [
+                Paragraph("Annual Total", S("at2", fontSize=5, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=7)),
+                Paragraph("All Drugs", S("at3", fontSize=5, textColor=DARK_GRAY, leading=7))
+            ]
+            for pharm in best_pharmacies:
+                total = sum(
+                    (drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs") or [{}])[
+                        next((i for i, p in enumerate(drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])) if p["name"] == pharm["name"]), 0)
+                    ].get("annual_total", 0) or 0
+                    for drug in drug_detail
+                    if drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs")
+                )
+                annual_row.append(Paragraph("$" + "{:.2f}".format(total),
+                    S("av2", fontSize=5, textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=7)))
+            rows.append(annual_row)
+
+            col_widths = [month_col_w, drug_name_col_w] + [pharm_col_w] * len(best_pharmacies)
+            t = Table(rows, colWidths=col_widths)
+            ts = [
+                ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
+                ("GRID", (0,0), (-1,-1), 0.3, MID_GRAY),
+                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                ("TOPPADDING", (0,0), (-1,-1), 1),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
+                ("LEFTPADDING", (0,0), (-1,-1), 3),
+                ("RIGHTPADDING", (0,0), (-1,-1), 3),
+                ("BACKGROUND", (0,-1), (-1,-1), LIGHT_GRAY),
+                ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
+            ]
+            t.setStyle(TableStyle(ts))
+            elements.append(t)
+        else:
+            # Fallback: plan-level comparison if no pharmacy data
+            elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN", sec_title))
+            elements.append(Spacer(1, 0.5*mm))
+            elements.append(Paragraph(
+                "Monthly totals at preferred retail pharmacy. Pharmacy-specific data not available for this zip code.",
+                S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
+            elements.append(Spacer(1, 1*mm))
+            carriers = list(ma_plans.keys())
+            month_col_w = 20*mm
+            col_w = (274*mm - month_col_w) / len(carriers)
+            rows = [[Paragraph("Month", ph_hdr)] +
+                    [Paragraph(c + (" ★" if c == ma_best else ""), ph_hdr) for c in carriers]]
+            for month in months_remaining:
+                row = [Paragraph(month, month_lbl)]
+                for c in carriers:
+                    total = sum(
+                        next((m["cost"] for m in drug.get("plans",{}).get(c,{}).get("monthly_costs",[]) if m["month"]==month), 0) or 0
+                        for drug in drug_detail
+                    )
+                    row.append(Paragraph("${:.2f}".format(total), cell))
+                rows.append(row)
+            annual_row = [Paragraph("Annual Total", S("at", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8))]
+            for c in carriers:
+                gt = sum((drug.get("plans",{}).get(c,{}).get("annual_total") or 0) for drug in drug_detail)
+                annual_row.append(Paragraph("${:.2f}".format(gt), S("av", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
+            rows.append(annual_row)
+            t = Table(rows, colWidths=[month_col_w] + [col_w]*len(carriers))
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
+                ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
+                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                ("TOPPADDING", (0,0), (-1,-1), 2),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+                ("LEFTPADDING", (0,0), (-1,-1), 4),
+                ("RIGHTPADDING", (0,0), (-1,-1), 4),
+                ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
+                ("BACKGROUND", (0,-1), (-1,-1), LIGHT_GRAY),
+                ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
+            ]))
+            elements.append(t)
+        elements.append(Spacer(1, 2*mm))
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 0.5*mm))
+        elements.append(Spacer(1, 1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 2*mm))
 
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=1*mm, spaceAfter=1*mm))
     elements.append(Paragraph(
         "Internal Use Only — Not for Distribution  |  Generated for agent reference only  |  "
         "Data sourced from CMS Medicare Formulary Files Q1 2026  |  "
