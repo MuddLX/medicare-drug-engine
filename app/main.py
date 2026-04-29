@@ -13,6 +13,7 @@ import os
 import json
 import base64
 import requests
+import re
 from datetime import datetime, date
 
 app = Flask(__name__)
@@ -78,7 +79,8 @@ Return this exact format:
     "normalized": "correct formulary name",
     "dosage": "dosage if provided or empty string",
     "confidence": 0.95,
-    "flag": "any concern or empty string"
+    "flag": "any concern or empty string",
+    "is_injectable": false
   }}
 ]
 
@@ -88,7 +90,8 @@ Rules:
 - Map generics to their most common formulary name
 - Keep dosage separate from name
 - If completely unrecognizable, set confidence below 0.5 and explain in flag
-- Never guess wildly — if unsure set confidence low and flag it"""
+- Never guess wildly — if unsure set confidence low and flag it
+- Set is_injectable to true if the drug is administered by injection, infusion, or subcutaneous pen (e.g. insulin, biologics, vaccines, IV drugs). Set false for oral tablets, capsules, patches, drops, and topical creams."""
 
     try:
         response = requests.post(
@@ -185,30 +188,22 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
 
     monthly_costs = []
-    deductible_remaining = deductible
 
     for month_num in months_remaining:
         month_name = datetime(2026, month_num, 1).strftime("%B")
-        if ded_applies == "N" or deductible_remaining <= 0:
-            if cost_type == 0:
-                monthly_cost = 0.0
-            elif cost_type == 1:
-                monthly_cost = float(cost_amt)
-            elif cost_type == 2:
-                monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
-            else:
-                monthly_cost = float(cost_amt)
+        # CMS pricing data contains negotiated plan costs, not retail drug prices,
+        # so we cannot accurately calculate deductible phase costs. Show flat cost.
+        if cost_type == 0:
+            # cost_type=0 means cost is based on unit_cost from pricing table (no fixed copay)
+            monthly_cost = round(unit_cost, 2) if unit_cost else 0.0
+        elif cost_type == 1:
+            # cost_type=1 means fixed copay amount
+            monthly_cost = float(cost_amt)
+        elif cost_type == 2:
+            # cost_type=2 means coinsurance (% of unit_cost)
+            monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
         else:
-            if unit_cost:
-                if unit_cost >= deductible_remaining:
-                    monthly_cost = round(deductible_remaining + (float(cost_amt) if cost_type == 1 else 0), 2)
-                    deductible_remaining = 0
-                else:
-                    monthly_cost = round(unit_cost, 2)
-                    deductible_remaining -= unit_cost
-            else:
-                monthly_cost = float(cost_amt)
-                deductible_remaining = 0
+            monthly_cost = round(unit_cost, 2) if unit_cost else float(cost_amt)
         monthly_costs.append({"month": month_name, "cost": monthly_cost})
 
     annual_total = round(sum(m["cost"] for m in monthly_costs), 2)
@@ -216,6 +211,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         "tier": tier, "covered": True, "ndc": ndc,
         "monthly_costs": monthly_costs, "annual_total": annual_total,
         "steady_state_copay": float(cost_amt) if cost_type == 1 else None,
+        "ded_applies": ded_applies,
     }
 
 
@@ -252,8 +248,24 @@ def compute_drug_costs(drugs, zip_code, soa_date):
         dosage = item.get("dosage", "").strip()
         flag = item.get("flag", "")
         norm_confidence = item.get("confidence", 1.0)
+        is_injectable = item.get("is_injectable", False)
 
         if not drug_name:
+            continue
+
+        # INJECTABLE EXCLUSION — skip cost lookup, mark for display only
+        # To enable injectables in the future, remove or comment out this block
+        if is_injectable:
+            drug_result = {
+                "drug_name": drug_name,
+                "original_name": original_name,
+                "dosage": dosage,
+                "flag": flag,
+                "normalization_confidence": norm_confidence,
+                "is_injectable": True,
+                "plans": {}
+            }
+            results.append(drug_result)
             continue
 
         # Collect warnings for low confidence normalizations
@@ -353,8 +365,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=13, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=16)
-    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=8)
+    h1        = S("h1",  fontSize=11, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=13)
+    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=7)
     sec_title = S("sec", fontSize=8,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=10)
     col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
@@ -399,27 +411,35 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=8*mm, leftMargin=8*mm,
-                            topMargin=6*mm, bottomMargin=6*mm)
+                            topMargin=2*mm, bottomMargin=6*mm)
     elements = []
 
-    # Header
+    # Header — compact single-row layout
     conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
-    header_left = [[Paragraph(client_name, h1)],
-                   [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)]]
-    header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
-                    [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
-                    [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
-                    [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))]]
+    # Left: name on one line, details on the next
+    header_left = [
+        [Paragraph(client_name, h1)],
+        [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)],
+    ]
+    # Right: all meta info stacked tightly
+    right_lines = [
+        [Paragraph("INTERNAL USE ONLY", badge_txt)],
+        [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}  ·  Data: CMS Medicare Formulary Q1 2026", gen_txt)],
+    ]
+    if conf_text:
+        right_lines.append([Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))])
     tl = Table([[Table(header_left, colWidths=[200*mm]),
-                 Table(header_right, colWidths=[80*mm])]],
+                 Table(right_lines, colWidths=[80*mm])]],
                colWidths=[200*mm, 80*mm])
     tl.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING", (0,0), (-1,-1), 0),
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ("TOPPADDING", (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceBefore=0.5*mm, spaceAfter=1*mm))
 
     # Warnings banner
     if warnings:
@@ -509,14 +529,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.5*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 1.5*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.5*mm))
         carriers = list(ma_plans.keys())
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
@@ -526,26 +546,36 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             name = drug.get("drug_name","")
             dosage = drug.get("dosage","")
             original = drug.get("original_name", "")
+            is_injectable = drug.get("is_injectable", False)
             label = f"{name} {dosage}".strip() if dosage else name
-            # Show original name if different from normalized
-            if original and original.lower() != name.lower():
-                label += f"\n(written: {original})"
+            # Only show "(written: ...)" when the drug name genuinely differs
+            # Strip dosage from original before comparing (original includes dosage, name does not)
+            orig_name_only = re.sub(r'[\s,]+[\d\.]+\s*(mg|mcg|ml|units?\/ml|units?|g|iu|%|meq).*$', '', original, flags=re.IGNORECASE).strip()
+            if original and orig_name_only.strip().lower() != name.strip().lower():
+                label += f'<br/><font size="5" color="#64748b">(written: {original})</font>'
+            if is_injectable:
+                label += f'<br/><font size="5" color="#b45309">(injectable)</font>'
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
-                pd = drug.get("plans",{}).get(c,{})
-                if not pd.get("covered", False):
-                    row.append(Paragraph("Not Covered", nc_style))
+                if is_injectable:
+                    # Injectable — no formulary lookup performed
+                    # To enable injectable cost lookup, remove the is_injectable block in compute_drug_costs
+                    row.append(Paragraph("Verify coverage", S("inj", fontSize=5, textColor=colors.HexColor("#b45309"), alignment=TA_CENTER, leading=7)))
                 else:
-                    tier = pd.get("tier")
-                    row.append(tier_badge(tier) if tier else Paragraph("—", cell))
+                    pd = drug.get("plans",{}).get(c,{})
+                    if not pd.get("covered", False):
+                        row.append(Paragraph("Not Covered", nc_style))
+                    else:
+                        tier = pd.get("tier")
+                        row.append(tier_badge(tier) if tier else Paragraph("—", cell))
             rows.append(row)
         t = Table(rows, colWidths=[label_w] + [col_w]*len(carriers))
         ts = [
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -565,16 +595,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 1.5*mm))
 
     if ma_plans and drug_detail and months_remaining:
         carriers = list(ma_plans.keys())
-        elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN", sec_title))
+        elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN (PLAN COPAY RATES)", sec_title))
         elements.append(Spacer(1, 0.5*mm))
         elements.append(Paragraph(
-            "Monthly totals at preferred retail pharmacy. Costs may vary during deductible phase.",
-            S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
-        elements.append(Spacer(1, 1*mm))
+            "Costs shown are plan negotiated copay rates at preferred retail pharmacy — not retail/cash prices. Costs during deductible phase and at non-preferred pharmacies may differ. Verify with plan before client meeting.",
+            S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=6)))
+        elements.append(Spacer(1, 0.5*mm))
         month_col_w = 20*mm
         col_w = (274*mm - month_col_w) / len(carriers)
         rows = [[Paragraph("Month", ph_hdr)] +
@@ -598,8 +628,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
@@ -615,16 +645,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 1.5*mm))
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.5*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 1*mm))
 
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=1*mm, spaceAfter=1*mm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
         "Internal Use Only — Not for Distribution  |  Generated for agent reference only  |  "
         "Data sourced from CMS Medicare Formulary Files Q1 2026  |  "
