@@ -407,7 +407,9 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     
     # Override with CMS negotiated MFP if available (more accurate for 2026)
     # MFP drugs use 25% coinsurance per 2026 standard benefit design
-    mfp = get_mfp(drug_name)
+    # Strip dosage from drug_name before lookup (e.g. "rivaroxaban 20mg" -> "rivaroxaban")
+    drug_name_base = drug_name.split()[0] if drug_name else ""
+    mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     if mfp is not None:
         unit_cost = mfp
         # Force 25% coinsurance for MFP drugs regardless of plan's filed cost structure
