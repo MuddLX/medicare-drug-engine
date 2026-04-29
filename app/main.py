@@ -1080,6 +1080,49 @@ def health():
     return jsonify({"status": "ok", "db": os.path.exists(DB_PATH)})
 
 
+@app.route("/debug-costs", methods=["POST"])
+def debug_costs():
+    """Debug endpoint - returns raw compute result to verify Section 3 data."""
+    data = request.get_json(force=True, silent=True) or {}
+    drug_names = data.get("drug_names", "")
+    drug_dosages = data.get("drug_dosages", "")
+    zip_code = data.get("zip_code", "55309")
+    soa_date = data.get("soa_date", "02/05/2026")
+    
+    names = [n.strip() for n in drug_names.split(",") if n.strip()]
+    dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
+    drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
+             for i in range(len(names))]
+    
+    result = compute_drug_costs(drugs, zip_code, soa_date)
+    
+    # Extract just Section 3 relevant data
+    section3_debug = []
+    best_carrier = min(
+        {k: v for k, v in result["plan_summaries"].items() if v["plan_type"] == "MA"}.keys(),
+        key=lambda c: (result["plan_summaries"][c]["total_drug_plus_premium"],
+                      result["plan_summaries"][c]["deductible"])
+    )
+    
+    for drug in result["drug_detail"]:
+        plan_data = drug.get("plans", {}).get(best_carrier, {})
+        pharm_costs = plan_data.get("pharmacy_costs", [])
+        section3_debug.append({
+            "drug": drug.get("drug_name"),
+            "has_pharmacy_costs": len(pharm_costs) > 0,
+            "pharmacy_count": len(pharm_costs),
+            "first_pharmacy": pharm_costs[0]["name"] if pharm_costs else None,
+            "first_pharmacy_june": next(
+                (m["cost"] for m in pharm_costs[0]["monthly_costs"] if m["month"] == "June"), None
+            ) if pharm_costs else None,
+        })
+    
+    return jsonify({
+        "best_carrier": best_carrier,
+        "section3_debug": section3_debug
+    })
+
+
 @app.route("/process-soa", methods=["POST"])
 def process_soa():
     """
