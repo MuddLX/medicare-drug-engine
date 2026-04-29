@@ -940,6 +940,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         if best_drug:
             best_pharmacies = best_drug["plans"][ma_best].get("pharmacy_costs", [])
         
+        # Rebuild best_pharmacies from ALL drugs to ensure consistent pharmacy list
+        # Use unique pharmacy names from any drug that has pharmacy_costs
+        pharm_name_map = {}
+        for drug in drug_detail:
+            pc = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
+            for p in pc:
+                if p["name"] not in pharm_name_map:
+                    pharm_name_map[p["name"]] = p
+        best_pharmacies = sorted(pharm_name_map.values(), key=lambda x: x["distance_miles"])[:4]
+
         if best_pharmacies:
             elements.append(Paragraph(
                 "SECTION 3 — ESTIMATED MONTHLY DRUG COSTS — " + ma_best.upper() + " (RECOMMENDED PLAN)",
