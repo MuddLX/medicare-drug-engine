@@ -244,10 +244,12 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
 
     # Apply MFP override for federally negotiated drugs (2026)
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
-    if mfp is not None:
+    is_mfp_drug = mfp is not None
+    if is_mfp_drug:
         unit_cost = mfp
         cost_type = 2
         cost_amt = 0.25
+        disp_fee = 0  # MFP coinsurance is the full patient cost, no additional dispensing fee
 
     if ded_applies_db == "N" or deductible_remaining <= 0:
         if cost_type == 0:
