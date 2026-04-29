@@ -406,9 +406,13 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
     
     # Override with CMS negotiated MFP if available (more accurate for 2026)
+    # MFP drugs use 25% coinsurance per 2026 standard benefit design
     mfp = get_mfp(drug_name)
     if mfp is not None:
         unit_cost = mfp
+        # Force 25% coinsurance for MFP drugs regardless of plan's filed cost structure
+        cost_type = 2
+        cost_amt = 0.25
 
     monthly_costs = []
     deductible_remaining = deductible
