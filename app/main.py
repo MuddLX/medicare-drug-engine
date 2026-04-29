@@ -192,10 +192,13 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         # CMS pricing data contains negotiated plan costs, not retail drug prices,
         # so we cannot accurately calculate deductible phase costs. Show flat cost.
         if cost_type == 0:
-            monthly_cost = 0.0
+            # cost_type=0 means cost is based on unit_cost from pricing table (no fixed copay)
+            monthly_cost = round(unit_cost, 2) if unit_cost else 0.0
         elif cost_type == 1:
+            # cost_type=1 means fixed copay amount
             monthly_cost = float(cost_amt)
         elif cost_type == 2:
+            # cost_type=2 means coinsurance (% of unit_cost)
             monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
         else:
             monthly_cost = round(unit_cost, 2) if unit_cost else float(cost_amt)
