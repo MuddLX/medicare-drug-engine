@@ -585,7 +585,8 @@ def compute_drug_costs(drugs, zip_code, soa_date):
         for carrier, plan in plan_details.items():
             plan_cost = get_drug_cost_for_plan(
                 conn, plan["formulary_id"], plan["contract_id"],
-                plan["plan_id"], rxcuis, plan["deductible"], months_remaining)
+                plan["plan_id"], rxcuis, plan["deductible"], months_remaining,
+                drug_name=drug_name)
             
             # Add pharmacy-specific costs if we found nearby pharmacies
             nearby_pharmacies = pharmacy_map.get(carrier, [])
