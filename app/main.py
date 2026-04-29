@@ -186,30 +186,19 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
 
     monthly_costs = []
-    deductible_remaining = deductible
 
     for month_num in months_remaining:
         month_name = datetime(2026, month_num, 1).strftime("%B")
-        if ded_applies == "N" or deductible_remaining <= 0:
-            if cost_type == 0:
-                monthly_cost = 0.0
-            elif cost_type == 1:
-                monthly_cost = float(cost_amt)
-            elif cost_type == 2:
-                monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
-            else:
-                monthly_cost = float(cost_amt)
+        # CMS pricing data contains negotiated plan costs, not retail drug prices,
+        # so we cannot accurately calculate deductible phase costs. Show flat cost.
+        if cost_type == 0:
+            monthly_cost = 0.0
+        elif cost_type == 1:
+            monthly_cost = float(cost_amt)
+        elif cost_type == 2:
+            monthly_cost = round((unit_cost or 0) * float(cost_amt), 2)
         else:
-            if unit_cost:
-                if unit_cost >= deductible_remaining:
-                    monthly_cost = round(deductible_remaining + (float(cost_amt) if cost_type == 1 else 0), 2)
-                    deductible_remaining = 0
-                else:
-                    monthly_cost = round(unit_cost, 2)
-                    deductible_remaining -= unit_cost
-            else:
-                monthly_cost = float(cost_amt)
-                deductible_remaining = 0
+            monthly_cost = round(unit_cost, 2) if unit_cost else float(cost_amt)
         monthly_costs.append({"month": month_name, "cost": monthly_cost})
 
     annual_total = round(sum(m["cost"] for m in monthly_costs), 2)
@@ -217,6 +206,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         "tier": tier, "covered": True, "ndc": ndc,
         "monthly_costs": monthly_costs, "annual_total": annual_total,
         "steady_state_copay": float(cost_amt) if cost_type == 1 else None,
+        "ded_applies": ded_applies,
     }
 
 
@@ -580,10 +570,10 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans and drug_detail and months_remaining:
         carriers = list(ma_plans.keys())
-        elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN", sec_title))
+        elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN (PLAN COPAY RATES)", sec_title))
         elements.append(Spacer(1, 0.5*mm))
         elements.append(Paragraph(
-            "Monthly totals at preferred retail pharmacy. Costs may vary during deductible phase.",
+            "Costs shown are plan negotiated copay rates at preferred retail pharmacy — not retail/cash prices. Costs during deductible phase and at non-preferred pharmacies may differ. Verify with plan before client meeting.",
             S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=6)))
         elements.append(Spacer(1, 0.5*mm))
         month_col_w = 20*mm
