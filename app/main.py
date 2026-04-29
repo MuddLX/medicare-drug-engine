@@ -190,11 +190,11 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
 
 def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
                                unit_cost,
-                               pharmacy, deductible_remaining):
+                               pharmacy, deductible_remaining, drug_name=""):
     """
     Calculate drug cost at a specific pharmacy.
     Uses preferred vs non-preferred copay rates from beneficiary_cost table.
-    Preferred pharmacies get lower patient cost because plan pays more.
+    For MFP drugs, forces 25% coinsurance on negotiated price.
     """
     plan_id_padded = plan_id.zfill(3)
     is_preferred = pharmacy.get("preferred", True)
@@ -221,6 +221,14 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
         cost_amt = cost_row[3]
     
     ded_applies_db = cost_row[4]
+
+    # Apply MFP override for federally negotiated drugs (2026)
+    drug_name_base = drug_name.split()[0] if drug_name else ""
+    mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
+    if mfp is not None:
+        unit_cost = mfp
+        cost_type = 2
+        cost_amt = 0.25
 
     if ded_applies_db == "N" or deductible_remaining <= 0:
         if cost_type == 0:
@@ -578,7 +586,7 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                             cost, ded_used = get_drug_cost_at_pharmacy(
                                 conn, plan["contract_id"], plan["plan_id"],
                                 ndc, tier, unit_cost,
-                                pharmacy, ded_remaining
+                                pharmacy, ded_remaining, drug_name=drug_name
                             )
                             ded_remaining = max(0, ded_remaining - ded_used)
                             pharm_monthly.append({"month": month_name, "cost": cost})
