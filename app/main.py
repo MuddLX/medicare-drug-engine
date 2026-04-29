@@ -613,10 +613,21 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                         unit_cost = pricing[0]
                 
                 pharmacy_costs = []
-                if cost_row:
-                    for pharmacy in nearby_pharmacies:
-                        pharm_monthly = []
-                        ded_remaining = plan["deductible"]
+                
+                # Check if this is an insulin drug - flat $35 at all pharmacies
+                drug_name_base = drug_name.split()[0] if drug_name else ""
+                drug_is_insulin = is_insulin(drug_name) or is_insulin(drug_name_base)
+                
+                for pharmacy in nearby_pharmacies:
+                    pharm_monthly = []
+                    ded_remaining = plan["deductible"]
+                    
+                    if drug_is_insulin:
+                        # Insulin: flat $35/month, no deductible
+                        for month_num in months_remaining:
+                            month_name = datetime(2026, month_num, 1).strftime("%B")
+                            pharm_monthly.append({"month": month_name, "cost": 35.00})
+                    elif cost_row:
                         for month_num in months_remaining:
                             month_name = datetime(2026, month_num, 1).strftime("%B")
                             cost, ded_used = get_drug_cost_at_pharmacy(
@@ -626,7 +637,8 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                             )
                             ded_remaining = max(0, ded_remaining - ded_used)
                             pharm_monthly.append({"month": month_name, "cost": cost})
-                        
+                    
+                    if pharm_monthly:
                         pharmacy_costs.append({
                             "name": pharmacy["name"],
                             "address": pharmacy["address"],
