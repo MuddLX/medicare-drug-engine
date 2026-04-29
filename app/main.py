@@ -31,6 +31,38 @@ PLANS = [
 ]
 
 
+
+# ===== CMS NEGOTIATED MAXIMUM FAIR PRICES (MFP) FOR 2026 =====
+# These are the federally negotiated prices that plans must use for these drugs
+# Source: CMS Medicare Drug Price Negotiation Program, effective January 1, 2026
+# Patient pays coinsurance % × MFP (plan-specific coinsurance in beneficiary_cost table)
+MFP_2026 = {
+    # Drug name (lowercase) -> MFP per 30-day supply
+    "apixaban": 231.00,       # Eliquis
+    "eliquis": 231.00,
+    "rivaroxaban": 197.00,    # Xarelto
+    "xarelto": 197.00,
+    "empagliflozin": 197.00,  # Jardiance
+    "jardiance": 197.00,
+    "sitagliptin": 113.00,    # Januvia
+    "januvia": 113.00,
+    "dapagliflozin": 178.50,  # Farxiga
+    "farxiga": 178.50,
+    "etanercept": 2355.00,    # Enbrel
+    "enbrel": 2355.00,
+    "ustekinumab": 4695.00,   # Stelara
+    "stelara": 4695.00,
+    "insulin aspart": 119.00, # NovoLog/Fiasp
+    "novolog": 119.00,
+    "fiasp": 119.00,
+}
+
+def get_mfp(drug_name):
+    """Return CMS negotiated MFP for a drug, or None if not in program."""
+    if not drug_name:
+        return None
+    return MFP_2026.get(drug_name.lower().strip())
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -156,30 +188,43 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
     return sorted_pharms[:max_results]
 
 
-def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier, 
-                               unit_cost, cost_type, cost_amt, ded_applies,
-                               pharmacy, deductible_remaining, is_brand):
+def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
+                               unit_cost, ded_applies,
+                               pharmacy, deductible_remaining):
     """
-    Calculate drug cost at a specific pharmacy using their dispensing fee.
-    
-    Patient cost = copay/coinsurance + dispensing_fee
-    During deductible: patient pays unit_cost + dispensing_fee
+    Calculate drug cost at a specific pharmacy.
+    Uses preferred vs non-preferred copay rates from beneficiary_cost table.
+    Preferred pharmacies get lower patient cost because plan pays more.
     """
     plan_id_padded = plan_id.zfill(3)
-    
-    # Get dispensing fee for this pharmacy
-    if is_brand:
-        disp_fee = pharmacy.get("brand_fee", 0)
+    is_preferred = pharmacy.get("preferred", True)
+    disp_fee = pharmacy.get("generic_fee", 0) or pharmacy.get("selected_fee", 0)
+
+    # Get correct cost row based on preferred status
+    cost_row = conn.execute("""
+        SELECT cost_type_pref, cost_amt_pref,
+               cost_type_nonpref, cost_amt_nonpref,
+               ded_applies
+        FROM beneficiary_cost
+        WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
+        ORDER BY coverage_level ASC LIMIT 1
+    """, (contract_id, plan_id_padded, tier)).fetchone()
+
+    if not cost_row:
+        return 0.0, 0
+
+    if is_preferred:
+        cost_type = cost_row[0]
+        cost_amt = cost_row[1]
     else:
-        disp_fee = pharmacy.get("generic_fee", 0)
+        cost_type = cost_row[2]
+        cost_amt = cost_row[3]
     
-    if disp_fee == 0:
-        disp_fee = pharmacy.get("selected_fee", 0)
-    
-    if ded_applies == "N" or deductible_remaining <= 0:
-        # Post-deductible
+    ded_applies_db = cost_row[4]
+
+    if ded_applies_db == "N" or deductible_remaining <= 0:
         if cost_type == 0:
-            patient_cost = float(unit_cost or 0) * 1.0  # use unit cost
+            patient_cost = 0.0
         elif cost_type == 1:
             patient_cost = float(cost_amt)
         elif cost_type == 2:
@@ -188,14 +233,11 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
             patient_cost = float(cost_amt)
         return round(patient_cost + disp_fee, 2), 0
     else:
-        # In deductible phase
         if unit_cost:
             drug_cost = unit_cost + disp_fee
             if drug_cost >= deductible_remaining:
-                # Deductible met this month
-                remaining_after = max(0, deductible_remaining - unit_cost)
-                post_ded_portion = float(cost_amt) if cost_type == 1 else 0
-                return round(deductible_remaining + disp_fee + post_ded_portion, 2), deductible_remaining
+                post_ded = float(cost_amt) if cost_type == 1 else 0
+                return round(deductible_remaining + disp_fee + post_ded, 2), deductible_remaining
             else:
                 return round(drug_cost, 2), drug_cost - disp_fee
         else:
@@ -324,7 +366,7 @@ def lookup_rxcuis(drug_name, dosage=""):
     return rxcuis
 
 
-def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining):
+def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining, drug_name=''):
     plan_id_padded = plan_id.zfill(3)
     tier_row = None
     for rxcui in rxcuis:
@@ -362,6 +404,11 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         LIMIT 1
     """, (contract_id, plan_id_padded, ndc)).fetchone()
     unit_cost = pricing_row["unit_cost"] if pricing_row else None
+    
+    # Override with CMS negotiated MFP if available (more accurate for 2026)
+    mfp = get_mfp(drug_name)
+    if mfp is not None:
+        unit_cost = mfp
 
     monthly_costs = []
     deductible_remaining = deductible
@@ -517,10 +564,6 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                 
                 pharmacy_costs = []
                 if cost_row:
-                    cost_type = cost_row[0]
-                    cost_amt = cost_row[1]
-                    ded_applies = cost_row[2]
-                    
                     for pharmacy in nearby_pharmacies:
                         pharm_monthly = []
                         ded_remaining = plan["deductible"]
@@ -528,8 +571,8 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                             month_name = datetime(2026, month_num, 1).strftime("%B")
                             cost, ded_used = get_drug_cost_at_pharmacy(
                                 conn, plan["contract_id"], plan["plan_id"],
-                                ndc, tier, unit_cost, cost_type, cost_amt,
-                                ded_applies, pharmacy, ded_remaining, is_brand
+                                ndc, tier, unit_cost, ded_applies,
+                                pharmacy, ded_remaining
                             )
                             ded_remaining = max(0, ded_remaining - ded_used)
                             pharm_monthly.append({"month": month_name, "cost": cost})
