@@ -69,85 +69,91 @@ def get_client_coords(conn, zip_code):
 def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30):
     """
     Find closest preferred retail pharmacies to client zip for a specific plan.
-    Prioritizes mainstream chains, falls back to any preferred pharmacy within radius.
-    Returns list of {"npi", "name", "address", "city", "distance_miles", "preferred"}
+    Matches pharmacies by zip code proximity rather than NPI (avoids NCPDP/NPI mismatch).
+    Returns list of dicts with name, address, distance, fees.
     """
     plan_id_padded = plan_id.zfill(3)
-    
+
     # Get client coordinates
     client_lat, client_lon, client_city = get_client_coords(conn, client_zip)
-    
-    # Get all preferred retail pharmacies for this plan
-    rows = conn.execute("""
-        SELECT pn.npi, pn.pharmacy_zip, pn.preferred_retail,
-               pn.generic_fee_30, pn.brand_fee_30, pn.selected_fee_30,
-               pn.floor_price,
-               nm.name, nm.address, nm.city, nm.is_chain
-        FROM pharmacy_network pn
-        LEFT JOIN pharmacy_names nm ON pn.npi = nm.npi
-        WHERE pn.contract_id = ? AND pn.plan_id = ?
-        AND pn.is_retail = 1
-        AND pn.preferred_retail = 'Y'
+    if not client_lat:
+        return []
+
+    # Get preferred zip codes for this plan within radius
+    pref_rows = conn.execute("""
+        SELECT DISTINCT pharmacy_zip, preferred_retail,
+               generic_fee_30, brand_fee_30, selected_fee_30
+        FROM pharmacy_network
+        WHERE contract_id = ? AND plan_id = ? AND is_retail = 1
     """, (contract_id, plan_id_padded)).fetchall()
-    
-    if not rows:
-        # Fall back to any retail pharmacy
-        rows = conn.execute("""
-            SELECT pn.npi, pn.pharmacy_zip, pn.preferred_retail,
-                   pn.generic_fee_30, pn.brand_fee_30, pn.selected_fee_30,
-                   pn.floor_price,
-                   nm.name, nm.address, nm.city, nm.is_chain
-            FROM pharmacy_network pn
-            LEFT JOIN pharmacy_names nm ON pn.npi = nm.npi
-            WHERE pn.contract_id = ? AND pn.plan_id = ?
-            AND pn.is_retail = 1
-        """, (contract_id, plan_id_padded)).fetchall()
-    
-    # Calculate distances if we have client coords
-    pharmacies = []
-    for row in rows:
-        npi, pharm_zip, pref, generic_fee, brand_fee, selected_fee, floor_price, name, address, city, is_chain = row
-        
-        distance = None
-        if client_lat and client_lon and pharm_zip:
-            pharm_coords = conn.execute(
-                "SELECT lat, lon FROM zip_coords WHERE zip = ?", (pharm_zip.zfill(5),)
-            ).fetchone()
-            if pharm_coords and pharm_coords[0]:
-                distance = haversine_distance(client_lat, client_lon, pharm_coords[0], pharm_coords[1])
-        
-        if distance is not None and distance > max_miles:
+
+    # Build zip -> fees + preferred lookup
+    zip_info = {}
+    for row in pref_rows:
+        pharm_zip, pref, gen_fee, brand_fee, sel_fee = row
+        pharm_zip = pharm_zip.zfill(5)
+        if pharm_zip not in zip_info or (pref == "Y" and zip_info[pharm_zip]["preferred"] != "Y"):
+            zip_info[pharm_zip] = {
+                "preferred": pref,
+                "generic_fee": float(gen_fee or 0),
+                "brand_fee": float(brand_fee or 0),
+                "selected_fee": float(sel_fee or 0),
+            }
+
+    # Find pharmacy names in nearby zips
+    candidates = []
+    for pharm_zip, info in zip_info.items():
+        # Get zip coordinates
+        coords = conn.execute(
+            "SELECT lat, lon FROM zip_coords WHERE zip = ?", (pharm_zip,)
+        ).fetchone()
+        if not coords or not coords[0]:
             continue
-            
-        pharmacies.append({
-            "npi": npi,
-            "name": name or "Unknown Pharmacy",
-            "address": address or "",
-            "city": city or "",
-            "distance_miles": round(distance, 1) if distance is not None else 999,
-            "preferred": pref == "Y",
-            "is_chain": bool(is_chain),
-            "generic_fee": float(generic_fee or 0),
-            "brand_fee": float(brand_fee or 0),
-            "selected_fee": float(selected_fee or 0),
-            "floor_price": float(floor_price or 0),
-        })
-    
-    # Sort: chains first by distance, then non-chains by distance
-    chains = sorted([p for p in pharmacies if p["is_chain"]], key=lambda x: x["distance_miles"])
-    non_chains = sorted([p for p in pharmacies if not p["is_chain"]], key=lambda x: x["distance_miles"])
-    
-    # Deduplicate by name (keep closest of each name)
-    seen_names = {}
-    for p in chains + non_chains:
-        base_name = p["name"].split("#")[0].strip()
-        if base_name not in seen_names:
-            seen_names[base_name] = p
-        elif p["distance_miles"] < seen_names[base_name]["distance_miles"]:
-            seen_names[base_name] = p
-    
-    sorted_pharmacies = sorted(seen_names.values(), key=lambda x: (not x["is_chain"], x["distance_miles"]))
-    return sorted_pharmacies[:max_results]
+
+        distance = haversine_distance(client_lat, client_lon, coords[0], coords[1])
+        if distance > max_miles:
+            continue
+
+        # Get pharmacies in this zip
+        pharms = conn.execute("""
+            SELECT npi, name, address, city, is_chain
+            FROM pharmacy_names
+            WHERE zip = ? AND name != 'Unknown Pharmacy'
+        """, (pharm_zip,)).fetchall()
+
+        for npi, name, address, city, is_chain in pharms:
+            if not name:
+                continue
+            candidates.append({
+                "npi": npi,
+                "name": name,
+                "address": address or "",
+                "city": city or "",
+                "zip": pharm_zip,
+                "distance_miles": round(distance, 1),
+                "preferred": info["preferred"] == "Y",
+                "is_chain": bool(is_chain),
+                "generic_fee": info["generic_fee"],
+                "brand_fee": info["brand_fee"],
+                "selected_fee": info["selected_fee"],
+            })
+
+    if not candidates:
+        return []
+
+    # Deduplicate by base name, keep closest
+    seen = {}
+    for p in candidates:
+        base = p["name"].split("#")[0].strip().upper()
+        if base not in seen or p["distance_miles"] < seen[base]["distance_miles"]:
+            seen[base] = p
+
+    # Sort: preferred chains first, then by distance
+    sorted_pharms = sorted(
+        seen.values(),
+        key=lambda x: (not x["preferred"], not x["is_chain"], x["distance_miles"])
+    )
+    return sorted_pharms[:max_results]
 
 
 def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier, 
@@ -779,9 +785,12 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             dosage = drug.get("dosage","")
             original = drug.get("original_name", "")
             label = f"{name} {dosage}".strip() if dosage else name
-            # Show original name if different from normalized
-            if original and original.lower() != name.lower():
-                label += f"\n(written: {original})"
+            # Show original name only if it meaningfully differs
+            # Strip dosage from original for comparison
+            orig_base = original.split()[0].lower() if original else ""
+            norm_base = name.split()[0].lower() if name else ""
+            if original and orig_base != norm_base:
+                label += "\n(written: " + original + ")"
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
                 pd = drug.get("plans",{}).get(c,{})
@@ -827,79 +836,75 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             best_pharmacies = best_drug["plans"][ma_best].get("pharmacy_costs", [])
         
         if best_pharmacies:
-            # Section 3A: Pharmacy-specific costs for recommended plan
             elements.append(Paragraph(
                 "SECTION 3 — ESTIMATED MONTHLY DRUG COSTS — " + ma_best.upper() + " (RECOMMENDED PLAN)",
                 sec_title))
             elements.append(Spacer(1, 0.5*mm))
+            # Show pharmacy names and distances
+            pharm_info = "  ·  ".join([
+                p["name"] + " (" + str(p["distance_miles"]) + " mi)"
+                for p in best_pharmacies
+            ])
             elements.append(Paragraph(
-                "Costs shown at preferred retail pharmacies nearest to client ZIP " + zip_code + ". " +
-                "Includes deductible phase. Mail order typically available for 90-day supply.",
+                "Nearest preferred pharmacies to ZIP " + zip_code + ":  " + pharm_info,
                 S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
             elements.append(Spacer(1, 1*mm))
 
-            # Build pharmacy columns
-            pharm_names = [p["name"] + "\n(" + str(p["distance_miles"]) + " mi)" for p in best_pharmacies]
-            month_col_w = 18*mm
-            drug_name_col_w = 28*mm
-            pharm_col_w = (274*mm - month_col_w - drug_name_col_w) / len(best_pharmacies)
+            # Layout: Month | Drug1@Pharm1 | Drug1@Pharm2 | ... | Total@Pharm1 | Total@Pharm2
+            # Simpler: one table per pharmacy showing all drugs as columns, months as rows
+            # Even simpler: Month | Pharm1 Total | Pharm2 Total | Pharm3 Total | Pharm4 Total
 
-            # Header
-            hdr = [Paragraph("Month", ph_hdr), Paragraph("Drug", ph_hdr)] + [
-                Paragraph(n.replace("\n", "\n"), S("ph2", fontSize=5, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=7))
-                for n in pharm_names
-            ]
+            month_col_w = 20*mm
+            pharm_col_w = (274*mm - month_col_w) / len(best_pharmacies)
+
+            # Header row with pharmacy names
+            hdr = [Paragraph("Month", ph_hdr)]
+            for p in best_pharmacies:
+                short_name = p["name"].split("#")[0].strip()
+                if len(short_name) > 20:
+                    short_name = short_name[:18] + "…"
+                hdr.append(Paragraph(short_name, S("ph2", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
             rows = [hdr]
 
-            # Monthly rows per drug
-            drug_colors = [WHITE, LIGHT_GRAY]
-            for di, drug in enumerate(drug_detail):
-                drug_name = drug.get("drug_name", "")
-                dosage = drug.get("dosage", "")
-                label = (drug_name + " " + dosage).strip() if dosage else drug_name
-                pharm_costs = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
-                
-                if not pharm_costs:
-                    continue
-                
-                # One row per month
-                for mi, month in enumerate(months_remaining):
-                    month_label = Paragraph(month if mi == 0 or True else "", month_lbl)
-                    drug_label = Paragraph(label if mi == 0 else "", S("dl2", fontSize=5, textColor=DARK_GRAY, fontName="Helvetica-Bold" if mi==0 else "Helvetica", leading=7))
-                    row = [month_label, drug_label]
-                    for pharm in pharm_costs:
-                        cost = next((m["cost"] for m in pharm["monthly_costs"] if m["month"] == month), 0) or 0
-                        row.append(Paragraph("$" + "{:.2f}".format(cost), cell))
-                    rows.append(row)
+            # Monthly total rows (sum all drugs at each pharmacy)
+            for month in months_remaining:
+                row = [Paragraph(month, month_lbl)]
+                for pharm in best_pharmacies:
+                    monthly_total = 0
+                    for drug in drug_detail:
+                        pharm_costs = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
+                        matched = next((pc for pc in pharm_costs if pc["name"] == pharm["name"]), None)
+                        if matched:
+                            cost = next((m["cost"] for m in matched["monthly_costs"] if m["month"] == month), 0)
+                            monthly_total += cost or 0
+                    row.append(Paragraph("$" + "{:.2f}".format(monthly_total), cell))
+                rows.append(row)
 
             # Annual total row
-            annual_row = [
-                Paragraph("Annual Total", S("at2", fontSize=5, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=7)),
-                Paragraph("All Drugs", S("at3", fontSize=5, textColor=DARK_GRAY, leading=7))
-            ]
+            annual_row = [Paragraph("Annual Total", S("at", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8))]
             for pharm in best_pharmacies:
-                total = sum(
-                    (drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs") or [{}])[
-                        next((i for i, p in enumerate(drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])) if p["name"] == pharm["name"]), 0)
-                    ].get("annual_total", 0) or 0
-                    for drug in drug_detail
-                    if drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs")
-                )
-                annual_row.append(Paragraph("$" + "{:.2f}".format(total),
-                    S("av2", fontSize=5, textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=7)))
+                annual_total = 0
+                for drug in drug_detail:
+                    pharm_costs = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
+                    matched = next((pc for pc in pharm_costs if pc["name"] == pharm["name"]), None)
+                    if matched:
+                        annual_total += matched.get("annual_total", 0) or 0
+                annual_row.append(Paragraph("$" + "{:.2f}".format(annual_total),
+                    S("av", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
             rows.append(annual_row)
 
-            col_widths = [month_col_w, drug_name_col_w] + [pharm_col_w] * len(best_pharmacies)
+            col_widths = [month_col_w] + [pharm_col_w] * len(best_pharmacies)
             t = Table(rows, colWidths=col_widths)
             ts = [
                 ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
-                ("GRID", (0,0), (-1,-1), 0.3, MID_GRAY),
+                ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
                 ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 1),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-                ("LEFTPADDING", (0,0), (-1,-1), 3),
-                ("RIGHTPADDING", (0,0), (-1,-1), 3),
-                ("BACKGROUND", (0,-1), (-1,-1), LIGHT_GRAY),
+                ("TOPPADDING", (0,0), (-1,-1), 2),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+                ("LEFTPADDING", (0,0), (-1,-1), 4),
+                ("RIGHTPADDING", (0,0), (-1,-1), 4),
+                ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
+                ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
                 ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
             ]
             t.setStyle(TableStyle(ts))
