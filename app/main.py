@@ -1233,6 +1233,18 @@ def health():
     return jsonify({"status": "ok", "db": os.path.exists(DB_PATH)})
 
 
+@app.route("/test-geocode", methods=["GET"])
+def test_geocode():
+    """Test if geocoding works from Railway."""
+    lat, lon, city = geocode_address_live("7203 Birch Lane", "Woodbury", "MN", "55125")
+    return jsonify({
+        "lat": lat,
+        "lon": lon,
+        "city": city,
+        "success": lat is not None
+    })
+
+
 @app.route("/debug-costs", methods=["POST"])
 def debug_costs():
     """Debug endpoint - returns raw compute result to verify Section 3 data."""
