@@ -185,19 +185,46 @@ def get_plans_for_zip(conn, zip_code):
         ("S5921", "406"): "AARP Rx Preferred",
     }
 
+    # Group by carrier family — show only the lowest-premium plan per carrier
+    # e.g. HealthPartners shows Journey Pace ($0), not all 4 plans
+    CARRIER_FAMILY = {
+        "H4882": "HealthPartners", "H6309": "HealthPartners",
+        "H5959": "Blue Cross",
+        "H6154": "Medica", "H8889": "Medica", "H2450": "Medica Cost",
+        "H5216": "Humana", "H8145": "Humana",
+        "H3219": "Aetna",
+        "H2001": "UHC AARP",
+        "H3186": "Align",
+        "H9834": "Quartz",
+    }
+
+    # Pick best plan per carrier family (lowest premium, prefer $0)
+    best_per_family = {}
     for row in ma_rows:
         key = (row[0], row[1].zfill(3))
+        family = CARRIER_FAMILY.get(row[0], row[0])
+        premium = row[4] or 999
+        if family not in best_per_family or premium < best_per_family[family]["premium"]:
+            best_per_family[family] = {
+                "contract_id": row[0], "plan_id": row[1],
+                "plan_name": row[2], "org_name": row[3],
+                "premium": premium, "deductible": row[5],
+                "plan_type": row[6], "key": key
+            }
+
+    for family, row in sorted(best_per_family.items(), key=lambda x: x[1]["premium"]):
+        key = row["key"]
         if key in seen:
             continue
         seen.add(key)
-        carrier = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else row[0])
+        carrier = FRIENDLY_NAMES.get(key, row["plan_name"][:35] if row["plan_name"] else row["contract_id"])
         plans.append({
             "carrier": carrier,
-            "contract_id": row[0],
-            "plan_id": row[1],
-            "type": "Cost" if "Cost" in (row[6] or "") else "MA",
-            "landscape_premium": row[4],
-            "landscape_deductible": row[5],
+            "contract_id": row["contract_id"],
+            "plan_id": row["plan_id"],
+            "type": "Cost" if "Cost" in (row["plan_type"] or "") else "MA",
+            "landscape_premium": row["premium"],
+            "landscape_deductible": row["deductible"],
         })
 
     for row in pd_rows:
@@ -1445,7 +1472,25 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "db": os.path.exists(DB_PATH)})
+    conn = get_db()
+    tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    zip_county = conn.execute("SELECT COUNT(*) FROM zip_county").fetchone()[0] if "zip_county" in tables else 0
+    service_area = conn.execute("SELECT COUNT(*) FROM service_area").fetchone()[0] if "service_area" in tables else 0
+    plans = conn.execute("SELECT COUNT(*) FROM plans").fetchone()[0]
+    pharm_net = conn.execute("SELECT COUNT(DISTINCT contract_id||plan_id) FROM pharmacy_network").fetchone()[0]
+    # Test zip lookup for 55309
+    county_55309 = None
+    if "zip_county" in tables:
+        r = conn.execute("SELECT county_name FROM zip_county WHERE zip='55309'").fetchone()
+        county_55309 = r[0] if r else "NOT FOUND"
+    conn.close()
+    return jsonify({
+        "status": "ok", "db": os.path.exists(DB_PATH),
+        "tables": tables, "zip_county_rows": zip_county,
+        "service_area_rows": service_area, "plans": plans,
+        "pharmacy_network_plans": pharm_net,
+        "zip_55309_county": county_55309
+    })
 
 
 @app.route("/plans", methods=["GET"])
