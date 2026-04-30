@@ -1,5 +1,5 @@
 """
-Medicare Drug Cost API v5
+Medicare Drug Cost API v6
 Endpoints:
 - POST /process-soa: accepts flat fields from Make, normalizes drugs via Claude,
   looks up drug costs, returns PDF report
@@ -1059,166 +1059,174 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(t)
         elements.append(Spacer(1, 0.3*mm))
 
-    if ma_plans and drug_detail and months_remaining:
-        # Get pharmacies for recommended plan
-        best_drug = next((d for d in drug_detail if d.get("plans", {}).get(ma_best, {}).get("pharmacy_costs")), None)
-        best_pharmacies = []
-        if best_drug:
-            best_pharmacies = best_drug["plans"][ma_best].get("pharmacy_costs", [])
-        
-        # Rebuild best_pharmacies from ALL drugs to ensure consistent pharmacy list
-        # Use unique pharmacy names from any drug that has pharmacy_costs
-        pharm_name_map = {}
-        for drug in drug_detail:
-            pc = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
-            for p in pc:
-                if p["name"] not in pharm_name_map:
-                    pharm_name_map[p["name"]] = p
-        best_pharmacies = sorted(pharm_name_map.values(), key=lambda x: x["distance_miles"])[:4]
+    if ma_plans and drug_detail:
+        elements.append(Paragraph("SECTION 3 — PHARMACY COST COMPARISON BY PLAN", sec_title))
+        elements.append(Spacer(1, 0.3*mm))
 
-        if best_pharmacies:
-            elements.append(Paragraph(
-                "SECTION 3 — ESTIMATED MONTHLY DRUG COSTS — " + ma_best.upper() + " (RECOMMENDED PLAN)",
-                sec_title))
-            elements.append(Spacer(1, 0.3*mm))
-            # Show pharmacy names and distances
-            pharm_info = "  ·  ".join([
-                p["name"] + " (" + str(p["distance_miles"]) + " mi)"
-                for p in best_pharmacies
-            ])
-            # Show actual address if available, otherwise zip
-            if client_address and client_city:
-                location_label = client_address + ", " + client_city
-            else:
-                location_label = "ZIP " + zip_code
-            elements.append(Paragraph(
-                "Nearest in-network pharmacies to " + location_label + ":  " + pharm_info,
-                S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
-            elements.append(Spacer(1, 0.3*mm))
+        if client_address and client_city:
+            location_label = client_address + ", " + client_city
+        else:
+            location_label = "ZIP " + zip_code
+        elements.append(Paragraph(
+            "Nearest in-network pharmacies to " + location_label + "  ·  Costs include deductible phase where applicable",
+            S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
+        elements.append(Spacer(1, 0.5*mm))
 
-            # Layout: Month | Drug1@Pharm1 | Drug1@Pharm2 | ... | Total@Pharm1 | Total@Pharm2
-            # Simpler: one table per pharmacy showing all drugs as columns, months as rows
-            # Even simpler: Month | Pharm1 Total | Pharm2 Total | Pharm3 Total | Pharm4 Total
-
-            mail_col_w = 22*mm
-            month_col_w = 20*mm
-            pharm_col_w = (274*mm - month_col_w - mail_col_w) / len(best_pharmacies)
-
-            # Header row with pharmacy names + Mail Order
-            hdr = [Paragraph("Month", ph_hdr)]
-            for p in best_pharmacies:
-                short_name = p["name"].split("#")[0].strip()
-                if len(short_name) > 18:
-                    short_name = short_name[:16] + "…"
-                pref_label = " ✓" if p.get("preferred") else ""
-                hdr.append(Paragraph(short_name + pref_label, S("ph2", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
-            hdr.append(Paragraph("Mail Order", S("ph3", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
-            rows = [hdr]
-
-            # Show each month but use abbreviated month names to save space
-            for month in months_remaining:
-                # Abbreviate month name
-                month_abbr = month[:3]
-                row = [Paragraph(month_abbr, month_lbl)]
-                for pharm in best_pharmacies:
-                    monthly_total = 0
-                    for drug in drug_detail:
-                        pharm_costs = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
-                        matched = next((pc for pc in pharm_costs if pc["name"] == pharm["name"]), None)
-                        if matched:
-                            cost = next((m["cost"] for m in matched["monthly_costs"] if m["month"] == month), 0)
-                            monthly_total += cost or 0
-                    row.append(Paragraph("$" + "{:.2f}".format(monthly_total), cell))
-                # Mail order total
-                mail_total = 0
-                for drug in drug_detail:
-                    mail_costs = drug.get("plans", {}).get(ma_best, {}).get("mail_order_costs", {})
-                    if mail_costs:
-                        cost = next((m["cost"] for m in mail_costs.get("monthly_costs", []) if m["month"] == month), 0)
-                        mail_total += cost or 0
-                row.append(Paragraph("$" + "{:.2f}".format(mail_total),
-                    S("mc", fontSize=6, textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)))
-                rows.append(row)
-
-            # Annual total row
-            annual_row = [Paragraph("Annual Total", S("at", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8))]
-            for pharm in best_pharmacies:
-                annual_total = 0
-                for drug in drug_detail:
-                    pharm_costs = drug.get("plans", {}).get(ma_best, {}).get("pharmacy_costs", [])
-                    matched = next((pc for pc in pharm_costs if pc["name"] == pharm["name"]), None)
-                    if matched:
-                        annual_total += matched.get("annual_total", 0) or 0
-                annual_row.append(Paragraph("$" + "{:.2f}".format(annual_total),
-                    S("av", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
-            # Mail order annual
+        def get_plan_pharmacy_summary(carrier):
+            pharm_totals = {}
+            for drug in drug_detail:
+                pc_list = drug.get("plans", {}).get(carrier, {}).get("pharmacy_costs", [])
+                for pc in pc_list:
+                    name = pc["name"]
+                    dist = pc.get("distance_miles", 99)
+                    annual = pc.get("annual_total", 0) or 0
+                    if name not in pharm_totals:
+                        pharm_totals[name] = {"annual": 0, "distance": dist, "monthly": {}}
+                    pharm_totals[name]["annual"] += annual
+                    for m in pc.get("monthly_costs", []):
+                        mn = m["month"]
+                        pharm_totals[name]["monthly"][mn] = pharm_totals[name]["monthly"].get(mn, 0) + (m["cost"] or 0)
+            if not pharm_totals:
+                return None
+            min_cost = min(v["annual"] for v in pharm_totals.values())
+            cheapest = sorted(
+                [{"name": k, "distance": v["distance"], "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
+                 for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) <= 1.0],
+                key=lambda x: x["distance"]
+            )
+            if len(cheapest) == 1:
+                others = sorted(
+                    [{"name": k, "distance": v["distance"], "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
+                     for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) > 1.0],
+                    key=lambda x: x["annual"]
+                )
+                if others:
+                    cheapest.append(others[0])
             mail_annual = sum(
-                (drug.get("plans", {}).get(ma_best, {}).get("mail_order_costs", {}).get("annual_total", 0) or 0)
+                (drug.get("plans", {}).get(carrier, {}).get("mail_order_costs", {}).get("annual_total", 0) or 0)
                 for drug in drug_detail
             )
-            mail_annual_str = "$" + "{:.2f}".format(mail_annual)
-            annual_row.append(Paragraph(mail_annual_str,
-                S("ma", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
-            rows.append(annual_row)
+            monthly = cheapest[0]["monthly"] if cheapest else {}
+            costs_by_month = [(mn, monthly.get(mn, 0)) for mn in months_remaining] if months_remaining else []
+            transitions = []
+            prev_cost = None
+            for mn, cost in costs_by_month:
+                if cost != prev_cost:
+                    transitions.append((mn[:3], cost))
+                    prev_cost = cost
+            return {
+                "min_annual": min_cost,
+                "cheapest": cheapest,
+                "mail_annual": mail_annual,
+                "transitions": transitions,
+                "all_same": len(transitions) <= 1
+            }
 
-            col_widths = [month_col_w] + [pharm_col_w] * len(best_pharmacies) + [mail_col_w]
-            t = Table(rows, colWidths=col_widths)
-            ts = [
-                ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
-                ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
-                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 1),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-                ("LEFTPADDING", (0,0), (-1,-1), 4),
-                ("RIGHTPADDING", (0,0), (-1,-1), 4),
-                ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
-                ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
-                ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
+        hdr_s  = S("sh",  fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", leading=8, alignment=TA_LEFT)
+        plan_s = S("ps",  fontSize=6, textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+        sub_s2 = S("ss2", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)
+        cost_s = S("cs",  fontSize=7, textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+        trans_s= S("ts2", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)
+        pharm_s= S("phs", fontSize=6, textColor=DARK_GRAY, leading=8)
+        mail_s = S("ms2", fontSize=7, textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+        save_s = S("sv",  fontSize=5, textColor=GREEN_TEXT, leading=7)
+        runner_s=S("rs",  fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)
+
+        plan_col_w = 42*mm
+        pharm_col_w= 62*mm
+        cost_col_w = 88*mm
+        mail_col_w = 82*mm
+        total_w = plan_col_w + pharm_col_w + cost_col_w + mail_col_w
+        scale = 274*mm / total_w
+        plan_col_w *= scale; pharm_col_w *= scale; cost_col_w *= scale; mail_col_w *= scale
+
+        inner_ts = TableStyle([
+            ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),1),
+            ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+        ])
+
+        rows = [[
+            Paragraph("Plan", hdr_s),
+            Paragraph("Cheapest pharmacy", hdr_s),
+            Paragraph("Monthly retail cost", hdr_s),
+            Paragraph("Mail order / mo", hdr_s),
+        ]]
+
+        carriers = list(ma_plans.keys())
+        for carrier in carriers:
+            plan_data = ma_plans[carrier]
+            summary = get_plan_pharmacy_summary(carrier)
+            is_best = carrier == ma_best
+            star = " ★" if is_best else ""
+
+            plan_cell = Table([
+                [Paragraph(carrier + star, plan_s)],
+                [Paragraph("$" + "{:.2f}".format(plan_data["premium_monthly"]) + " prem · $" + "{:.0f}".format(plan_data["deductible"]) + " ded", sub_s2)]
+            ], colWidths=[plan_col_w - 3*mm], style=inner_ts)
+
+            if not summary:
+                rows.append([plan_cell, Paragraph("No data", sub_s2), Paragraph("—", cell), Paragraph("—", cell)])
+                continue
+
+            pharm_lines = []
+            for p in summary["cheapest"][:3]:
+                name = p["name"].split("#")[0].strip()[:20]
+                dist = str(p["distance"]) + " mi"
+                if p.get("is_runner_up"):
+                    diff = p.get("cost_diff", 0)
+                    pharm_lines.append(Paragraph(name + "  (" + dist + ")  +$" + "{:.0f}".format(diff) + "/yr", runner_s))
+                else:
+                    pharm_lines.append(Paragraph(name + "  (" + dist + ")", pharm_s))
+            pharm_cell = Table([[p] for p in pharm_lines], colWidths=[pharm_col_w - 3*mm], style=inner_ts)
+
+            if summary["all_same"]:
+                monthly_amt = summary["min_annual"] / len(months_remaining) if months_remaining else 0
+                cost_parts = [Paragraph("$" + "{:.2f}".format(monthly_amt) + " / mo", cost_s)]
+            else:
+                t_parts = []
+                for i, (mn, cost) in enumerate(summary["transitions"][:4]):
+                    if i < len(summary["transitions"]) - 1:
+                        t_parts.append(mn + " $" + "{:.0f}".format(cost))
+                    else:
+                        t_parts.append(mn + " $" + "{:.2f}".format(cost) + " steady")
+                steady = summary["transitions"][-1][1] if summary["transitions"] else 0
+                cost_parts = [
+                    Paragraph("$" + "{:.2f}".format(steady) + " / mo", cost_s),
+                    Paragraph("  →  ".join(t_parts), trans_s)
+                ]
+            cost_cell = Table([[p] for p in cost_parts], colWidths=[cost_col_w - 3*mm], style=inner_ts)
+
+            mail_monthly = summary["mail_annual"] / len(months_remaining) if months_remaining else 0
+            savings = summary["min_annual"] - summary["mail_annual"]
+            mail_parts = [Paragraph("$" + "{:.2f}".format(mail_monthly) + " / mo", mail_s)]
+            if savings > 1:
+                mail_parts.append(Paragraph("Save $" + "{:.0f}".format(savings) + "/yr vs retail", save_s))
+            mail_cell = Table([[p] for p in mail_parts], colWidths=[mail_col_w - 3*mm], style=inner_ts)
+
+            rows.append([plan_cell, pharm_cell, cost_cell, mail_cell])
+
+        t = Table(rows, colWidths=[plan_col_w, pharm_col_w, cost_col_w, mail_col_w])
+        ts_list = [
+            ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
+            ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("LEFTPADDING", (0,0), (-1,-1), 4),
+            ("RIGHTPADDING", (0,0), (-1,-1), 4),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
+        ]
+        if ma_best in carriers:
+            bi = carriers.index(ma_best) + 1
+            ts_list += [
+                ("BACKGROUND", (0,bi), (-1,bi), GREEN_BG),
+                ("LINEABOVE", (0,bi), (-1,bi), 1, TEAL),
+                ("LINEBELOW", (0,bi), (-1,bi), 1, TEAL),
             ]
-            t.setStyle(TableStyle(ts))
-            elements.append(t)
-        else:
-            # Fallback: plan-level comparison if no pharmacy data
-            elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN", sec_title))
-            elements.append(Spacer(1, 0.3*mm))
-            elements.append(Paragraph(
-                "Monthly totals at preferred retail pharmacy. Pharmacy-specific data not available for this zip code.",
-                S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
-            elements.append(Spacer(1, 0.3*mm))
-            carriers = list(ma_plans.keys())
-            month_col_w = 20*mm
-            col_w = (274*mm - month_col_w) / len(carriers)
-            rows = [[Paragraph("Month", ph_hdr)] +
-                    [Paragraph(c + (" ★" if c == ma_best else ""), ph_hdr) for c in carriers]]
-            for month in months_remaining:
-                row = [Paragraph(month, month_lbl)]
-                for c in carriers:
-                    total = sum(
-                        next((m["cost"] for m in drug.get("plans",{}).get(c,{}).get("monthly_costs",[]) if m["month"]==month), 0) or 0
-                        for drug in drug_detail
-                    )
-                    row.append(Paragraph("${:.2f}".format(total), cell))
-                rows.append(row)
-            annual_row = [Paragraph("Annual Total", S("at", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8))]
-            for c in carriers:
-                gt = sum((drug.get("plans",{}).get(c,{}).get("annual_total") or 0) for drug in drug_detail)
-                annual_row.append(Paragraph("${:.2f}".format(gt), S("av", fontSize=6, textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
-            rows.append(annual_row)
-            t = Table(rows, colWidths=[month_col_w] + [col_w]*len(carriers))
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
-                ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
-                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 1),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-                ("LEFTPADDING", (0,0), (-1,-1), 4),
-                ("RIGHTPADDING", (0,0), (-1,-1), 4),
-                ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
-                ("BACKGROUND", (0,-1), (-1,-1), LIGHT_GRAY),
-                ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
-            ]))
-            elements.append(t)
+        t.setStyle(TableStyle(ts_list))
+        elements.append(t)
         elements.append(Spacer(1, 0.3*mm))
+
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
