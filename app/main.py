@@ -1249,6 +1249,18 @@ def health():
     return jsonify({"status": "ok", "db": os.path.exists(DB_PATH)})
 
 
+@app.route("/plans", methods=["GET"])
+def list_plans():
+    """List all available plans in the database for custom plan lookup."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT contract_id, plan_id, plan_name, premium, deductible
+        FROM plans ORDER BY contract_id, plan_id
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.route("/test-geocode", methods=["GET"])
 def test_geocode():
     """Test multiple geocoding services from Railway."""
