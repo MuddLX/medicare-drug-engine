@@ -308,8 +308,9 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
         cost_type = cost_row[0]
         cost_amt = cost_row[1]
     else:
-        cost_type = cost_row[2]
-        cost_amt = cost_row[3]
+        # Non-preferred: use nonpref rates if available, fall back to pref
+        cost_type = cost_row[2] if cost_row[2] is not None else cost_row[0]
+        cost_amt = cost_row[3] if cost_row[3] is not None and float(cost_row[3] or 0) > 0 else cost_row[1]
     
     ded_applies_db = cost_row[4]
 
@@ -809,7 +810,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     }
 
 
-def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None):
+def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None):
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
@@ -1085,7 +1086,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 p["name"] + " (" + str(p["distance_miles"]) + " mi)"
                 for p in best_pharmacies
             ])
-            location_label = "ZIP " + zip_code
+            # Show actual address if available, otherwise zip
+            if client_address and client_city:
+                location_label = client_address + ", " + client_city
+            else:
+                location_label = "ZIP " + zip_code
             elements.append(Paragraph(
                 "Nearest in-network pharmacies to " + location_label + ":  " + pharm_info,
                 S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
@@ -1367,7 +1372,9 @@ def process_soa():
             result["drug_detail"],
             result["months_remaining"],
             confidence=confidence,
-            warnings=result.get("warnings", [])
+            warnings=result.get("warnings", []),
+            client_address=client_address,
+            client_city=client_city
         )
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
