@@ -1127,7 +1127,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     if mail_costs:
                         cost = next((m["cost"] for m in mail_costs.get("monthly_costs", []) if m["month"] == month), 0)
                         mail_total += cost or 0
-                row.append(Paragraph("$" + "{:.2f}".format(mail_total) if mail_total else "—",
+                row.append(Paragraph("$" + "{:.2f}".format(mail_total),
                     S("mc", fontSize=6, textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)))
                 rows.append(row)
 
@@ -1147,7 +1147,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 (drug.get("plans", {}).get(ma_best, {}).get("mail_order_costs", {}).get("annual_total", 0) or 0)
                 for drug in drug_detail
             )
-            mail_annual_str = "—" if mail_annual == 0 else "$" + "{:.2f}".format(mail_annual)
+            mail_annual_str = "$" + "{:.2f}".format(mail_annual)
             annual_row.append(Paragraph(mail_annual_str,
                 S("ma", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
             rows.append(annual_row)
