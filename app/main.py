@@ -1237,8 +1237,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
-        "Internal Use Only — Not for Distribution  |  Generated for agent reference only  |  "
-        "Data: CMS Medicare Formulary Q1 2026  |  Verify pricing before presenting to client", footer))
+        "Internal Use Only · Agent reference only · CMS Medicare Formulary Q1 2026 · Verify before presenting", footer))
 
     doc.build(elements)
     buffer.seek(0)
