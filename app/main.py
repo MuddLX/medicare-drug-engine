@@ -198,17 +198,25 @@ def get_plans_for_zip(conn, zip_code):
         "H9834": "Quartz",
     }
 
-    # Pick best plan per carrier family (lowest premium, prefer $0)
+    # Pick best plan per carrier family (lowest premium from plans table, prefer $0)
+    # service_area tells us WHICH plans are available, plans table has correct premiums
     best_per_family = {}
     for row in ma_rows:
-        key = (row[0], row[1].zfill(3))
-        family = CARRIER_FAMILY.get(row[0], row[0])
-        premium = row[4] or 999
+        cid, pid = row[0], row[1].zfill(3)
+        key = (cid, pid)
+        family = CARRIER_FAMILY.get(cid, cid)
+        # Get premium from plans table (correct Landscape premium)
+        plan_row = conn.execute(
+            "SELECT premium, deductible FROM plans WHERE contract_id=? AND plan_id=?",
+            (cid, pid)
+        ).fetchone()
+        premium = float(plan_row[0]) if plan_row else (row[4] or 999)
+        deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
         if family not in best_per_family or premium < best_per_family[family]["premium"]:
             best_per_family[family] = {
-                "contract_id": row[0], "plan_id": row[1],
+                "contract_id": cid, "plan_id": pid,
                 "plan_name": row[2], "org_name": row[3],
-                "premium": premium, "deductible": row[5],
+                "premium": premium, "deductible": deductible,
                 "plan_type": row[6], "key": key
             }
 
