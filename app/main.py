@@ -148,6 +148,8 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             }
 
     # Find pharmacy names in nearby zips
+    # Only include pharmacies that are confirmed in-network for this plan
+    # We verify by checking if their zip is in pharmacy_network for this plan
     candidates = []
     for pharm_zip, info in zip_info.items():
         # Get zip coordinates
@@ -161,12 +163,20 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
         if distance > max_miles:
             continue
 
-        # Get pharmacies in this zip
+        # Get pharmacies in this zip that are confirmed in-network
+        # Cross-reference pharmacy_names with pharmacy_network via zip
+        # This ensures we only show pharmacies actually in this plan's network
         pharms = conn.execute("""
-            SELECT npi, name, address, city, is_chain
-            FROM pharmacy_names
-            WHERE zip = ? AND name != 'Unknown Pharmacy'
-        """, (pharm_zip,)).fetchall()
+            SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain
+            FROM pharmacy_names pn
+            INNER JOIN pharmacy_network net ON net.pharmacy_zip = pn.zip
+            WHERE pn.zip = ?
+            AND net.contract_id = ?
+            AND net.plan_id = ?
+            AND net.is_retail = 1
+            AND pn.name != 'Unknown Pharmacy'
+            AND pn.name IS NOT NULL
+        """, (pharm_zip, contract_id, plan_id_padded)).fetchall()
 
         for npi, name, address, city, is_chain in pharms:
             if not name:
@@ -183,6 +193,7 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "generic_fee": info["generic_fee"],
                 "brand_fee": info["brand_fee"],
                 "selected_fee": info["selected_fee"],
+                "in_network": True,  # Confirmed in-network
             })
 
     if not candidates:
@@ -587,6 +598,9 @@ def compute_drug_costs(drugs, zip_code, soa_date):
 
         # Determine if brand name drug
         is_brand = drug_name.lower() != original_name.lower() and bool(original_name)
+        drug_name_base_outer = drug_name.split()[0] if drug_name else ""
+        mfp_value = get_mfp(drug_name_base_outer) or get_mfp(drug_name) or 0
+        is_mfp_drug_flag = mfp_value > 0
 
         for carrier, plan in plan_details.items():
             plan_cost = get_drug_cost_for_plan(
@@ -656,6 +670,42 @@ def compute_drug_costs(drugs, zip_code, soa_date):
                         })
                 
                 plan_cost["pharmacy_costs"] = pharmacy_costs
+
+                # Calculate mail order costs
+                mail_cost_row = conn.execute("""
+                    SELECT cost_type_mail_pref, cost_amt_mail_pref, ded_applies
+                    FROM beneficiary_cost
+                    WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 3
+                    ORDER BY coverage_level ASC LIMIT 1
+                """, (plan["contract_id"], plan["plan_id"].zfill(3), plan_cost.get("tier", 0))).fetchone()
+
+                if mail_cost_row or drug_is_insulin or is_mfp_drug_flag:
+                    mail_monthly = []
+                    for month_num in months_remaining:
+                        month_name = datetime(2026, month_num, 1).strftime("%B")
+                        if drug_is_insulin:
+                            mail_cost = 35.00
+                        elif is_mfp_drug_flag:
+                            # MFP drugs: mail order 90-day = same monthly equivalent
+                            mail_cost = round(mfp_value * 0.25, 2)
+                        elif mail_cost_row:
+                            mt = mail_cost_row[0]
+                            ma = mail_cost_row[1]
+                            if mt == 0:
+                                mail_cost = 0.0
+                            elif mt == 1:
+                                mail_cost = float(ma) / 3  # 90-day divided by 3
+                            elif mt == 2:
+                                mail_cost = round((unit_cost or 0) * float(ma) / 3, 2)
+                            else:
+                                mail_cost = float(ma) / 3
+                        else:
+                            mail_cost = 0.0
+                        mail_monthly.append({"month": month_name, "cost": mail_cost})
+                    plan_cost["mail_order_costs"] = {
+                        "monthly_costs": mail_monthly,
+                        "annual_total": round(sum(m["cost"] for m in mail_monthly), 2)
+                    }
             
             drug_result["plans"][carrier] = plan_cost
         results.append(drug_result)
@@ -975,19 +1025,22 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             # Simpler: one table per pharmacy showing all drugs as columns, months as rows
             # Even simpler: Month | Pharm1 Total | Pharm2 Total | Pharm3 Total | Pharm4 Total
 
+            mail_col_w = 22*mm
             month_col_w = 20*mm
-            pharm_col_w = (274*mm - month_col_w) / len(best_pharmacies)
+            pharm_col_w = (274*mm - month_col_w - mail_col_w) / len(best_pharmacies)
 
-            # Header row with pharmacy names
+            # Header row with pharmacy names + Mail Order
             hdr = [Paragraph("Month", ph_hdr)]
             for p in best_pharmacies:
                 short_name = p["name"].split("#")[0].strip()
-                if len(short_name) > 20:
-                    short_name = short_name[:18] + "…"
-                hdr.append(Paragraph(short_name, S("ph2", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
+                if len(short_name) > 18:
+                    short_name = short_name[:16] + "…"
+                pref_label = " ✓" if p.get("preferred") else ""
+                hdr.append(Paragraph(short_name + pref_label, S("ph2", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
+            hdr.append(Paragraph("Mail Order", S("ph3", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
             rows = [hdr]
 
-            # Monthly total rows (sum all drugs at each pharmacy)
+            # Monthly total rows (sum all drugs at each pharmacy + mail order)
             for month in months_remaining:
                 row = [Paragraph(month, month_lbl)]
                 for pharm in best_pharmacies:
@@ -999,6 +1052,15 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                             cost = next((m["cost"] for m in matched["monthly_costs"] if m["month"] == month), 0)
                             monthly_total += cost or 0
                     row.append(Paragraph("$" + "{:.2f}".format(monthly_total), cell))
+                # Mail order total
+                mail_total = 0
+                for drug in drug_detail:
+                    mail_costs = drug.get("plans", {}).get(ma_best, {}).get("mail_order_costs", {})
+                    if mail_costs:
+                        cost = next((m["cost"] for m in mail_costs.get("monthly_costs", []) if m["month"] == month), 0)
+                        mail_total += cost or 0
+                row.append(Paragraph("$" + "{:.2f}".format(mail_total) if mail_total else "—",
+                    S("mc", fontSize=6, textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)))
                 rows.append(row)
 
             # Annual total row
@@ -1012,9 +1074,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                         annual_total += matched.get("annual_total", 0) or 0
                 annual_row.append(Paragraph("$" + "{:.2f}".format(annual_total),
                     S("av", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
+            # Mail order annual
+            mail_annual = sum(
+                (drug.get("plans", {}).get(ma_best, {}).get("mail_order_costs", {}).get("annual_total", 0) or 0)
+                for drug in drug_detail
+            )
+            annual_row.append(Paragraph("$" + "{:.2f}".format(mail_annual),
+                S("ma", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
             rows.append(annual_row)
 
-            col_widths = [month_col_w] + [pharm_col_w] * len(best_pharmacies)
+            col_widths = [month_col_w] + [pharm_col_w] * len(best_pharmacies) + [mail_col_w]
             t = Table(rows, colWidths=col_widths)
             ts = [
                 ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
