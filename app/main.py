@@ -104,24 +104,27 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
 
 def geocode_address_live(address, city, state, zipcode):
-    """Geocode a street address using US Census Geocoder API in real time."""
+    """
+    Geocode a street address using Nominatim (OpenStreetMap).
+    Returns (lat, lon, city) or (None, None, None) on failure.
+    """
+    if not address or not city:
+        return None, None, None
     try:
-        import urllib.parse as urlparse
-        params = urlparse.urlencode({
-            "street": address,
-            "city": city,
-            "state": state or "MN",
-            "zip": zipcode,
-            "benchmark": "2020",
-            "format": "json"
-        })
-        url = "https://geocoding.geo.census.gov/geocoder/locations/address?" + params
-        req = requests.get(url, timeout=8)
-        data = req.json()
-        matches = data.get("result", {}).get("addressMatches", [])
-        if matches:
-            coords = matches[0]["coordinates"]
-            return float(coords["y"]), float(coords["x"]), city
+        query = f"{address}, {city}, {state or 'MN'} {zipcode}, USA"
+        params = requests.utils.requote_uri(
+            "https://nominatim.openstreetmap.org/search?q=" +
+            requests.utils.quote(query) +
+            "&format=json&limit=1&countrycodes=us"
+        )
+        resp = requests.get(
+            params,
+            timeout=8,
+            headers={"User-Agent": "MedicareDrugEngine/1.0 contact@medicare-tool.com"}
+        )
+        data = resp.json()
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"]), city
     except Exception:
         pass
     return None, None, None
@@ -1082,8 +1085,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 p["name"] + " (" + str(p["distance_miles"]) + " mi)"
                 for p in best_pharmacies
             ])
+            location_label = "ZIP " + zip_code
             elements.append(Paragraph(
-                "Nearest preferred pharmacies to ZIP " + zip_code + ":  " + pharm_info,
+                "Nearest in-network pharmacies to " + location_label + ":  " + pharm_info,
                 S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
             elements.append(Spacer(1, 0.3*mm))
 
