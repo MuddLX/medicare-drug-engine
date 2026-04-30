@@ -1235,14 +1235,43 @@ def health():
 
 @app.route("/test-geocode", methods=["GET"])
 def test_geocode():
-    """Test if geocoding works from Railway."""
-    lat, lon, city = geocode_address_live("7203 Birch Lane", "Woodbury", "MN", "55125")
-    return jsonify({
-        "lat": lat,
-        "lon": lon,
-        "city": city,
-        "success": lat is not None
-    })
+    """Test multiple geocoding services from Railway."""
+    results = {}
+    
+    # Test 1: Census
+    try:
+        import urllib.parse as urlparse
+        params = urlparse.urlencode({"street": "7203 Birch Lane", "city": "Woodbury", "state": "MN", "zip": "55125", "benchmark": "2020", "format": "json"})
+        r = requests.get("https://geocoding.geo.census.gov/geocoder/locations/address?" + params, timeout=5, headers={"User-Agent": "Mozilla/5.0"})
+        results["census"] = r.status_code
+    except Exception as e:
+        results["census"] = str(e)[:50]
+    
+    # Test 2: Nominatim
+    try:
+        r = requests.get("https://nominatim.openstreetmap.org/search?q=7203+Birch+Lane+Woodbury+MN&format=json&limit=1", timeout=5, headers={"User-Agent": "MedicareTool/1.0"})
+        data = r.json()
+        results["nominatim"] = {"status": r.status_code, "found": len(data) > 0, "lat": data[0]["lat"] if data else None}
+    except Exception as e:
+        results["nominatim"] = str(e)[:50]
+    
+    # Test 3: Zippopotam (we know this worked for zip coords)
+    try:
+        r = requests.get("https://api.zippopotam.us/us/55125", timeout=5)
+        results["zippopotam"] = {"status": r.status_code, "data": r.json()}
+    except Exception as e:
+        results["zippopotam"] = str(e)[:50]
+
+    # Test 4: Photon (OSM based, different server)
+    try:
+        r = requests.get("https://photon.komoot.io/api/?q=7203+Birch+Lane+Woodbury+MN&limit=1", timeout=5, headers={"User-Agent": "Mozilla/5.0"})
+        data = r.json()
+        features = data.get("features", [])
+        results["photon"] = {"status": r.status_code, "found": len(features) > 0, "coords": features[0]["geometry"]["coordinates"] if features else None}
+    except Exception as e:
+        results["photon"] = str(e)[:50]
+
+    return jsonify(results)
 
 
 @app.route("/debug-costs", methods=["POST"])
