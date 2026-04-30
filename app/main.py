@@ -20,7 +20,8 @@ app = Flask(__name__)
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-PLANS = [
+# ===== FALLBACK PLANS (used when service_area table not available) =====
+FALLBACK_PLANS = [
     {"carrier": "HealthPartners", "contract_id": "H4882", "plan_id": "009", "type": "MA"},
     {"carrier": "Blue Cross",     "contract_id": "H5959", "plan_id": "009", "type": "MA"},
     {"carrier": "Medica",         "contract_id": "H6154", "plan_id": "001", "type": "MA"},
@@ -29,6 +30,123 @@ PLANS = [
     {"carrier": "Humana Part D",  "contract_id": "S5884", "plan_id": "190", "type": "PD"},
     {"carrier": "WellCare Part D","contract_id": "S4802", "plan_id": "146", "type": "PD"},
 ]
+
+# SNP types to exclude from standard reports (specialty plans)
+EXCLUDE_PLAN_TYPES = {"HMO D-SNP", "PPO D-SNP", "HMO C-SNP", "PPO C-SNP",
+                      "HMO I-SNP", "PPO I-SNP", "PACE", "MSA"}
+
+def get_plans_for_zip(conn, zip_code):
+    """
+    Dynamically load plans available for a client zip code.
+    Uses service_area + zip_county tables if available.
+    Falls back to hardcoded FALLBACK_PLANS.
+    """
+    # Check if service_area and zip_county tables exist
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+
+    if "service_area" not in tables or "zip_county" not in tables:
+        return FALLBACK_PLANS
+
+    # Get county for this zip
+    row = conn.execute(
+        "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
+    ).fetchone()
+
+    if not row:
+        # Try nearby zips by incrementing/decrementing
+        for delta in [1, -1, 2, -2, 3, -3]:
+            alt_zip = str(int(zip_code) + delta).zfill(5)
+            row = conn.execute(
+                "SELECT county_name FROM zip_county WHERE zip = ?", (alt_zip,)
+            ).fetchone()
+            if row:
+                break
+
+    if not row:
+        return FALLBACK_PLANS
+
+    county = row[0]
+
+    # Get all MA/Cost plans available in this county
+    # Exclude SNP/specialty plans from standard reports
+    ma_rows = conn.execute("""
+        SELECT sa.contract_id, sa.plan_id, sa.plan_name, sa.org_name,
+               sa.premium_total, sa.deductible, sa.plan_type,
+               p.formulary_id
+        FROM service_area sa
+        LEFT JOIN plans p ON p.contract_id = sa.contract_id
+                          AND p.plan_id = sa.plan_id
+        WHERE sa.county_name IN (?, 'All Counties')
+        AND sa.plan_type NOT IN ('PDP', 'PACE')
+        AND sa.plan_type NOT LIKE '%SNP%'
+        AND sa.plan_type NOT LIKE '%D-SNP%'
+        AND sa.plan_type NOT LIKE '%C-SNP%'
+        AND sa.plan_type NOT LIKE '%I-SNP%'
+        AND p.formulary_id IS NOT NULL
+        ORDER BY sa.premium_total ASC, sa.plan_name ASC
+    """, (county,)).fetchall()
+
+    # Get Part D plans available statewide
+    pd_rows = conn.execute("""
+        SELECT sa.contract_id, sa.plan_id, sa.plan_name, sa.org_name,
+               sa.premium_total, sa.deductible, sa.plan_type,
+               p.formulary_id
+        FROM service_area sa
+        LEFT JOIN plans p ON p.contract_id = sa.contract_id
+                          AND p.plan_id = sa.plan_id
+        WHERE sa.county_name IN (?, 'All Counties')
+        AND sa.plan_type = 'PDP'
+        AND p.formulary_id IS NOT NULL
+        ORDER BY sa.premium_total ASC
+        LIMIT 3
+    """, (county,)).fetchall()
+
+    if not ma_rows and not pd_rows:
+        return FALLBACK_PLANS
+
+    plans = []
+    seen = set()
+
+    for row in ma_rows:
+        key = (row[0], row[1])
+        if key in seen:
+            continue
+        seen.add(key)
+        # Use org name + plan name for carrier label
+        carrier = row[3] if row[3] else row[2]
+        # Shorten long carrier names
+        carrier = (carrier.replace("Organization Marketing Name", "")
+                         .replace("Medicare Advantage", "")
+                         .strip())
+        if len(carrier) > 30:
+            carrier = carrier[:28] + "…"
+        plans.append({
+            "carrier": carrier,
+            "contract_id": row[0],
+            "plan_id": row[1],
+            "type": "Cost" if "Cost" in row[6] else "MA",
+            "landscape_premium": row[4],
+            "landscape_deductible": row[5],
+        })
+
+    for row in pd_rows:
+        key = (row[0], row[1])
+        if key in seen:
+            continue
+        seen.add(key)
+        carrier = row[2][:30] if row[2] else row[0]
+        plans.append({
+            "carrier": carrier,
+            "contract_id": row[0],
+            "plan_id": row[1],
+            "type": "PD",
+            "landscape_premium": row[4],
+            "landscape_deductible": row[5],
+        })
+
+    return plans if plans else FALLBACK_PLANS
 
 
 
@@ -587,16 +705,28 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     month_names = [datetime(2026, m, 1).strftime("%B") for m in months_remaining]
 
     conn = get_db()
+
+    # Dynamically load plans available for this zip code
+    available_plans = get_plans_for_zip(conn, zip_code)
+
     plan_details = {}
-    for plan in PLANS:
+    for plan in available_plans:
         row = conn.execute("SELECT * FROM plans WHERE contract_id = ? AND plan_id = ?",
                            (plan["contract_id"], plan["plan_id"].zfill(3))).fetchone()
         if row:
+            # Use landscape premium if available (more accurate consumer-facing price)
+            premium = plan.get("landscape_premium", row["premium"])
+            if premium is None or premium == 0:
+                premium = row["premium"]
+            deductible = plan.get("landscape_deductible", row["deductible"])
+            if deductible is None or deductible == 0:
+                deductible = row["deductible"]
             plan_details[plan["carrier"]] = {
                 "carrier": plan["carrier"], "plan_type": plan["type"],
                 "plan_name": row["plan_name"], "formulary_id": row["formulary_id"],
                 "contract_id": plan["contract_id"], "plan_id": plan["plan_id"],
-                "premium": row["premium"], "deductible": row["deductible"],
+                "premium": float(premium), "deductible": float(deductible),
+                "premium_monthly": float(premium),
             }
 
     # Normalize drug names via Claude
