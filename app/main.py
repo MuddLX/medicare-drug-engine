@@ -1,5 +1,5 @@
 """
-Medicare Drug Cost API v6
+Medicare Drug Cost API v7
 Endpoints:
 - POST /process-soa: accepts flat fields from Make, normalizes drugs via Claude,
   looks up drug costs, returns PDF report
