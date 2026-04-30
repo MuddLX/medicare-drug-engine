@@ -73,7 +73,7 @@ def get_plans_for_zip(conn, zip_code):
     # Exclude SNP/specialty plans from standard reports
     ma_rows = conn.execute("""
         SELECT sa.contract_id, sa.plan_id, sa.plan_name, sa.org_name,
-               sa.premium_total, sa.deductible, sa.plan_type,
+               MIN(sa.premium_total) as premium_total, sa.deductible, sa.plan_type,
                p.formulary_id
         FROM service_area sa
         LEFT JOIN plans p ON p.contract_id = sa.contract_id
@@ -85,13 +85,14 @@ def get_plans_for_zip(conn, zip_code):
         AND sa.plan_type NOT LIKE '%C-SNP%'
         AND sa.plan_type NOT LIKE '%I-SNP%'
         AND p.formulary_id IS NOT NULL
-        ORDER BY sa.premium_total ASC, sa.plan_name ASC
+        GROUP BY sa.contract_id, sa.plan_id
+        ORDER BY MIN(sa.premium_total) ASC, sa.plan_name ASC
     """, (county,)).fetchall()
 
     # Get Part D plans available statewide
     pd_rows = conn.execute("""
         SELECT sa.contract_id, sa.plan_id, sa.plan_name, sa.org_name,
-               sa.premium_total, sa.deductible, sa.plan_type,
+               MIN(sa.premium_total) as premium_total, sa.deductible, sa.plan_type,
                p.formulary_id
         FROM service_area sa
         LEFT JOIN plans p ON p.contract_id = sa.contract_id
@@ -99,7 +100,8 @@ def get_plans_for_zip(conn, zip_code):
         WHERE sa.county_name IN (?, 'All Counties')
         AND sa.plan_type = 'PDP'
         AND p.formulary_id IS NOT NULL
-        ORDER BY sa.premium_total ASC
+        GROUP BY sa.contract_id, sa.plan_id
+        ORDER BY MIN(sa.premium_total) ASC
         LIMIT 3
     """, (county,)).fetchall()
 
