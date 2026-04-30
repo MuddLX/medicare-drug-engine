@@ -888,7 +888,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=6*mm, leftMargin=6*mm,
-                            topMargin=5*mm, bottomMargin=5*mm)
+                            topMargin=4*mm, bottomMargin=4*mm)
     elements = []
 
     # Header
@@ -1070,7 +1070,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Paragraph(
             "Nearest in-network pharmacies to " + location_label + "  ·  Costs include deductible phase where applicable",
             S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
-        elements.append(Spacer(1, 0.5*mm))
+        elements.append(Spacer(1, 0.1*mm))
 
         def get_plan_pharmacy_summary(carrier):
             pharm_totals = {}
@@ -1230,14 +1230,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
         elements.append(Spacer(1, 0.3*mm))
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
-        "Internal Use Only · Agent reference only · CMS Medicare Formulary Q1 2026 · Verify before presenting", footer))
+        "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
 
     doc.build(elements)
     buffer.seek(0)
