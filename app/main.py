@@ -772,9 +772,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=13, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=16)
-    h2        = S("h2",  fontSize=6,  textColor=colors.HexColor("#64748b"), leading=8)
-    sec_title = S("sec", fontSize=8,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=10)
+    h1        = S("h1",  fontSize=11, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=16)
+    h2        = S("h2",  fontSize=5,  textColor=colors.HexColor("#64748b"), leading=8)
+    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=10)
     col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
     cell      = S("c",   fontSize=6,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)
@@ -817,8 +817,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                            rightMargin=8*mm, leftMargin=8*mm,
-                            topMargin=6*mm, bottomMargin=6*mm)
+                            rightMargin=6*mm, leftMargin=6*mm,
+                            topMargin=5*mm, bottomMargin=5*mm)
     elements = []
 
     # Header
@@ -838,7 +838,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=2*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=1*mm))
 
     # Warnings banner
     if warnings:
@@ -858,13 +858,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         wt.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,-1), WARN_BG),
             ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#fed7aa")),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("SPAN", (0,0), (0,0)),
         ]))
         elements.append(wt)
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
@@ -907,8 +907,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
@@ -928,14 +928,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.3*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.3*mm))
         carriers = list(ma_plans.keys())
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
@@ -966,8 +966,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -987,7 +987,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if ma_plans and drug_detail and months_remaining:
         # Get pharmacies for recommended plan
@@ -1010,7 +1010,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             elements.append(Paragraph(
                 "SECTION 3 — ESTIMATED MONTHLY DRUG COSTS — " + ma_best.upper() + " (RECOMMENDED PLAN)",
                 sec_title))
-            elements.append(Spacer(1, 0.5*mm))
+            elements.append(Spacer(1, 0.3*mm))
             # Show pharmacy names and distances
             pharm_info = "  ·  ".join([
                 p["name"] + " (" + str(p["distance_miles"]) + " mi)"
@@ -1019,7 +1019,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             elements.append(Paragraph(
                 "Nearest preferred pharmacies to ZIP " + zip_code + ":  " + pharm_info,
                 S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
-            elements.append(Spacer(1, 1*mm))
+            elements.append(Spacer(1, 0.3*mm))
 
             # Layout: Month | Drug1@Pharm1 | Drug1@Pharm2 | ... | Total@Pharm1 | Total@Pharm2
             # Simpler: one table per pharmacy showing all drugs as columns, months as rows
@@ -1040,9 +1040,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             hdr.append(Paragraph("Mail Order", S("ph3", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)))
             rows = [hdr]
 
-            # Monthly total rows (sum all drugs at each pharmacy + mail order)
+            # Show each month but use abbreviated month names to save space
             for month in months_remaining:
-                row = [Paragraph(month, month_lbl)]
+                # Abbreviate month name
+                month_abbr = month[:3]
+                row = [Paragraph(month_abbr, month_lbl)]
                 for pharm in best_pharmacies:
                     monthly_total = 0
                     for drug in drug_detail:
@@ -1089,8 +1091,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
                 ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
                 ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 2),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+                ("TOPPADDING", (0,0), (-1,-1), 1),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
                 ("LEFTPADDING", (0,0), (-1,-1), 4),
                 ("RIGHTPADDING", (0,0), (-1,-1), 4),
                 ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
@@ -1102,11 +1104,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         else:
             # Fallback: plan-level comparison if no pharmacy data
             elements.append(Paragraph("SECTION 3 — ESTIMATED MONTHLY TOTAL DRUG COST BY PLAN", sec_title))
-            elements.append(Spacer(1, 0.5*mm))
+            elements.append(Spacer(1, 0.3*mm))
             elements.append(Paragraph(
                 "Monthly totals at preferred retail pharmacy. Pharmacy-specific data not available for this zip code.",
                 S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
-            elements.append(Spacer(1, 1*mm))
+            elements.append(Spacer(1, 0.3*mm))
             carriers = list(ma_plans.keys())
             month_col_w = 20*mm
             col_w = (274*mm - month_col_w) / len(carriers)
@@ -1131,8 +1133,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
                 ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
                 ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 2),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+                ("TOPPADDING", (0,0), (-1,-1), 1),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
                 ("LEFTPADDING", (0,0), (-1,-1), 4),
                 ("RIGHTPADDING", (0,0), (-1,-1), 4),
                 ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT_GRAY]),
@@ -1140,20 +1142,19 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
             ]))
             elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 1*mm))
+        elements.append(Spacer(1, 0.3*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 2*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=1*mm, spaceAfter=1*mm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
         "Internal Use Only — Not for Distribution  |  Generated for agent reference only  |  "
-        "Data sourced from CMS Medicare Formulary Files Q1 2026  |  "
-        "Verify current pricing before presenting to client", footer))
+        "Data: CMS Medicare Formulary Q1 2026  |  Verify pricing before presenting to client", footer))
 
     doc.build(elements)
     buffer.seek(0)
