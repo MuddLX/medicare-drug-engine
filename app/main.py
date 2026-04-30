@@ -103,8 +103,43 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def get_client_coords(conn, zip_code):
-    """Get lat/lon for client zip code."""
+def geocode_address_live(address, city, state, zipcode):
+    """Geocode a street address using US Census Geocoder API in real time."""
+    try:
+        import urllib.parse as urlparse
+        params = urlparse.urlencode({
+            "street": address,
+            "city": city,
+            "state": state or "MN",
+            "zip": zipcode,
+            "benchmark": "2020",
+            "format": "json"
+        })
+        url = "https://geocoding.geo.census.gov/geocoder/locations/address?" + params
+        req = requests.get(url, timeout=8)
+        data = req.json()
+        matches = data.get("result", {}).get("addressMatches", [])
+        if matches:
+            coords = matches[0]["coordinates"]
+            return float(coords["y"]), float(coords["x"]), city
+    except Exception:
+        pass
+    return None, None, None
+
+
+def get_client_coords(conn, zip_code, address=None, city=None, state=None):
+    """
+    Get lat/lon for client location.
+    Uses actual street address geocoding if available (more accurate).
+    Falls back to zip code centroid.
+    """
+    # Try real address geocoding first
+    if address and city:
+        lat, lon, city_name = geocode_address_live(address, city, state, zip_code)
+        if lat and lon:
+            return lat, lon, city_name
+    
+    # Fall back to zip centroid
     row = conn.execute(
         "SELECT lat, lon, city FROM zip_coords WHERE zip = ?", (zip_code,)
     ).fetchone()
@@ -113,16 +148,19 @@ def get_client_coords(conn, zip_code):
     return None, None, None
 
 
-def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30):
+def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30,
+                          client_address=None, client_city=None, client_state=None):
     """
-    Find closest preferred retail pharmacies to client zip for a specific plan.
-    Matches pharmacies by zip code proximity rather than NPI (avoids NCPDP/NPI mismatch).
-    Returns list of dicts with name, address, distance, fees.
+    Find closest preferred retail pharmacies to client location.
+    Uses real street address geocoding when available for precise distances.
+    Falls back to zip centroid.
     """
     plan_id_padded = plan_id.zfill(3)
 
-    # Get client coordinates
-    client_lat, client_lon, client_city = get_client_coords(conn, client_zip)
+    # Get client coordinates - prefer real address over zip centroid
+    client_lat, client_lon, client_city = get_client_coords(
+        conn, client_zip, address=client_address, city=client_city, state=client_state
+    )
     if not client_lat:
         return []
 
@@ -174,10 +212,10 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             continue
 
         # Get pharmacies in this zip that are confirmed in-network
-        # Cross-reference pharmacy_names with pharmacy_network via zip
-        # This ensures we only show pharmacies actually in this plan's network
+        # Use pharmacy's actual lat/lon if available for precise distance
         pharms = conn.execute("""
-            SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain
+            SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain,
+                   pn.lat, pn.lon
             FROM pharmacy_names pn
             INNER JOIN pharmacy_network net ON net.pharmacy_zip = pn.zip
             WHERE pn.zip = ?
@@ -188,12 +226,14 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             AND pn.name IS NOT NULL
         """, (pharm_zip, contract_id, plan_id_padded)).fetchall()
 
-        for npi, name, address, city, is_chain in pharms:
+        for npi, name, address, city, is_chain, pharm_lat, pharm_lon in pharms:
             if not name:
                 continue
-            # Determine preferred status:
-            # If zip has BOTH preferred and non-preferred, chains = preferred, others = non-preferred
-            # If zip is all-preferred or all-non-preferred, use that status
+            # Use pharmacy's actual coordinates if available, else use zip centroid
+            if pharm_lat and pharm_lon:
+                distance = haversine_distance(client_lat, client_lon, pharm_lat, pharm_lon)
+            # else distance already calculated from zip centroid above
+            # Determine preferred status
             if info.get("has_preferred") and info.get("has_nonpreferred"):
                 is_preferred = bool(is_chain)
             else:
@@ -533,10 +573,11 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     }
 
 
-def compute_drug_costs(drugs, zip_code, soa_date):
+def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_city=None, client_state=None):
     """
     drugs: list of {"name": str, "dosage": str}
     Normalizes drug names via Claude first, then looks up costs.
+    Uses real client address for pharmacy distance calculations when available.
     """
     months_remaining = get_remaining_months(soa_date)
     month_names = [datetime(2026, m, 1).strftime("%B") for m in months_remaining]
@@ -565,7 +606,10 @@ def compute_drug_costs(drugs, zip_code, soa_date):
     for carrier, plan in plan_details.items():
         nearby = get_nearby_pharmacies(
             conn, plan["contract_id"], plan["plan_id"], zip_code,
-            max_results=4, max_miles=30
+            max_results=4, max_miles=30,
+            client_address=client_address,
+            client_city=client_city,
+            client_state=client_state
         )
         pharmacy_map[carrier] = nearby
 
@@ -1246,6 +1290,9 @@ def process_soa():
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
     drug_names = data.get("drug_names", "")
     drug_dosages = data.get("drug_dosages", "")
+    client_address = data.get("client_address", "")
+    client_city = data.get("client_city", "")
+    client_state = data.get("client_state", "MN")
     confidence = data.get("confidence")
     try:
         confidence = float(confidence) if confidence else None
@@ -1261,7 +1308,10 @@ def process_soa():
         return jsonify({"error": "No drugs provided"}), 400
 
     try:
-        result = compute_drug_costs(drugs, zip_code, soa_date)
+        result = compute_drug_costs(drugs, zip_code, soa_date,
+                                    client_address=client_address,
+                                    client_city=client_city,
+                                    client_state=client_state)
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
