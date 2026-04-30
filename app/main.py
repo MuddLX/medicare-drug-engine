@@ -220,6 +220,7 @@ def get_plans_for_zip(conn, zip_code):
                 "plan_type": row[6], "key": key
             }
 
+    # First pass: best plan per carrier family
     for family, row in sorted(best_per_family.items(), key=lambda x: x[1]["premium"]):
         key = row["key"]
         if key in seen:
@@ -234,6 +235,48 @@ def get_plans_for_zip(conn, zip_code):
             "landscape_premium": row["premium"],
             "landscape_deductible": row["deductible"],
         })
+
+    # Second pass: if fewer than 5 MA plans, fill with next premium tier up
+    # Skip $0 plans (already shown), pick lowest-cost paid plans not yet shown
+    if len([p for p in plans if p["type"] in ("MA", "Cost")]) < 5:
+        paid_candidates = []
+        for row in ma_rows:
+            cid, pid = row[0], row[1].zfill(3)
+            key = (cid, pid)
+            if key in seen:
+                continue
+            plan_row = conn.execute(
+                "SELECT premium, deductible FROM plans WHERE contract_id=? AND plan_id=?",
+                (cid, pid)
+            ).fetchone()
+            premium = float(plan_row[0]) if plan_row else (row[4] or 999)
+            deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
+            # Only include paid plans (premium > 0) for the filler spots
+            if premium > 0:
+                paid_candidates.append({
+                    "contract_id": cid, "plan_id": pid,
+                    "plan_name": row[2], "org_name": row[3],
+                    "premium": premium, "deductible": deductible,
+                    "plan_type": row[6], "key": key
+                })
+        # Sort by lowest premium first so agent sees most affordable upgrade
+        paid_candidates.sort(key=lambda x: (x["premium"], x["deductible"]))
+        for row in paid_candidates:
+            if len([p for p in plans if p["type"] in ("MA", "Cost")]) >= 5:
+                break
+            key = row["key"]
+            if key in seen:
+                continue
+            seen.add(key)
+            carrier = FRIENDLY_NAMES.get(key, row["plan_name"][:35] if row["plan_name"] else row["contract_id"])
+            plans.append({
+                "carrier": carrier,
+                "contract_id": row["contract_id"],
+                "plan_id": row["plan_id"],
+                "type": "Cost" if "Cost" in (row["plan_type"] or "") else "MA",
+                "landscape_premium": row["premium"],
+                "landscape_deductible": row["deductible"],
+            })
 
     for row in pd_rows:
         key = (row[0], row[1].zfill(3))
