@@ -109,34 +109,101 @@ def get_plans_for_zip(conn, zip_code):
     plans = []
     seen = set()
 
+    # Friendly name lookup — use short carrier names for known plans
+    FRIENDLY_NAMES = {
+        ("H4882", "009"): "HealthPartners Journey Pace",
+        ("H4882", "003"): "HealthPartners Journey Steady",
+        ("H4882", "011"): "HealthPartners Journey Stride",
+        ("H4882", "014"): "HealthPartners Journey Smart",
+        ("H6309", "001"): "HealthPartners Birch",
+        ("H6309", "002"): "HealthPartners Cedar",
+        ("H5959", "009"): "Blue Cross Choice",
+        ("H5959", "010"): "Blue Cross Complete ($92)",
+        ("H5959", "011"): "Blue Cross Complete ($191)",
+        ("H5959", "012"): "Blue Cross Core ($49)",
+        ("H5959", "013"): "Blue Cross Core ($0)",
+        ("H5959", "014"): "Blue Cross Choice ($59)",
+        ("H5959", "015"): "Blue Cross Comfort ($18)",
+        ("H5959", "016"): "Blue Cross Comfort ($62)",
+        ("H6154", "001"): "Medica Advantage H6154",
+        ("H8889", "001"): "Medica Advantage ($46)",
+        ("H8889", "002"): "Medica Advantage ($105)",
+        ("H8889", "003"): "Medica Advantage ($103)",
+        ("H8889", "004"): "Medica Advantage ($140)",
+        ("H8889", "005"): "Medica Advantage ($0)",
+        ("H8889", "008"): "Medica Advantage ($44)",
+        ("H8889", "009"): "Medica Advantage (No Rx)",
+        ("H8889", "010"): "Medica Value",
+        ("H8889", "011"): "Medica Preferred ($23)",
+        ("H8889", "012"): "Medica Select ($0)",
+        ("H8889", "013"): "Medica Preferred ($29)",
+        ("H8889", "014"): "Medica Value ($0)",
+        ("H8889", "015"): "Medica Select ($0/355)",
+        ("H8889", "017"): "Medica Value ($0/617)",
+        ("H8889", "018"): "Medica Select ($0/355b)",
+        ("H2450", "002"): "Medica Cost Enhanced",
+        ("H2450", "007"): "Medica Cost Thrift",
+        ("H2450", "016"): "Medica Cost Basic",
+        ("H2450", "035"): "Medica Cost Core",
+        ("H2450", "037"): "Medica Cost Premier",
+        ("H2450", "039"): "Medica Cost Focus",
+        ("H2450", "049"): "Medica Cost Standard",
+        ("H5216", "275"): "Humana Choice ($0)",
+        ("H5216", "063"): "Humana Choice ($18)",
+        ("H5216", "092"): "Humana Choice ($22)",
+        ("H5216", "359"): "Humana Choice ($0/615b)",
+        ("H3219", "001"): "Aetna Signature",
+        ("H3219", "002"): "Aetna Enhanced ($19)",
+        ("H3219", "003"): "Aetna Grand ($40)",
+        ("H3219", "004"): "Aetna Grand Extra ($69)",
+        ("H3219", "005"): "Aetna Eagle",
+        ("H3219", "008"): "Aetna Signature Fit",
+        ("H3219", "012"): "Aetna Signature ($12)",
+        ("H3219", "014"): "Aetna Enhanced ($46)",
+        ("H2001", "116"): "UHC AARP ($0/600)",
+        ("H2001", "117"): "UHC AARP ($0/520)",
+        ("H2001", "123"): "UHC AARP ($0/520b)",
+        ("H3186", "001"): "Align ChoiceElite ($63)",
+        ("H3186", "002"): "Align ChoicePlus ($0)",
+        ("H8145", "006"): "Humana Gold Choice",
+        ("H9834", "001"): "Gundersen Quartz Elite",
+        ("H9834", "003"): "Gundersen Quartz Value",
+        ("H9834", "006"): "Gundersen Quartz Core",
+        ("H9834", "007"): "Gundersen Quartz Basic",
+        ("S5884", "190"): "Humana Value Rx",
+        ("S5884", "171"): "Humana Premier Rx",
+        ("S5884", "204"): "Humana Value Rx ($0/601)",
+        ("S5884", "145"): "Humana Basic Rx",
+        ("S4802", "146"): "WellCare Value Script",
+        ("S4802", "158"): "WellCare Value Script b",
+        ("S4802", "089"): "WellCare Classic",
+        ("S5601", "050"): "SilverScript Choice",
+        ("S5743", "001"): "MedicareBlue Rx",
+        ("S5921", "370"): "AARP Rx Saver",
+        ("S5921", "406"): "AARP Rx Preferred",
+    }
+
     for row in ma_rows:
-        key = (row[0], row[1])
+        key = (row[0], row[1].zfill(3))
         if key in seen:
             continue
         seen.add(key)
-        # Use org name + plan name for carrier label
-        carrier = row[3] if row[3] else row[2]
-        # Shorten long carrier names
-        carrier = (carrier.replace("Organization Marketing Name", "")
-                         .replace("Medicare Advantage", "")
-                         .strip())
-        if len(carrier) > 30:
-            carrier = carrier[:28] + "…"
+        carrier = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else row[0])
         plans.append({
             "carrier": carrier,
             "contract_id": row[0],
             "plan_id": row[1],
-            "type": "Cost" if "Cost" in row[6] else "MA",
+            "type": "Cost" if "Cost" in (row[6] or "") else "MA",
             "landscape_premium": row[4],
             "landscape_deductible": row[5],
         })
 
     for row in pd_rows:
-        key = (row[0], row[1])
+        key = (row[0], row[1].zfill(3))
         if key in seen:
             continue
         seen.add(key)
-        carrier = row[2][:30] if row[2] else row[0]
+        carrier = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else row[0])
         plans.append({
             "carrier": carrier,
             "contract_id": row[0],
