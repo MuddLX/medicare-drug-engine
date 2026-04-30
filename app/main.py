@@ -989,10 +989,10 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 total_drug_cost += pc["annual_total"]
             else:
                 all_covered = False
-        premium_annual = round(plan["premium"] * len(months_remaining), 2)
+        premium_annual = round(plan["premium_monthly"] * len(months_remaining), 2)
         plan_summaries[carrier] = {
             "plan_name": plan["plan_name"], "plan_type": plan["plan_type"],
-            "premium_monthly": plan["premium"], "premium_remaining_year": premium_annual,
+            "premium_monthly": plan["premium_monthly"], "premium_remaining_year": premium_annual,
             "deductible": plan["deductible"],
             "total_drug_cost": round(total_drug_cost, 2),
             "total_drug_plus_premium": round(total_drug_cost + premium_annual, 2),
