@@ -120,16 +120,16 @@ def get_plans_for_zip(conn, zip_code):
         ("H6309", "001"): "HealthPartners Birch",
         ("H6309", "002"): "HealthPartners Cedar",
         ("H5959", "009"): "Blue Cross Choice",
-        ("H5959", "010"): "Blue Cross Complete ($92)",
-        ("H5959", "011"): "Blue Cross Complete ($191)",
-        ("H5959", "012"): "Blue Cross Core ($49)",
-        ("H5959", "013"): "Blue Cross Core ($0)",
-        ("H5959", "014"): "Blue Cross Choice ($59)",
-        ("H5959", "015"): "Blue Cross Comfort ($18)",
-        ("H5959", "016"): "Blue Cross Comfort ($62)",
-        ("H6154", "001"): "Medica Advantage H6154",
-        ("H8889", "001"): "Medica Advantage ($46)",
-        ("H8889", "002"): "Medica Advantage ($105)",
+        ("H5959", "010"): "Blue Cross Complete",
+        ("H5959", "011"): "Blue Cross Complete",
+        ("H5959", "012"): "Blue Cross Core",
+        ("H5959", "013"): "Blue Cross Core",
+        ("H5959", "014"): "Blue Cross Choice",
+        ("H5959", "015"): "Blue Cross Comfort",
+        ("H5959", "016"): "Blue Cross Comfort",
+        ("H6154", "001"): "Medica Advantage",
+        ("H8889", "001"): "Medica Advantage",
+        ("H8889", "002"): "Medica Advantage",
         ("H8889", "003"): "Medica Advantage ($103)",
         ("H8889", "004"): "Medica Advantage ($140)",
         ("H8889", "005"): "Medica Advantage ($0)",
@@ -212,7 +212,13 @@ def get_plans_for_zip(conn, zip_code):
         ).fetchone()
         premium = float(plan_row[0]) if plan_row else (row[4] or 999)
         deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
-        if family not in best_per_family or premium < best_per_family[family]["premium"]:
+        current = best_per_family.get(family)
+        is_better = (
+            current is None or
+            premium < current["premium"] or
+            (premium == current["premium"] and deductible < current["deductible"])
+        )
+        if is_better:
             best_per_family[family] = {
                 "contract_id": cid, "plan_id": pid,
                 "plan_name": row[2], "org_name": row[3],
