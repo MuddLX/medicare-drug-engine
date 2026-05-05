@@ -120,16 +120,16 @@ def get_plans_for_zip(conn, zip_code):
         ("H6309", "001"): "HealthPartners Birch",
         ("H6309", "002"): "HealthPartners Cedar",
         ("H5959", "009"): "Blue Cross Choice",
-        ("H5959", "010"): "Blue Cross Complete",
-        ("H5959", "011"): "Blue Cross Complete",
-        ("H5959", "012"): "Blue Cross Core",
-        ("H5959", "013"): "Blue Cross Core",
-        ("H5959", "014"): "Blue Cross Choice",
-        ("H5959", "015"): "Blue Cross Comfort",
-        ("H5959", "016"): "Blue Cross Comfort",
-        ("H6154", "001"): "Medica Advantage",
-        ("H8889", "001"): "Medica Advantage",
-        ("H8889", "002"): "Medica Advantage",
+        ("H5959", "010"): "Blue Cross Complete ($92)",
+        ("H5959", "011"): "Blue Cross Complete ($191)",
+        ("H5959", "012"): "Blue Cross Core ($49)",
+        ("H5959", "013"): "Blue Cross Core ($0)",
+        ("H5959", "014"): "Blue Cross Choice ($59)",
+        ("H5959", "015"): "Blue Cross Comfort ($18)",
+        ("H5959", "016"): "Blue Cross Comfort ($62)",
+        ("H6154", "001"): "Medica Advantage H6154",
+        ("H8889", "001"): "Medica Advantage ($46)",
+        ("H8889", "002"): "Medica Advantage ($105)",
         ("H8889", "003"): "Medica Advantage ($103)",
         ("H8889", "004"): "Medica Advantage ($140)",
         ("H8889", "005"): "Medica Advantage ($0)",
@@ -212,13 +212,7 @@ def get_plans_for_zip(conn, zip_code):
         ).fetchone()
         premium = float(plan_row[0]) if plan_row else (row[4] or 999)
         deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
-        current = best_per_family.get(family)
-        is_better = (
-            current is None or
-            premium < current["premium"] or
-            (premium == current["premium"] and deductible < current["deductible"])
-        )
-        if is_better:
+        if family not in best_per_family or premium < best_per_family[family]["premium"]:
             best_per_family[family] = {
                 "contract_id": cid, "plan_id": pid,
                 "plan_name": row[2], "org_name": row[3],
@@ -301,6 +295,220 @@ def get_plans_for_zip(conn, zip_code):
 
     return plans if plans else FALLBACK_PLANS
 
+
+
+def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
+    """
+    Fuzzy-match agent-requested plan names against the plans table.
+    custom_plans_str: comma-separated string e.g. "BC Comfort, Medica Preferred"
+    existing_plan_keys: set of (contract_id, plan_id) already in the default list
+    Returns list of plan dicts (same shape as get_plans_for_zip output), max 2.
+    """
+    if not custom_plans_str or not custom_plans_str.strip():
+        return []
+
+    # Alias map — common shorthand → fragments to match against plan name + carrier
+    ALIASES = {
+        "bc": "blue cross",
+        "bcbs": "blue cross",
+        "blue cross": "blue cross",
+        "hp": "healthpartners",
+        "health partners": "healthpartners",
+        "healthpartners": "healthpartners",
+        "medica": "medica",
+        "humana": "humana",
+        "aetna": "aetna",
+        "allina": "aetna",
+        "uhc": "uhc",
+        "aarp": "uhc",
+        "united": "uhc",
+        "align": "align",
+        "wellcare": "wellcare",
+        "silverscript": "silverscript",
+        "medicareblue": "medicareblue",
+    }
+
+    PLAN_KEYWORDS = {
+        "core": "core",
+        "comfort": "comfort",
+        "choice": "choice",
+        "complete": "complete",
+        "pace": "pace",
+        "stride": "stride",
+        "steady": "steady",
+        "smart": "smart",
+        "birch": "birch",
+        "cedar": "cedar",
+        "value": "value",
+        "preferred": "preferred",
+        "select": "select",
+        "solution": "solution",
+        "basic": "basic",
+        "premier": "premier",
+        "saver": "saver",
+        "classic": "classic",
+        "signature": "signature",
+        "enhanced": "enhanced",
+        "grand": "grand",
+        "eagle": "eagle",
+        "fit": "fit",
+        "freedom": "freedom",
+        "elite": "elite",
+        "plus": "plus",
+        "standard": "standard",
+        "focus": "focus",
+        "thrift": "thrift",
+    }
+
+    FRIENDLY_NAMES = {
+        ("H4882", "009"): "HealthPartners Journey Pace",
+        ("H4882", "003"): "HealthPartners Journey Steady",
+        ("H4882", "011"): "HealthPartners Journey Stride",
+        ("H4882", "014"): "HealthPartners Journey Smart",
+        ("H6309", "001"): "HealthPartners Birch",
+        ("H6309", "002"): "HealthPartners Cedar",
+        ("H5959", "009"): "Blue Cross Choice",
+        ("H5959", "010"): "Blue Cross Complete",
+        ("H5959", "011"): "Blue Cross Complete",
+        ("H5959", "012"): "Blue Cross Core",
+        ("H5959", "013"): "Blue Cross Core",
+        ("H5959", "014"): "Blue Cross Choice",
+        ("H5959", "015"): "Blue Cross Comfort",
+        ("H5959", "016"): "Blue Cross Comfort",
+        ("H6154", "001"): "Medica Advantage",
+        ("H8889", "001"): "Medica Advantage",
+        ("H8889", "002"): "Medica Advantage",
+        ("H8889", "003"): "Medica Advantage",
+        ("H8889", "004"): "Medica Advantage",
+        ("H8889", "005"): "Medica Advantage",
+        ("H8889", "008"): "Medica Advantage",
+        ("H8889", "010"): "Medica Value",
+        ("H8889", "011"): "Medica Preferred",
+        ("H8889", "012"): "Medica Select",
+        ("H8889", "013"): "Medica Preferred",
+        ("H8889", "014"): "Medica Value",
+        ("H8889", "015"): "Medica Select",
+        ("H8889", "017"): "Medica Value",
+        ("H8889", "018"): "Medica Select",
+        ("H2450", "002"): "Medica Cost Enhanced",
+        ("H2450", "007"): "Medica Cost Thrift",
+        ("H2450", "016"): "Medica Cost Basic",
+        ("H2450", "035"): "Medica Cost Core",
+        ("H2450", "037"): "Medica Cost Premier",
+        ("H2450", "039"): "Medica Cost Focus",
+        ("H2450", "049"): "Medica Cost Standard",
+        ("H5216", "275"): "Humana Choice",
+        ("H5216", "063"): "Humana Choice",
+        ("H5216", "092"): "Humana Choice",
+        ("H5216", "359"): "Humana Choice",
+        ("H3219", "001"): "Aetna Signature",
+        ("H3219", "002"): "Aetna Enhanced",
+        ("H3219", "003"): "Aetna Grand",
+        ("H3219", "004"): "Aetna Grand Extra",
+        ("H3219", "005"): "Aetna Eagle",
+        ("H3219", "008"): "Aetna Signature Fit",
+        ("H3219", "012"): "Aetna Signature",
+        ("H3219", "014"): "Aetna Enhanced",
+        ("H2001", "116"): "UHC AARP",
+        ("H2001", "117"): "UHC AARP",
+        ("H2001", "123"): "UHC AARP",
+        ("H3186", "001"): "Align ChoiceElite",
+        ("H3186", "002"): "Align ChoicePlus",
+        ("H8145", "006"): "Humana Gold Choice",
+        ("S5884", "190"): "Humana Value Rx",
+        ("S5884", "145"): "Humana Basic Rx",
+        ("S5884", "171"): "Humana Premier Rx",
+        ("S4802", "146"): "WellCare Value Script",
+        ("S4802", "089"): "WellCare Classic",
+        ("S5601", "050"): "SilverScript Choice",
+        ("S5743", "001"): "MedicareBlue Rx",
+        ("S5921", "370"): "AARP Rx Saver",
+        ("S5921", "406"): "AARP Rx Preferred",
+    }
+
+    CARRIER_FAMILY = {
+        "H4882": "HealthPartners", "H6309": "HealthPartners",
+        "H5959": "Blue Cross",
+        "H6154": "Medica", "H8889": "Medica", "H2450": "Medica Cost",
+        "H5216": "Humana", "H8145": "Humana",
+        "H3219": "Aetna",
+        "H2001": "UHC AARP",
+        "H3186": "Align",
+        "H9834": "Quartz",
+    }
+
+    # Load all plans from DB for matching
+    all_plans = conn.execute(
+        "SELECT contract_id, plan_id, plan_name, premium, deductible FROM plans"
+    ).fetchall()
+
+    def score_plan(request_str, contract_id, plan_id, plan_name):
+        """Score how well a plan matches a request string. Higher = better match."""
+        req = request_str.lower().strip()
+        pname = plan_name.lower() if plan_name else ""
+        friendly = FRIENDLY_NAMES.get((contract_id, plan_id.zfill(3)), "").lower()
+        score = 0
+
+        # Expand aliases in request
+        for alias, expanded in ALIASES.items():
+            if alias in req:
+                req = req.replace(alias, expanded)
+
+        # Check carrier match
+        carrier_family = CARRIER_FAMILY.get(contract_id, "").lower()
+        if carrier_family and carrier_family in req:
+            score += 10
+
+        # Check plan keyword match
+        for kw in PLAN_KEYWORDS:
+            if kw in req and (kw in pname or kw in friendly):
+                score += 8
+
+        # Substring match on friendly name words
+        for word in friendly.split():
+            if len(word) > 3 and word in req:
+                score += 3
+
+        return score
+
+    requests_list = [r.strip() for r in custom_plans_str.split(",") if r.strip()]
+    resolved = []
+
+    for req_str in requests_list[:2]:  # max 2 custom plans
+        best_score = 0
+        best_plan = None
+
+        for row in all_plans:
+            cid, pid = row[0], row[1].zfill(3)
+            key = (cid, pid)
+            if key in existing_plan_keys:
+                continue  # already in default list
+            s = score_plan(req_str, cid, pid, row[2])
+            if s > best_score:
+                best_score = s
+                best_plan = row
+
+        if best_plan and best_score >= 8:  # minimum confidence threshold
+            cid, pid = best_plan[0], best_plan[1].zfill(3)
+            key = (cid, pid)
+            existing_plan_keys.add(key)  # prevent duplicate if two requests match same plan
+            friendly = FRIENDLY_NAMES.get(key, best_plan[2][:35] if best_plan[2] else cid)
+            plan_type_row = conn.execute(
+                "SELECT plan_type FROM service_area WHERE contract_id=? AND plan_id=? LIMIT 1",
+                (cid, pid)
+            ).fetchone()
+            ptype = "Cost" if (plan_type_row and "Cost" in plan_type_row[0]) else "MA"
+            resolved.append({
+                "carrier": friendly,
+                "contract_id": cid,
+                "plan_id": pid,
+                "type": ptype,
+                "landscape_premium": float(best_plan[3]) if best_plan[3] is not None else 0.0,
+                "landscape_deductible": float(best_plan[4]) if best_plan[4] is not None else 0.0,
+                "custom": True,  # flag so PDF can mark it as agent-requested
+            })
+
+    return resolved
 
 
 # ===== CMS NEGOTIATED MAXIMUM FAIR PRICES (MFP) FOR 2026 =====
@@ -848,11 +1056,12 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     }
 
 
-def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_city=None, client_state=None):
+def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_city=None, client_state=None, custom_plans_str=None):
     """
     drugs: list of {"name": str, "dosage": str}
     Normalizes drug names via Claude first, then looks up costs.
     Uses real client address for pharmacy distance calculations when available.
+    custom_plans_str: optional comma-separated agent-requested plan names
     """
     months_remaining = get_remaining_months(soa_date)
     month_names = [datetime(2026, m, 1).strftime("%B") for m in months_remaining]
@@ -861,6 +1070,12 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
 
     # Dynamically load plans available for this zip code
     available_plans = get_plans_for_zip(conn, zip_code)
+
+    # Append any agent-requested custom plans (max 2, skip dupes)
+    if custom_plans_str and custom_plans_str.strip():
+        existing_keys = {(p["contract_id"], p["plan_id"].zfill(3)) for p in available_plans}
+        custom = resolve_custom_plans(conn, custom_plans_str, existing_keys)
+        available_plans = available_plans + custom
 
     plan_details = {}
     for plan in available_plans:
@@ -1664,6 +1879,7 @@ def process_soa():
     client_city = data.get("client_city", "")
     client_state = data.get("client_state", "MN")
     confidence = data.get("confidence")
+    custom_plans_str = data.get("custom_plans", "")
     try:
         confidence = float(confidence) if confidence else None
     except Exception:
@@ -1681,7 +1897,8 @@ def process_soa():
         result = compute_drug_costs(drugs, zip_code, soa_date,
                                     client_address=client_address,
                                     client_city=client_city,
-                                    client_state=client_state)
+                                    client_state=client_state,
+                                    custom_plans_str=custom_plans_str)
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
