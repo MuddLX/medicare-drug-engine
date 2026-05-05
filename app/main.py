@@ -120,14 +120,14 @@ def get_plans_for_zip(conn, zip_code):
         ("H6309", "001"): "HealthPartners Birch",
         ("H6309", "002"): "HealthPartners Cedar",
         ("H5959", "009"): "Blue Cross Choice",
-        ("H5959", "010"): "Blue Cross Complete ($92)",
-        ("H5959", "011"): "Blue Cross Complete ($191)",
-        ("H5959", "012"): "Blue Cross Core ($49)",
-        ("H5959", "013"): "Blue Cross Core ($0)",
-        ("H5959", "014"): "Blue Cross Choice ($59)",
-        ("H5959", "015"): "Blue Cross Comfort ($18)",
-        ("H5959", "016"): "Blue Cross Comfort ($62)",
-        ("H6154", "001"): "Medica Advantage H6154",
+        ("H5959", "010"): "Blue Cross Complete",
+        ("H5959", "011"): "Blue Cross Complete",
+        ("H5959", "012"): "Blue Cross Core",
+        ("H5959", "013"): "Blue Cross Core",
+        ("H5959", "014"): "Blue Cross Choice",
+        ("H5959", "015"): "Blue Cross Comfort",
+        ("H5959", "016"): "Blue Cross Comfort",
+        ("H6154", "001"): "Medica Advantage",
         ("H8889", "001"): "Medica Advantage ($46)",
         ("H8889", "002"): "Medica Advantage ($105)",
         ("H8889", "003"): "Medica Advantage ($103)",
@@ -212,7 +212,13 @@ def get_plans_for_zip(conn, zip_code):
         ).fetchone()
         premium = float(plan_row[0]) if plan_row else (row[4] or 999)
         deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
-        if family not in best_per_family or premium < best_per_family[family]["premium"]:
+        current = best_per_family.get(family)
+        is_better = (
+            current is None or
+            premium < current["premium"] or
+            (premium == current["premium"] and deductible < current["deductible"])
+        )
+        if is_better:
             best_per_family[family] = {
                 "contract_id": cid, "plan_id": pid,
                 "plan_name": row[2], "org_name": row[3],
@@ -300,66 +306,24 @@ def get_plans_for_zip(conn, zip_code):
 def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
     """
     Fuzzy-match agent-requested plan names against the plans table.
-    custom_plans_str: comma-separated string e.g. "BC Comfort, Medica Preferred"
-    existing_plan_keys: set of (contract_id, plan_id) already in the default list
-    Returns list of plan dicts (same shape as get_plans_for_zip output), max 2.
+    Returns (matched_plans list, unmatched_requests list).
     """
     if not custom_plans_str or not custom_plans_str.strip():
-        return []
+        return [], []
 
-    # Alias map — common shorthand → fragments to match against plan name + carrier
     ALIASES = {
-        "bc": "blue cross",
-        "bcbs": "blue cross",
-        "blue cross": "blue cross",
-        "hp": "healthpartners",
-        "health partners": "healthpartners",
-        "healthpartners": "healthpartners",
-        "medica": "medica",
-        "humana": "humana",
-        "aetna": "aetna",
-        "allina": "aetna",
-        "uhc": "uhc",
-        "aarp": "uhc",
-        "united": "uhc",
-        "align": "align",
-        "wellcare": "wellcare",
-        "silverscript": "silverscript",
-        "medicareblue": "medicareblue",
+        "bc": "blue cross", "bcbs": "blue cross", "blue cross": "blue cross",
+        "hp": "healthpartners", "health partners": "healthpartners", "healthpartners": "healthpartners",
+        "medica": "medica", "humana": "humana", "aetna": "aetna", "allina": "aetna",
+        "uhc": "uhc", "aarp": "uhc", "united": "uhc", "align": "align",
+        "wellcare": "wellcare", "silverscript": "silverscript", "medicareblue": "medicareblue",
     }
-
     PLAN_KEYWORDS = {
-        "core": "core",
-        "comfort": "comfort",
-        "choice": "choice",
-        "complete": "complete",
-        "pace": "pace",
-        "stride": "stride",
-        "steady": "steady",
-        "smart": "smart",
-        "birch": "birch",
-        "cedar": "cedar",
-        "value": "value",
-        "preferred": "preferred",
-        "select": "select",
-        "solution": "solution",
-        "basic": "basic",
-        "premier": "premier",
-        "saver": "saver",
-        "classic": "classic",
-        "signature": "signature",
-        "enhanced": "enhanced",
-        "grand": "grand",
-        "eagle": "eagle",
-        "fit": "fit",
-        "freedom": "freedom",
-        "elite": "elite",
-        "plus": "plus",
-        "standard": "standard",
-        "focus": "focus",
-        "thrift": "thrift",
+        "core", "comfort", "choice", "complete", "pace", "stride", "steady", "smart",
+        "birch", "cedar", "value", "preferred", "select", "solution", "basic", "premier",
+        "saver", "classic", "signature", "enhanced", "grand", "eagle", "fit", "freedom",
+        "elite", "plus", "standard", "focus", "thrift",
     }
-
     FRIENDLY_NAMES = {
         ("H4882", "009"): "HealthPartners Journey Pace",
         ("H4882", "003"): "HealthPartners Journey Steady",
@@ -425,73 +389,61 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         ("S5921", "370"): "AARP Rx Saver",
         ("S5921", "406"): "AARP Rx Preferred",
     }
-
     CARRIER_FAMILY = {
         "H4882": "HealthPartners", "H6309": "HealthPartners",
         "H5959": "Blue Cross",
         "H6154": "Medica", "H8889": "Medica", "H2450": "Medica Cost",
         "H5216": "Humana", "H8145": "Humana",
-        "H3219": "Aetna",
-        "H2001": "UHC AARP",
-        "H3186": "Align",
-        "H9834": "Quartz",
+        "H3219": "Aetna", "H2001": "UHC AARP", "H3186": "Align", "H9834": "Quartz",
     }
 
-    # Load all plans from DB for matching
     all_plans = conn.execute(
         "SELECT contract_id, plan_id, plan_name, premium, deductible FROM plans"
     ).fetchall()
 
     def score_plan(request_str, contract_id, plan_id, plan_name):
-        """Score how well a plan matches a request string. Higher = better match."""
         req = request_str.lower().strip()
         pname = plan_name.lower() if plan_name else ""
         friendly = FRIENDLY_NAMES.get((contract_id, plan_id.zfill(3)), "").lower()
         score = 0
-
-        # Expand aliases in request
         for alias, expanded in ALIASES.items():
             if alias in req:
                 req = req.replace(alias, expanded)
-
-        # Check carrier match
         carrier_family = CARRIER_FAMILY.get(contract_id, "").lower()
         if carrier_family and carrier_family in req:
             score += 10
-
-        # Check plan keyword match
         for kw in PLAN_KEYWORDS:
             if kw in req and (kw in pname or kw in friendly):
                 score += 8
-
-        # Substring match on friendly name words
         for word in friendly.split():
             if len(word) > 3 and word in req:
                 score += 3
-
         return score
 
     requests_list = [r.strip() for r in custom_plans_str.split(",") if r.strip()]
     resolved = []
+    unmatched = []
 
-    for req_str in requests_list[:2]:  # max 2 custom plans
+    for req_str in requests_list[:2]:
         best_score = 0
         best_plan = None
-
         for row in all_plans:
             cid, pid = row[0], row[1].zfill(3)
             key = (cid, pid)
             if key in existing_plan_keys:
-                continue  # already in default list
+                continue
             s = score_plan(req_str, cid, pid, row[2])
             if s > best_score:
                 best_score = s
                 best_plan = row
 
-        if best_plan and best_score >= 8:  # minimum confidence threshold
+        if best_plan and best_score >= 8:
             cid, pid = best_plan[0], best_plan[1].zfill(3)
             key = (cid, pid)
-            existing_plan_keys.add(key)  # prevent duplicate if two requests match same plan
+            if key in existing_plan_keys:
+                unmatched.append(f"Requested plan '{req_str}' is already included in the comparison")
+                continue
+            existing_plan_keys.add(key)
             friendly = FRIENDLY_NAMES.get(key, best_plan[2][:35] if best_plan[2] else cid)
             plan_type_row = conn.execute(
                 "SELECT plan_type FROM service_area WHERE contract_id=? AND plan_id=? LIMIT 1",
@@ -505,13 +457,12 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
                 "type": ptype,
                 "landscape_premium": float(best_plan[3]) if best_plan[3] is not None else 0.0,
                 "landscape_deductible": float(best_plan[4]) if best_plan[4] is not None else 0.0,
-                "custom": True,  # flag so PDF can mark it as agent-requested
+                "custom": True,
             })
+        else:
+            unmatched.append(f"Requested plan '{req_str}' is not available in this service area")
 
-    return resolved
-
-
-# ===== CMS NEGOTIATED MAXIMUM FAIR PRICES (MFP) FOR 2026 =====
+    return resolved, unmatched
 # Source: CMS Medicare Drug Price Negotiation Program, effective January 1, 2026
 # Patient pays 25% coinsurance × MFP
 MFP_2026 = {
@@ -1072,9 +1023,10 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     available_plans = get_plans_for_zip(conn, zip_code)
 
     # Append any agent-requested custom plans (max 2, skip dupes)
+    custom_warnings = []
     if custom_plans_str and custom_plans_str.strip():
         existing_keys = {(p["contract_id"], p["plan_id"].zfill(3)) for p in available_plans}
-        custom = resolve_custom_plans(conn, custom_plans_str, existing_keys)
+        custom, custom_warnings = resolve_custom_plans(conn, custom_plans_str, existing_keys)
         available_plans = available_plans + custom
 
     plan_details = {}
@@ -1298,6 +1250,10 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             "all_drugs_covered": all_covered,
         }
 
+    # Append any custom plan warnings (plan not available in service area, etc.)
+    for msg in custom_warnings:
+        warnings.append({"drug": "Plan Request", "normalized_to": "", "flag": msg})
+
     conn.close()
     return {
         "zip_code": zip_code, "soa_date": soa_date,
@@ -1410,29 +1366,47 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     # Warnings banner
     if warnings:
-        warn_rows = [[Paragraph("⚠ Drug Verification Required", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
-                      Paragraph("Please verify the following before client meeting:", warn_s)]]
-        for w in warnings:
-            drug = w.get("drug", "")
-            normalized = w.get("normalized_to", "")
-            flag = w.get("flag", "")
-            note = f"{drug}"
-            if normalized and normalized.lower() != drug.lower():
-                note += f" → interpreted as {normalized}"
-            if flag:
-                note += f" — {flag}"
-            warn_rows.append([Paragraph("", warn_s), Paragraph(note, warn_s)])
-        wt = Table(warn_rows, colWidths=[50*mm, 230*mm])
-        wt.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), WARN_BG),
-            ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#fed7aa")),
-            ("TOPPADDING", (0,0), (-1,-1), 1),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-            ("LEFTPADDING", (0,0), (-1,-1), 4),
-            ("SPAN", (0,0), (0,0)),
-        ]))
-        elements.append(wt)
-        elements.append(Spacer(1, 0.3*mm))
+        drug_warnings = [w for w in warnings if w.get("drug") != "Plan Request"]
+        plan_warnings = [w for w in warnings if w.get("drug") == "Plan Request"]
+
+        warn_rows = []
+
+        if drug_warnings:
+            warn_rows.append([
+                Paragraph("⚠ Drug Verification Required", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
+                Paragraph("Please verify the following before client meeting:", warn_s)
+            ])
+            for w in drug_warnings:
+                drug = w.get("drug", "")
+                normalized = w.get("normalized_to", "")
+                flag = w.get("flag", "")
+                note = f"{drug}"
+                if normalized and normalized.lower() != drug.lower():
+                    note += f" → interpreted as {normalized}"
+                if flag:
+                    note += f" — {flag}"
+                warn_rows.append([Paragraph("", warn_s), Paragraph(note, warn_s)])
+
+        if plan_warnings:
+            warn_rows.append([
+                Paragraph("⚠ Plan Request Notice", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
+                Paragraph("The following agent-requested plans could not be added:", warn_s)
+            ])
+            for w in plan_warnings:
+                warn_rows.append([Paragraph("", warn_s), Paragraph(w.get("flag", ""), warn_s)])
+
+        if warn_rows:
+            wt = Table(warn_rows, colWidths=[50*mm, 230*mm])
+            wt.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,-1), WARN_BG),
+                ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#fed7aa")),
+                ("TOPPADDING", (0,0), (-1,-1), 1),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
+                ("LEFTPADDING", (0,0), (-1,-1), 4),
+                ("SPAN", (0,0), (0,0)),
+            ]))
+            elements.append(wt)
+            elements.append(Spacer(1, 0.3*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
