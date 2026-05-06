@@ -128,8 +128,8 @@ def get_plans_for_zip(conn, zip_code):
         ("H5959", "015"): "Blue Cross Comfort",
         ("H5959", "016"): "Blue Cross Comfort",
         ("H6154", "001"): "Medica Advantage",
-        ("H8889", "001"): "Medica Advantage ($46)",
-        ("H8889", "002"): "Medica Advantage ($105)",
+        ("H8889", "001"): "Medica Advantage",
+        ("H8889", "002"): "Medica Advantage",
         ("H8889", "003"): "Medica Advantage ($103)",
         ("H8889", "004"): "Medica Advantage ($140)",
         ("H8889", "005"): "Medica Advantage ($0)",
@@ -304,13 +304,8 @@ def get_plans_for_zip(conn, zip_code):
 
 
 def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
-    """
-    Fuzzy-match agent-requested plan names against the plans table.
-    Returns (matched_plans list, unmatched_requests list).
-    """
     if not custom_plans_str or not custom_plans_str.strip():
         return [], []
-
     ALIASES = {
         "bc": "blue cross", "bcbs": "blue cross", "blue cross": "blue cross",
         "hp": "healthpartners", "health partners": "healthpartners", "healthpartners": "healthpartners",
@@ -324,70 +319,69 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "saver", "classic", "signature", "enhanced", "grand", "eagle", "fit", "freedom",
         "elite", "plus", "standard", "focus", "thrift",
     }
-    FRIENDLY_NAMES = {
-        ("H4882", "009"): "HealthPartners Journey Pace",
-        ("H4882", "003"): "HealthPartners Journey Steady",
-        ("H4882", "011"): "HealthPartners Journey Stride",
-        ("H4882", "014"): "HealthPartners Journey Smart",
-        ("H6309", "001"): "HealthPartners Birch",
-        ("H6309", "002"): "HealthPartners Cedar",
-        ("H5959", "009"): "Blue Cross Choice",
-        ("H5959", "010"): "Blue Cross Complete",
-        ("H5959", "011"): "Blue Cross Complete",
-        ("H5959", "012"): "Blue Cross Core",
-        ("H5959", "013"): "Blue Cross Core",
-        ("H5959", "014"): "Blue Cross Choice",
-        ("H5959", "015"): "Blue Cross Comfort",
-        ("H5959", "016"): "Blue Cross Comfort",
-        ("H6154", "001"): "Medica Advantage",
-        ("H8889", "001"): "Medica Advantage",
-        ("H8889", "002"): "Medica Advantage",
-        ("H8889", "003"): "Medica Advantage",
-        ("H8889", "004"): "Medica Advantage",
-        ("H8889", "005"): "Medica Advantage",
-        ("H8889", "008"): "Medica Advantage",
-        ("H8889", "010"): "Medica Value",
-        ("H8889", "011"): "Medica Preferred",
-        ("H8889", "012"): "Medica Select",
-        ("H8889", "013"): "Medica Preferred",
-        ("H8889", "014"): "Medica Value",
-        ("H8889", "015"): "Medica Select",
-        ("H8889", "017"): "Medica Value",
-        ("H8889", "018"): "Medica Select",
-        ("H2450", "002"): "Medica Cost Enhanced",
-        ("H2450", "007"): "Medica Cost Thrift",
-        ("H2450", "016"): "Medica Cost Basic",
-        ("H2450", "035"): "Medica Cost Core",
-        ("H2450", "037"): "Medica Cost Premier",
-        ("H2450", "039"): "Medica Cost Focus",
-        ("H2450", "049"): "Medica Cost Standard",
-        ("H5216", "275"): "Humana Choice",
-        ("H5216", "063"): "Humana Choice",
-        ("H5216", "092"): "Humana Choice",
-        ("H5216", "359"): "Humana Choice",
-        ("H3219", "001"): "Aetna Signature",
-        ("H3219", "002"): "Aetna Enhanced",
-        ("H3219", "003"): "Aetna Grand",
-        ("H3219", "004"): "Aetna Grand Extra",
-        ("H3219", "005"): "Aetna Eagle",
-        ("H3219", "008"): "Aetna Signature Fit",
-        ("H3219", "012"): "Aetna Signature",
-        ("H3219", "014"): "Aetna Enhanced",
-        ("H2001", "116"): "UHC AARP",
-        ("H2001", "117"): "UHC AARP",
-        ("H2001", "123"): "UHC AARP",
-        ("H3186", "001"): "Align ChoiceElite",
-        ("H3186", "002"): "Align ChoicePlus",
-        ("H8145", "006"): "Humana Gold Choice",
-        ("S5884", "190"): "Humana Value Rx",
-        ("S5884", "145"): "Humana Basic Rx",
-        ("S5884", "171"): "Humana Premier Rx",
-        ("S4802", "146"): "WellCare Value Script",
-        ("S4802", "089"): "WellCare Classic",
-        ("S5601", "050"): "SilverScript Choice",
-        ("S5743", "001"): "MedicareBlue Rx",
-        ("S5921", "370"): "AARP Rx Saver",
-        ("S5921", "406"): "AARP Rx Preferred",
+    FN = {
+        ("H4882","009"): "HealthPartners Journey Pace",
+        ("H4882","003"): "HealthPartners Journey Steady",
+        ("H4882","011"): "HealthPartners Journey Stride",
+        ("H4882","014"): "HealthPartners Journey Smart",
+        ("H6309","001"): "HealthPartners Birch",
+        ("H6309","002"): "HealthPartners Cedar",
+        ("H5959","009"): "Blue Cross Choice",
+        ("H5959","010"): "Blue Cross Complete",
+        ("H5959","011"): "Blue Cross Complete",
+        ("H5959","012"): "Blue Cross Core",
+        ("H5959","013"): "Blue Cross Core",
+        ("H5959","014"): "Blue Cross Choice",
+        ("H5959","015"): "Blue Cross Comfort",
+        ("H5959","016"): "Blue Cross Comfort",
+        ("H6154","001"): "Medica Advantage",
+        ("H8889","001"): "Medica Advantage",
+        ("H8889","002"): "Medica Advantage",
+        ("H8889","003"): "Medica Advantage",
+        ("H8889","004"): "Medica Advantage",
+        ("H8889","005"): "Medica Advantage",
+        ("H8889","008"): "Medica Advantage",
+        ("H8889","010"): "Medica Value",
+        ("H8889","011"): "Medica Preferred",
+        ("H8889","012"): "Medica Select",
+        ("H8889","013"): "Medica Preferred",
+        ("H8889","014"): "Medica Value",
+        ("H8889","015"): "Medica Select",
+        ("H8889","017"): "Medica Value",
+        ("H8889","018"): "Medica Select",
+        ("H2450","002"): "Medica Cost Enhanced",
+        ("H2450","007"): "Medica Cost Thrift",
+        ("H2450","016"): "Medica Cost Basic",
+        ("H2450","035"): "Medica Cost Core",
+        ("H2450","037"): "Medica Cost Premier",
+        ("H2450","039"): "Medica Cost Focus",
+        ("H2450","049"): "Medica Cost Standard",
+        ("H5216","275"): "Humana Choice",
+        ("H5216","063"): "Humana Choice",
+        ("H5216","092"): "Humana Choice",
+        ("H5216","359"): "Humana Choice",
+        ("H3219","001"): "Aetna Signature",
+        ("H3219","002"): "Aetna Enhanced",
+        ("H3219","003"): "Aetna Grand",
+        ("H3219","004"): "Aetna Grand Extra",
+        ("H3219","008"): "Aetna Signature Fit",
+        ("H3219","012"): "Aetna Signature",
+        ("H3219","014"): "Aetna Enhanced",
+        ("H2001","116"): "UHC AARP",
+        ("H2001","117"): "UHC AARP",
+        ("H2001","123"): "UHC AARP",
+        ("H3186","001"): "Align ChoiceElite",
+        ("H3186","002"): "Align ChoicePlus",
+        ("H8145","006"): "Humana Gold Choice",
+        ("S5884","190"): "Humana Value Rx",
+        ("S5884","145"): "Humana Basic Rx",
+        ("S5884","171"): "Humana Premier Rx",
+        ("S4802","146"): "WellCare Value Script",
+        ("S4802","089"): "WellCare Classic",
+        ("S5601","050"): "SilverScript Choice",
+        ("S5743","001"): "MedicareBlue Rx",
+        ("S5921","370"): "AARP Rx Saver",
+        ("S5921","406"): "AARP Rx Preferred",
     }
     CARRIER_FAMILY = {
         "H4882": "HealthPartners", "H6309": "HealthPartners",
@@ -396,21 +390,18 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "H5216": "Humana", "H8145": "Humana",
         "H3219": "Aetna", "H2001": "UHC AARP", "H3186": "Align", "H9834": "Quartz",
     }
+    all_plans = conn.execute("SELECT contract_id, plan_id, plan_name, premium, deductible FROM plans").fetchall()
 
-    all_plans = conn.execute(
-        "SELECT contract_id, plan_id, plan_name, premium, deductible FROM plans"
-    ).fetchall()
-
-    def score_plan(request_str, contract_id, plan_id, plan_name):
-        req = request_str.lower().strip()
+    def score_plan(req_str, cid, pid, plan_name):
+        req = req_str.lower().strip()
         pname = plan_name.lower() if plan_name else ""
-        friendly = FRIENDLY_NAMES.get((contract_id, plan_id.zfill(3)), "").lower()
+        friendly = FN.get((cid, pid.zfill(3)), "").lower()
         score = 0
         for alias, expanded in ALIASES.items():
             if alias in req:
                 req = req.replace(alias, expanded)
-        carrier_family = CARRIER_FAMILY.get(contract_id, "").lower()
-        if carrier_family and carrier_family in req:
+        cf = CARRIER_FAMILY.get(cid, "").lower()
+        if cf and cf in req:
             score += 10
         for kw in PLAN_KEYWORDS:
             if kw in req and (kw in pname or kw in friendly):
@@ -429,14 +420,12 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         best_plan = None
         for row in all_plans:
             cid, pid = row[0], row[1].zfill(3)
-            key = (cid, pid)
-            if key in existing_plan_keys:
+            if (cid, pid) in existing_plan_keys:
                 continue
             s = score_plan(req_str, cid, pid, row[2])
             if s > best_score:
                 best_score = s
                 best_plan = row
-
         if best_plan and best_score >= 8:
             cid, pid = best_plan[0], best_plan[1].zfill(3)
             key = (cid, pid)
@@ -444,17 +433,11 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
                 unmatched.append(f"Requested plan '{req_str}' is already included in the comparison")
                 continue
             existing_plan_keys.add(key)
-            friendly = FRIENDLY_NAMES.get(key, best_plan[2][:35] if best_plan[2] else cid)
-            plan_type_row = conn.execute(
-                "SELECT plan_type FROM service_area WHERE contract_id=? AND plan_id=? LIMIT 1",
-                (cid, pid)
-            ).fetchone()
-            ptype = "Cost" if (plan_type_row and "Cost" in plan_type_row[0]) else "MA"
+            friendly = FN.get(key, best_plan[2][:35] if best_plan[2] else cid)
+            pt_row = conn.execute("SELECT plan_type FROM service_area WHERE contract_id=? AND plan_id=? LIMIT 1", (cid, pid)).fetchone()
+            ptype = "Cost" if (pt_row and "Cost" in pt_row[0]) else "MA"
             resolved.append({
-                "carrier": friendly,
-                "contract_id": cid,
-                "plan_id": pid,
-                "type": ptype,
+                "carrier": friendly, "contract_id": cid, "plan_id": pid, "type": ptype,
                 "landscape_premium": float(best_plan[3]) if best_plan[3] is not None else 0.0,
                 "landscape_deductible": float(best_plan[4]) if best_plan[4] is not None else 0.0,
                 "custom": True,
@@ -463,6 +446,9 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
             unmatched.append(f"Requested plan '{req_str}' is not available in this service area")
 
     return resolved, unmatched
+
+
+# ===== CMS NEGOTIATED MAXIMUM FAIR PRICES (MFP) FOR 2026 =====
 # Source: CMS Medicare Drug Price Negotiation Program, effective January 1, 2026
 # Patient pays 25% coinsurance × MFP
 MFP_2026 = {
@@ -1250,7 +1236,6 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             "all_drugs_covered": all_covered,
         }
 
-    # Append any custom plan warnings (plan not available in service area, etc.)
     for msg in custom_warnings:
         warnings.append({"drug": "Plan Request", "normalized_to": "", "flag": msg})
 
@@ -1296,9 +1281,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=11, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=16)
-    h2        = S("h2",  fontSize=5,  textColor=colors.HexColor("#64748b"), leading=8)
-    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=10)
+    h1        = S("h1",  fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
+    h2        = S("h2",  fontSize=5,  textColor=colors.HexColor("#64748b"), leading=7)
+    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
     col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
     cell      = S("c",   fontSize=6,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)
@@ -1342,7 +1327,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=6*mm, leftMargin=6*mm,
-                            topMargin=4*mm, bottomMargin=4*mm)
+                            topMargin=3*mm, bottomMargin=3*mm)
     elements = []
 
     # Header
@@ -1352,7 +1337,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
                     [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
-                    [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=8))]]
+                    [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=7))]]
     tl = Table([[Table(header_left, colWidths=[200*mm]),
                  Table(header_right, colWidths=[80*mm])]],
                colWidths=[200*mm, 80*mm])
@@ -1368,9 +1353,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     if warnings:
         drug_warnings = [w for w in warnings if w.get("drug") != "Plan Request"]
         plan_warnings = [w for w in warnings if w.get("drug") == "Plan Request"]
-
         warn_rows = []
-
         if drug_warnings:
             warn_rows.append([
                 Paragraph("⚠ Drug Verification Required", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
@@ -1386,7 +1369,6 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 if flag:
                     note += f" — {flag}"
                 warn_rows.append([Paragraph("", warn_s), Paragraph(note, warn_s)])
-
         if plan_warnings:
             warn_rows.append([
                 Paragraph("⚠ Plan Request Notice", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
@@ -1394,7 +1376,6 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ])
             for w in plan_warnings:
                 warn_rows.append([Paragraph("", warn_s), Paragraph(w.get("flag", ""), warn_s)])
-
         if warn_rows:
             wt = Table(warn_rows, colWidths=[50*mm, 230*mm])
             wt.setStyle(TableStyle([
