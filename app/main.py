@@ -1307,7 +1307,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     h1        = S("h1",  fontSize=14, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=17)
     h2        = S("h2",  fontSize=10,  textColor=colors.HexColor("#334155"), leading=13)
-    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
+    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8)
     col_hdr   = S("ch",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
     row_lbl   = S("rl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
     cell      = S("c",   fontSize=7,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
@@ -1702,17 +1702,17 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts_list))
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.05*mm))
 
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 0.1*mm))
+        elements.append(Spacer(1, 0.05*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.05*mm))
 
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.1*mm, spaceAfter=0.1*mm))
     elements.append(Paragraph(
         "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
 
