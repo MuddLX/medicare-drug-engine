@@ -1371,7 +1371,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=1*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.5*mm))
 
     # Warnings banner
     if warnings:
@@ -1411,7 +1411,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 ("SPAN", (0,0), (0,0)),
             ]))
             elements.append(wt)
-            elements.append(Spacer(1, 0.3*mm))
+            elements.append(Spacer(1, 0.15*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
@@ -1475,14 +1475,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
         carriers = list(ma_plans.keys())
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
@@ -1534,11 +1534,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 3 — PHARMACY COST COMPARISON BY PLAN", sec_title))
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
         if client_address and client_city:
             location_label = client_address + ", " + client_city
@@ -1687,8 +1687,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ("TOPPADDING", (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -1702,7 +1702,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts_list))
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
 
     if pd_plans:
@@ -1710,7 +1710,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
