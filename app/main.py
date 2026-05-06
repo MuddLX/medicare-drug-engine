@@ -1729,7 +1729,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.1*mm, spaceAfter=0.1*mm))
     elements.append(Paragraph(
-        "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
+        "Internal use only · Agent reference only · Drug costs are estimates based on CMS 2026 formulary data; actual pharmacy costs may vary · Verify at medicare.gov before enrollment", footer))
 
     doc.build(elements)
     buffer.seek(0)
