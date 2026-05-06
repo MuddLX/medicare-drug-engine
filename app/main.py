@@ -1305,19 +1305,19 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
-    h2        = S("h2",  fontSize=5,  textColor=colors.HexColor("#64748b"), leading=7)
+    h1        = S("h1",  fontSize=14, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=17)
+    h2        = S("h2",  fontSize=8,  textColor=colors.HexColor("#64748b"), leading=10)
     sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
-    col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
-    row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
-    cell      = S("c",   fontSize=6,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)
-    badge_txt = S("bt",  fontSize=6,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=8)
-    gen_txt   = S("gt",  fontSize=6,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=8)
+    col_hdr   = S("ch",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    row_lbl   = S("rl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
+    cell      = S("c",   fontSize=7,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
+    badge_txt = S("bt",  fontSize=8,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=10)
+    gen_txt   = S("gt",  fontSize=7,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=9)
     footer    = S("ft",  fontSize=6,  textColor=colors.HexColor("#94a3b8"), alignment=TA_CENTER, leading=8)
     drug_lbl  = S("dl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
-    nc_style  = S("nc",  fontSize=6,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=8)
-    green_val = S("gv",  fontSize=6,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
-    bold_cell = S("bc",  fontSize=6,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+    nc_style  = S("nc",  fontSize=7,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=9)
+    green_val = S("gv",  fontSize=7,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    bold_cell = S("bc",  fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
     month_lbl = S("ml",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
     ph_hdr    = S("ph",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     warn_s    = S("ws",  fontSize=6,  textColor=WARN_TEXT, leading=8)
@@ -1331,7 +1331,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         }
         color, label = configs.get(tier, ("#334155", f"Tier {tier}"))
         return Paragraph(f'<font color="{color}">{label}</font>',
-                         S(f"t{tier}", fontSize=6, fontName="Helvetica-Bold",
+                         S(f"t{tier}", fontSize=7, fontName="Helvetica-Bold",
                            alignment=TA_CENTER, textColor=colors.HexColor(color), leading=8))
 
     def tier_bg(tier):
@@ -1351,7 +1351,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=6*mm, leftMargin=6*mm,
-                            topMargin=3*mm, bottomMargin=3*mm)
+                            topMargin=2*mm, bottomMargin=2*mm)
     elements = []
 
     # Header
