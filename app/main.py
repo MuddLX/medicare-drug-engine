@@ -112,10 +112,10 @@ def get_plans_for_zip(conn, zip_code):
 
     # Friendly name lookup — use short carrier names for known plans
     FRIENDLY_NAMES = {
-        ("H4882", "009"): "HealthPartners Journey Pace",
-        ("H4882", "003"): "HealthPartners Journey Steady",
-        ("H4882", "011"): "HealthPartners Journey Stride",
-        ("H4882", "014"): "HealthPartners Journey Smart",
+        ("H4882", "009"): "HealthPartners Pace",
+        ("H4882", "003"): "HealthPartners Steady",
+        ("H4882", "011"): "HealthPartners Stride",
+        ("H4882", "014"): "HealthPartners Smart",
         ("H6309", "001"): "HealthPartners Birch",
         ("H6309", "002"): "HealthPartners Cedar",
         ("H5959", "009"): "Blue Cross Choice",
@@ -344,10 +344,10 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "elite", "plus", "standard", "focus", "thrift",
     }
     FN = {
-        ("H4882","009"): "HealthPartners Journey Pace",
-        ("H4882","003"): "HealthPartners Journey Steady",
-        ("H4882","011"): "HealthPartners Journey Stride",
-        ("H4882","014"): "HealthPartners Journey Smart",
+        ("H4882","009"): "HealthPartners Pace",
+        ("H4882","003"): "HealthPartners Steady",
+        ("H4882","011"): "HealthPartners Stride",
+        ("H4882","014"): "HealthPartners Smart",
         ("H6309","001"): "HealthPartners Birch",
         ("H6309","002"): "HealthPartners Cedar",
         ("H5959","009"): "Blue Cross Choice",
@@ -1306,7 +1306,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         return ParagraphStyle(name, **defaults)
 
     h1        = S("h1",  fontSize=14, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=17)
-    h2        = S("h2",  fontSize=8,  textColor=colors.HexColor("#64748b"), leading=10)
+    h2        = S("h2",  fontSize=10,  textColor=colors.HexColor("#334155"), leading=13)
     sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
     col_hdr   = S("ch",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
     row_lbl   = S("rl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
@@ -1430,7 +1430,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 if split > 0:
                     name = name[:split] + "\n" + name[split+1:]
             star = " ★" if c == best else ""
-            return Paragraph(f"{c}{star}<br/><font size='5'>{name}</font>", col_hdr)
+            return Paragraph(f"{c}{star}<br/><font size='4'>{name}</font>", col_hdr)
 
         rows = [[Paragraph(section_label, col_hdr)] + [carrier_header(c) for c in carriers]]
         for label, fn, is_total in [
