@@ -102,7 +102,6 @@ def get_plans_for_zip(conn, zip_code):
         AND p.formulary_id IS NOT NULL
         GROUP BY sa.contract_id, sa.plan_id
         ORDER BY MIN(sa.premium_total) ASC
-        LIMIT 3
     """, (county,)).fetchall()
 
     if not ma_rows and not pd_rows:
@@ -284,19 +283,44 @@ def get_plans_for_zip(conn, zip_code):
                 "landscape_deductible": row["deductible"],
             })
 
+    # Part D: one plan per carrier family, pick 3 cheapest from different carriers
+    PD_CARRIER_FAMILY = {
+        "S5884": "Humana", "S4802": "WellCare", "S5601": "SilverScript",
+        "S5743": "MedicareBlue", "S5921": "UHC AARP", "S5660": "Cigna",
+    }
+    pd_best_per_carrier = {}
     for row in pd_rows:
-        key = (row[0], row[1].zfill(3))
+        cid, pid = row[0], row[1].zfill(3)
+        key = (cid, pid)
+        if key in seen:
+            continue
+        # Get actual premium from plans table
+        plan_row = conn.execute(
+            "SELECT premium FROM plans WHERE contract_id=? AND plan_id=?", (cid, pid)
+        ).fetchone()
+        premium = float(plan_row[0]) if plan_row else (row[4] or 999)
+        pd_family = PD_CARRIER_FAMILY.get(cid, cid)
+        if pd_family not in pd_best_per_carrier or premium < pd_best_per_carrier[pd_family]["premium"]:
+            pd_best_per_carrier[pd_family] = {
+                "key": key, "contract_id": cid, "plan_id": pid,
+                "plan_name": row[2], "premium": premium, "deductible": row[5],
+            }
+
+    # Sort by premium, take 3 cheapest from different carriers
+    pd_sorted = sorted(pd_best_per_carrier.values(), key=lambda x: x["premium"])
+    for d in pd_sorted[:3]:
+        key = d["key"]
         if key in seen:
             continue
         seen.add(key)
-        carrier = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else row[0])
+        carrier = FRIENDLY_NAMES.get(key, d["plan_name"][:35] if d["plan_name"] else d["contract_id"])
         plans.append({
             "carrier": carrier,
-            "contract_id": row[0],
-            "plan_id": row[1],
+            "contract_id": d["contract_id"],
+            "plan_id": d["plan_id"],
             "type": "PD",
-            "landscape_premium": row[4],
-            "landscape_deductible": row[5],
+            "landscape_premium": d["premium"],
+            "landscape_deductible": d["deductible"],
         })
 
     return plans if plans else FALLBACK_PLANS
@@ -1347,7 +1371,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.5*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=1*mm))
 
     # Warnings banner
     if warnings:
@@ -1387,7 +1411,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 ("SPAN", (0,0), (0,0)),
             ]))
             elements.append(wt)
-            elements.append(Spacer(1, 0.15*mm))
+            elements.append(Spacer(1, 0.3*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
@@ -1451,14 +1475,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
         carriers = list(ma_plans.keys())
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
@@ -1510,11 +1534,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 3 — PHARMACY COST COMPARISON BY PLAN", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
         if client_address and client_city:
             location_label = client_address + ", " + client_city
@@ -1663,8 +1687,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -1678,7 +1702,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts_list))
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
 
     if pd_plans:
@@ -1686,7 +1710,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
