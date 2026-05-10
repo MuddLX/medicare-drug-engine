@@ -1340,20 +1340,32 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     ph_hdr    = S("ph",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     warn_s    = S("ws",  fontSize=6,  textColor=WARN_TEXT, leading=8)
 
-    def tier_badge(tier):
+    def tier_badge(tier, copay=None):
+        # If copay is $0 regardless of tier number, treat it as preferred (green)
+        is_free = copay is not None and copay == 0.0
         configs = {
-            1: ("#166534", "Tier 1"),
-            2: ("#1e40af", "Tier 2"),
-            3: ("#854d0e", "Tier 3"),
-            4: ("#991b1b", "Tier 4"),
+            1: ("#166534", "#dcfce7", "Tier 1"),   # green — preferred generic
+            2: ("#1e40af", "#dbeafe", "Tier 2"),   # blue — generic
+            3: ("#854d0e", "#fef9c3", "Tier 3"),   # amber — preferred brand
+            4: ("#991b1b", "#fee2e2", "Tier 4"),   # red — non-preferred brand
+            5: ("#6b21a8", "#f3e8ff", "Tier 5"),   # purple — specialty
+            6: ("#166534", "#dcfce7", "Tier 6"),   # green by default (usually $0 preferred)
         }
-        color, label = configs.get(tier, ("#334155", f"Tier {tier}"))
-        return Paragraph(f'<font color="{color}">{label}</font>',
+        if is_free and tier not in (1, 6):
+            # Override to green if $0 copay on any tier
+            text_color, bg_color, label = "#166534", "#dcfce7", f"Tier {tier}"
+        else:
+            text_color, bg_color, label = configs.get(tier, ("#334155", "#f1f5f9", f"Tier {tier}"))
+        return Paragraph(f'<font color="{text_color}">{label}</font>',
                          S(f"t{tier}", fontSize=6, fontName="Helvetica-Bold",
-                           alignment=TA_CENTER, textColor=colors.HexColor(color), leading=8))
+                           alignment=TA_CENTER, textColor=colors.HexColor(text_color), leading=8))
 
-    def tier_bg(tier):
-        return {1: GREEN_BG, 2: BLUE_BG, 3: AMBER_BG, 4: RED_BG}.get(tier, WHITE)
+    def tier_bg(tier, copay=None):
+        is_free = copay is not None and copay == 0.0
+        if is_free:
+            return GREEN_BG
+        return {1: GREEN_BG, 2: BLUE_BG, 3: AMBER_BG, 4: RED_BG,
+                5: colors.HexColor("#f3e8ff"), 6: GREEN_BG}.get(tier, WHITE)
 
     def best_plan(plans):
         def score(c):
@@ -1524,7 +1536,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     row.append(Paragraph("Not Covered", nc_style))
                 else:
                     tier = pd.get("tier")
-                    row.append(tier_badge(tier) if tier else Paragraph("—", cell))
+                    copay = pd.get("steady_state_copay")
+                    row.append(tier_badge(tier, copay) if tier else Paragraph("—", cell))
             rows.append(row)
         t = Table(rows, colWidths=[label_w] + [col_w]*len(carriers))
         ts = [
@@ -1552,7 +1565,27 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+
+        # Tier legend
+        legend_s = S("leg", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)
+        legend_items = [
+            ('<font color="#166534">■</font> Tier 1 Preferred Generic ($0–low)',
+             '<font color="#1e40af">■</font> Tier 2 Generic',
+             '<font color="#854d0e">■</font> Tier 3 Preferred Brand',
+             '<font color="#991b1b">■</font> Tier 4 Non-Preferred Brand',
+             '<font color="#6b21a8">■</font> Tier 5 Specialty',
+             '<font color="#166534">■</font> Tier 6 $0 Preferred'),
+        ]
+        legend_row = Table([[Paragraph(item, legend_s) for item in legend_items[0]]],
+                           colWidths=[47*mm]*6)
+        legend_row.setStyle(TableStyle([
+            ("LEFTPADDING", (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+        ]))
+        elements.append(legend_row)
+        elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 3 — PHARMACY COST COMPARISON BY PLAN", sec_title))
