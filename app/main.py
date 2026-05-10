@@ -1598,6 +1598,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Paragraph(
             "Nearest in-network pharmacies to " + location_label + "  ·  Costs include deductible phase where applicable",
             S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
+        elements.append(Paragraph(
+            "Costs shown reflect CMS negotiated preferred pharmacy rates. All in-network preferred pharmacies charge the same copay for a given plan.",
+            S("disc", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)))
         elements.append(Spacer(1, 0.1*mm))
 
         def get_plan_pharmacy_summary(carrier):
@@ -1698,15 +1701,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 continue
 
             pharm_lines = []
-            for p in summary["cheapest"][:3]:
-                name = p["name"].split("#")[0].strip()[:20]
+            for p in summary["cheapest"][:4]:
+                name = p["name"].split("#")[0].strip()[:22]
                 dist_prefix = "~" if p.get("dist_approximate") else ""
                 dist = dist_prefix + str(p["distance"]) + " mi"
+                pref_label = "" if p.get("preferred", True) else " (non-pref)"
                 if p.get("is_runner_up"):
                     diff = p.get("cost_diff", 0)
-                    pharm_lines.append(Paragraph(name + "  (" + dist + ")  +$" + "{:.0f}".format(diff) + "/yr", runner_s))
+                    pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")  +$" + "{:.0f}".format(diff) + "/yr", runner_s))
                 else:
-                    pharm_lines.append(Paragraph(name + "  (" + dist + ")", pharm_s))
+                    pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")", pharm_s))
             pharm_cell = Table([[p] for p in pharm_lines], colWidths=[pharm_col_w - 3*mm], style=inner_ts)
 
             if summary["all_same"]:
