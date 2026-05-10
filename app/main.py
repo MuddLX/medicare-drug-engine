@@ -717,9 +717,20 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
         if base not in seen or p["distance_miles"] < seen[base]["distance_miles"]:
             seen[base] = p
 
+    # Secondary dedup: remove pharmacies within 0.1 miles of a closer one
+    # Catches co-located pharmacies with different names (e.g. Sanford Health Pharm
+    # and SANFORD CLINIC NORTH at the same campus)
+    by_distance = sorted(seen.values(), key=lambda x: x["distance_miles"])
+    proximity_deduped = []
+    for p in by_distance:
+        too_close = any(abs(p["distance_miles"] - kept["distance_miles"]) <= 0.1
+                        for kept in proximity_deduped)
+        if not too_close:
+            proximity_deduped.append(p)
+
     # Sort: preferred chains first, then by distance
     sorted_pharms = sorted(
-        seen.values(),
+        proximity_deduped,
         key=lambda x: (not x["preferred"], not x["is_chain"], x["distance_miles"])
     )
     return sorted_pharms[:max_results]
