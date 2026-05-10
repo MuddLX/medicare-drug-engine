@@ -678,7 +678,7 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain,
                    pn.lat, pn.lon
             FROM pharmacy_names pn
-            INNER JOIN pharmacy_network net ON net.pharmacy_zip = pn.zip
+            INNER JOIN pharmacy_network net ON net.npi = pn.npi
             WHERE pn.zip = ?
             AND net.contract_id = ?
             AND net.plan_id = ?
@@ -1584,7 +1584,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(t)
 
         # Tier legend
-        legend_s = S("leg", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)
+        legend_s = S("leg", fontSize=4.5, textColor=colors.HexColor("#64748b"), leading=6)
         legend_items = [
             ('<font color="#166534">■</font> Tier 1 Preferred Generic ($0–low)',
              '<font color="#1e40af">■</font> Tier 2 Generic',
@@ -1598,7 +1598,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         legend_row.setStyle(TableStyle([
             ("LEFTPADDING", (0,0), (-1,-1), 0),
             ("RIGHTPADDING", (0,0), (-1,-1), 2),
-            ("TOPPADDING", (0,0), (-1,-1), 1),
+            ("TOPPADDING", (0,0), (-1,-1), 0),
             ("BOTTOMPADDING", (0,0), (-1,-1), 0),
         ]))
         elements.append(legend_row)
