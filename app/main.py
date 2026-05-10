@@ -1649,7 +1649,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             "Nearest in-network pharmacies to " + location_label + "  ·  Costs include deductible phase where applicable",
             S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
         elements.append(Paragraph(
-            "Costs shown reflect CMS negotiated preferred pharmacy rates. All in-network preferred pharmacies charge the same copay for a given plan.",
+            "Costs shown reflect CMS negotiated rates including pharmacy dispensing fees. Prices may vary by pharmacy.",
             S("disc", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)))
         elements.append(Spacer(1, 0.1*mm))
 
@@ -1763,11 +1763,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 dist_prefix = "~" if p.get("dist_approximate") else ""
                 dist = dist_prefix + str(p["distance"]) + " mi"
                 pref_label = "" if p.get("preferred", True) else " (non-pref)"
-                # Show per-pharmacy monthly cost if prices differ between pharmacies
+                # Show steady-state monthly cost (last month = post-deductible) per pharmacy
                 if prices_differ:
-                    pharm_annual = p.get("annual", 0)
-                    pharm_monthly = pharm_annual / len(months_remaining) if months_remaining else 0
-                    price_str = "  $" + "{:.2f}".format(pharm_monthly) + "/mo"
+                    pharm_monthly_dict = p.get("monthly", {})
+                    # Steady state = last month in the period (post-deductible)
+                    if pharm_monthly_dict and months_remaining:
+                        last_month = [datetime(2026, m, 1).strftime("%B") for m in months_remaining][-1]
+                        steady = pharm_monthly_dict.get(last_month, 0)
+                    else:
+                        steady = p.get("annual", 0) / len(months_remaining) if months_remaining else 0
+                    price_str = "  $" + "{:.2f}".format(steady) + "/mo"
                     is_cheapest = p["name"] == cheapest_name
                     style = pharm_s if is_cheapest else runner_s
                     pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")" + price_str, style))
