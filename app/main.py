@@ -202,6 +202,9 @@ def get_plans_for_zip(conn, zip_code):
 
     # Pick best plan per carrier family (lowest premium from plans table, prefer $0)
     # service_area tells us WHICH plans are available, plans table has correct premiums
+    # Plan type preference order: PPO > HMO-POS > Cost > PFFS > HMO
+    PLAN_TYPE_RANK = {"PPO": 0, "HMO-POS": 1, "Cost": 2, "PFFS": 3, "HMO": 4}
+
     best_per_family = {}
     for row in ma_rows:
         cid, pid = row[0], row[1].zfill(3)
@@ -214,18 +217,22 @@ def get_plans_for_zip(conn, zip_code):
         ).fetchone()
         premium = float(plan_row[0]) if plan_row else (row[4] or 999)
         deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
+        plan_type = row[6] or ""
+        type_rank = PLAN_TYPE_RANK.get(plan_type, 5)
         current = best_per_family.get(family)
+        curr_rank = PLAN_TYPE_RANK.get(current["plan_type"] or "", 5) if current else 5
         is_better = (
             current is None or
             premium < current["premium"] or
-            (premium == current["premium"] and deductible < current["deductible"])
+            (premium == current["premium"] and type_rank < curr_rank) or
+            (premium == current["premium"] and type_rank == curr_rank and deductible < current["deductible"])
         )
         if is_better:
             best_per_family[family] = {
                 "contract_id": cid, "plan_id": pid,
                 "plan_name": row[2], "org_name": row[3],
                 "premium": premium, "deductible": deductible,
-                "plan_type": row[6], "key": key
+                "plan_type": plan_type, "key": key
             }
 
     # First pass: best plan per carrier family
@@ -621,6 +628,10 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
         WHERE contract_id = ? AND plan_id = ? AND is_retail = 1
     """, (contract_id, plan_id_padded)).fetchall()
 
+    # Does this plan have ANY preferred pharmacies anywhere in MN?
+    # If not, all pharmacies are treated equally — don't show (non-pref) label
+    plan_has_any_preferred = any(row[1] == "Y" for row in pref_rows)
+
     # Build zip -> fees + preferred lookup
     # Track both preferred and non-preferred fees per zip
     zip_info = {}
@@ -632,6 +643,7 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "preferred": pref,
                 "has_preferred": pref == "Y",
                 "has_nonpreferred": pref == "N",
+                "plan_has_any_preferred": plan_has_any_preferred,
                 "generic_fee": float(gen_fee or 0),
                 "brand_fee": float(brand_fee or 0),
                 "selected_fee": float(sel_fee or 0),
@@ -686,7 +698,12 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 precise_distance = distance  # zip centroid fallback
                 dist_approximate = True
             # Determine preferred status
-            if info.get("has_preferred") and info.get("has_nonpreferred"):
+            # Only mark as non-preferred if the plan actually distinguishes preferred/non-preferred
+            plan_has_pref = info.get("plan_has_any_preferred", False)
+            if not plan_has_pref:
+                # Plan treats all pharmacies equally — don't show non-pref label
+                is_preferred = True
+            elif info.get("has_preferred") and info.get("has_nonpreferred"):
                 is_preferred = bool(is_chain)
             else:
                 is_preferred = info["preferred"] == "Y"
