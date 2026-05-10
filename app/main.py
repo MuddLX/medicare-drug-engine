@@ -1611,9 +1611,10 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     name = pc["name"]
                     dist = pc.get("distance_miles", 99)
                     dist_approx = pc.get("dist_approximate", False)
+                    preferred = pc.get("preferred", True)
                     annual = pc.get("annual_total", 0) or 0
                     if name not in pharm_totals:
-                        pharm_totals[name] = {"annual": 0, "distance": dist, "dist_approximate": dist_approx, "monthly": {}}
+                        pharm_totals[name] = {"annual": 0, "distance": dist, "dist_approximate": dist_approx, "preferred": preferred, "monthly": {}}
                     pharm_totals[name]["annual"] += annual
                     for m in pc.get("monthly_costs", []):
                         mn = m["month"]
@@ -1622,13 +1623,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 return None
             min_cost = min(v["annual"] for v in pharm_totals.values())
             cheapest = sorted(
-                [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False), "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
+                [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False),
+                  "preferred": v.get("preferred", True), "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
                  for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) <= 1.0],
                 key=lambda x: x["distance"]
             )
             if len(cheapest) == 1:
                 others = sorted(
-                    [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False), "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
+                    [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False),
+                      "preferred": v.get("preferred", True), "annual": v["annual"], "monthly": v["monthly"],
+                      "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
                      for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) > 1.0],
                     key=lambda x: x["annual"]
                 )
