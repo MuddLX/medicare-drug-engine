@@ -27,10 +27,15 @@ def check_env():
 
 
 def get_r2_client():
+    endpoint = os.environ["R2_ENDPOINT_URL"]
+    key_id = os.environ["R2_ACCESS_KEY_ID"]
+    print(f"  R2 endpoint: {endpoint}")
+    print(f"  R2 key ID: {key_id[:8]}...{key_id[-4:]} (length: {len(key_id)})")
+    print(f"  R2 bucket: {os.environ['R2_BUCKET_NAME']}")
     return boto3.client(
         "s3",
-        endpoint_url=os.environ["R2_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        endpoint_url=endpoint,
+        aws_access_key_id=key_id,
         aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
         region_name="auto",
     )
