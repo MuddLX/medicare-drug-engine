@@ -1418,7 +1418,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=1*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.3*mm))
 
     # Warnings banner
     if warnings:
@@ -1522,10 +1522,10 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.1*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
@@ -1788,9 +1788,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.3*mm))
+        elements.append(Spacer(1, 0.1*mm))
 
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.1*mm, spaceAfter=0.1*mm))
     elements.append(Paragraph(
         "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
 
