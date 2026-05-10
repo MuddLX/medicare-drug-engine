@@ -112,10 +112,10 @@ def get_plans_for_zip(conn, zip_code):
 
     # Friendly name lookup — use short carrier names for known plans
     FRIENDLY_NAMES = {
-        ("H4882", "009"): "HealthPartners Pace",
-        ("H4882", "003"): "HealthPartners Steady",
-        ("H4882", "011"): "HealthPartners Stride",
-        ("H4882", "014"): "HealthPartners Smart",
+        ("H4882", "009"): "HealthPartners Journey Pace",
+        ("H4882", "003"): "HealthPartners Journey Steady",
+        ("H4882", "011"): "HealthPartners Journey Stride",
+        ("H4882", "014"): "HealthPartners Journey Smart",
         ("H6309", "001"): "HealthPartners Birch",
         ("H6309", "002"): "HealthPartners Cedar",
         ("H5959", "009"): "Blue Cross Choice",
@@ -129,19 +129,19 @@ def get_plans_for_zip(conn, zip_code):
         ("H6154", "001"): "Medica Advantage",
         ("H8889", "001"): "Medica Advantage",
         ("H8889", "002"): "Medica Advantage",
-        ("H8889", "003"): "Medica Advantage ($103)",
-        ("H8889", "004"): "Medica Advantage ($140)",
-        ("H8889", "005"): "Medica Advantage ($0)",
-        ("H8889", "008"): "Medica Advantage ($44)",
+        ("H8889", "003"): "Medica Advantage",
+        ("H8889", "004"): "Medica Advantage",
+        ("H8889", "005"): "Medica Advantage",
+        ("H8889", "008"): "Medica Advantage",
         ("H8889", "009"): "Medica Advantage (No Rx)",
         ("H8889", "010"): "Medica Value",
-        ("H8889", "011"): "Medica Preferred ($23)",
-        ("H8889", "012"): "Medica Select ($0)",
-        ("H8889", "013"): "Medica Preferred ($29)",
-        ("H8889", "014"): "Medica Value ($0)",
-        ("H8889", "015"): "Medica Select ($0/355)",
-        ("H8889", "017"): "Medica Value ($0/617)",
-        ("H8889", "018"): "Medica Select ($0/355b)",
+        ("H8889", "011"): "Medica Preferred",
+        ("H8889", "012"): "Medica Select",
+        ("H8889", "013"): "Medica Preferred",
+        ("H8889", "014"): "Medica Value",
+        ("H8889", "015"): "Medica Select",
+        ("H8889", "017"): "Medica Value",
+        ("H8889", "018"): "Medica Select",
         ("H2450", "002"): "Medica Cost Enhanced",
         ("H2450", "007"): "Medica Cost Thrift",
         ("H2450", "016"): "Medica Cost Basic",
@@ -149,23 +149,26 @@ def get_plans_for_zip(conn, zip_code):
         ("H2450", "037"): "Medica Cost Premier",
         ("H2450", "039"): "Medica Cost Focus",
         ("H2450", "049"): "Medica Cost Standard",
-        ("H5216", "275"): "Humana Choice ($0)",
-        ("H5216", "063"): "Humana Choice ($18)",
-        ("H5216", "092"): "Humana Choice ($22)",
-        ("H5216", "359"): "Humana Choice ($0/615b)",
+        ("H5216", "275"): "Humana Choice",
+        ("H5216", "063"): "Humana Choice",
+        ("H5216", "092"): "Humana Choice",
+        ("H5216", "359"): "Humana Choice",
         ("H3219", "001"): "Aetna Signature",
-        ("H3219", "002"): "Aetna Enhanced ($19)",
-        ("H3219", "003"): "Aetna Grand ($40)",
-        ("H3219", "004"): "Aetna Grand Extra ($69)",
+        ("H3219", "002"): "Aetna Enhanced",
+        ("H3219", "003"): "Aetna Grand",
+        ("H3219", "004"): "Aetna Grand Extra",
         ("H3219", "005"): "Aetna Eagle",
         ("H3219", "008"): "Aetna Signature Fit",
-        ("H3219", "012"): "Aetna Signature ($12)",
-        ("H3219", "014"): "Aetna Enhanced ($46)",
-        ("H2001", "116"): "UHC AARP ($0/600)",
-        ("H2001", "117"): "UHC AARP ($0/520)",
-        ("H2001", "123"): "UHC AARP ($0/520b)",
-        ("H3186", "001"): "Align ChoiceElite ($63)",
-        ("H3186", "002"): "Align ChoicePlus ($0)",
+        ("H3219", "012"): "Aetna Signature",
+        ("H3219", "014"): "Aetna Enhanced",
+        ("H2001", "116"): "UHC AARP",
+        ("H2001", "117"): "UHC AARP",
+        ("H2001", "118"): "UHC AARP FG",
+        ("H2001", "119"): "UHC AARP FG",
+        ("H2001", "120"): "UHC AARP FG",
+        ("H2001", "123"): "UHC AARP",
+        ("H3186", "001"): "Align ChoiceElite",
+        ("H3186", "002"): "Align ChoicePlus",
         ("H8145", "006"): "Humana Gold Choice",
         ("H9834", "001"): "Gundersen Quartz Elite",
         ("H9834", "003"): "Gundersen Quartz Value",
@@ -344,10 +347,10 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "elite", "plus", "standard", "focus", "thrift",
     }
     FN = {
-        ("H4882","009"): "HealthPartners Pace",
-        ("H4882","003"): "HealthPartners Steady",
-        ("H4882","011"): "HealthPartners Stride",
-        ("H4882","014"): "HealthPartners Smart",
+        ("H4882","009"): "HealthPartners Journey Pace",
+        ("H4882","003"): "HealthPartners Journey Steady",
+        ("H4882","011"): "HealthPartners Journey Stride",
+        ("H4882","014"): "HealthPartners Journey Smart",
         ("H6309","001"): "HealthPartners Birch",
         ("H6309","002"): "HealthPartners Cedar",
         ("H5959","009"): "Blue Cross Choice",
@@ -393,6 +396,9 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         ("H3219","014"): "Aetna Enhanced",
         ("H2001","116"): "UHC AARP",
         ("H2001","117"): "UHC AARP",
+        ("H2001","118"): "UHC AARP FG",
+        ("H2001","119"): "UHC AARP FG",
+        ("H2001","120"): "UHC AARP FG",
         ("H2001","123"): "UHC AARP",
         ("H3186","001"): "Align ChoiceElite",
         ("H3186","002"): "Align ChoicePlus",
@@ -674,8 +680,11 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 continue
             # Use pharmacy's actual coordinates if available, else use zip centroid
             if pharm_lat and pharm_lon:
-                distance = haversine_distance(client_lat, client_lon, pharm_lat, pharm_lon)
-            # else distance already calculated from zip centroid above
+                precise_distance = haversine_distance(client_lat, client_lon, pharm_lat, pharm_lon)
+                dist_approximate = False
+            else:
+                precise_distance = distance  # zip centroid fallback
+                dist_approximate = True
             # Determine preferred status
             if info.get("has_preferred") and info.get("has_nonpreferred"):
                 is_preferred = bool(is_chain)
@@ -688,7 +697,8 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "address": address or "",
                 "city": city or "",
                 "zip": pharm_zip,
-                "distance_miles": round(distance, 1),
+                "distance_miles": round(precise_distance, 1),
+                "dist_approximate": dist_approximate,
                 "preferred": is_preferred,
                 "is_chain": bool(is_chain),
                 "generic_fee": info["generic_fee"],
@@ -701,13 +711,9 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
         return []
 
     # Deduplicate by base name, keep closest
-    # Add small address-based offset to distinguish same-zip pharmacies
     seen = {}
     for p in candidates:
         base = p["name"].split("#")[0].strip().upper()
-        # Add tiny distance variation based on address hash so same-zip pharmacies differ slightly
-        addr_hash = sum(ord(c) for c in p.get("address", "")) % 100
-        p["distance_miles"] = round(p["distance_miles"] + addr_hash * 0.001, 1)
         if base not in seen or p["distance_miles"] < seen[base]["distance_miles"]:
             seen[base] = p
 
@@ -1194,6 +1200,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                             "address": pharmacy["address"],
                             "city": pharmacy["city"],
                             "distance_miles": pharmacy["distance_miles"],
+                            "dist_approximate": pharmacy.get("dist_approximate", False),
                             "preferred": pharmacy["preferred"],
                             "monthly_costs": pharm_monthly,
                             "annual_total": round(sum(m["cost"] for m in pharm_monthly), 2)
@@ -1305,19 +1312,19 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=14, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=17)
-    h2        = S("h2",  fontSize=10,  textColor=colors.HexColor("#334155"), leading=13)
-    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8)
-    col_hdr   = S("ch",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    row_lbl   = S("rl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
-    cell      = S("c",   fontSize=7,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
-    badge_txt = S("bt",  fontSize=8,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=10)
-    gen_txt   = S("gt",  fontSize=7,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=9)
+    h1        = S("h1",  fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
+    h2        = S("h2",  fontSize=5,  textColor=colors.HexColor("#64748b"), leading=7)
+    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
+    col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+    row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
+    cell      = S("c",   fontSize=6,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)
+    badge_txt = S("bt",  fontSize=6,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=8)
+    gen_txt   = S("gt",  fontSize=6,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=8)
     footer    = S("ft",  fontSize=6,  textColor=colors.HexColor("#94a3b8"), alignment=TA_CENTER, leading=8)
     drug_lbl  = S("dl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
-    nc_style  = S("nc",  fontSize=7,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=9)
-    green_val = S("gv",  fontSize=7,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    bold_cell = S("bc",  fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    nc_style  = S("nc",  fontSize=6,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=8)
+    green_val = S("gv",  fontSize=6,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+    bold_cell = S("bc",  fontSize=6,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     month_lbl = S("ml",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
     ph_hdr    = S("ph",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     warn_s    = S("ws",  fontSize=6,  textColor=WARN_TEXT, leading=8)
@@ -1331,7 +1338,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         }
         color, label = configs.get(tier, ("#334155", f"Tier {tier}"))
         return Paragraph(f'<font color="{color}">{label}</font>',
-                         S(f"t{tier}", fontSize=7, fontName="Helvetica-Bold",
+                         S(f"t{tier}", fontSize=6, fontName="Helvetica-Bold",
                            alignment=TA_CENTER, textColor=colors.HexColor(color), leading=8))
 
     def tier_bg(tier):
@@ -1351,7 +1358,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=6*mm, leftMargin=6*mm,
-                            topMargin=2*mm, bottomMargin=2*mm)
+                            topMargin=3*mm, bottomMargin=3*mm)
     elements = []
 
     # Header
@@ -1362,31 +1369,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
                     [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
                     [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=7))]]
-
-    left_t = Table(header_left, colWidths=[200*mm], rowHeights=[14, 11])
-    left_t.setStyle(TableStyle([
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-    ]))
-    right_t = Table(header_right, colWidths=[80*mm])
-    right_t.setStyle(TableStyle([
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-    ]))
-    tl = Table([[left_t, right_t]], colWidths=[200*mm, 80*mm])
+    tl = Table([[Table(header_left, colWidths=[200*mm]),
+                 Table(header_right, colWidths=[80*mm])]],
+               colWidths=[200*mm, 80*mm])
     tl.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING", (0,0), (-1,-1), 0),
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.5*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=1*mm))
 
     # Warnings banner
     if warnings:
@@ -1426,7 +1418,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 ("SPAN", (0,0), (0,0)),
             ]))
             elements.append(wt)
-            elements.append(Spacer(1, 0.15*mm))
+            elements.append(Spacer(1, 0.3*mm))
 
     ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
@@ -1445,7 +1437,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 if split > 0:
                     name = name[:split] + "\n" + name[split+1:]
             star = " ★" if c == best else ""
-            return Paragraph(f"{c}{star}<br/><font size='4'>{name}</font>", col_hdr)
+            return Paragraph(f"{c}{star}<br/><font size='5'>{name}</font>", col_hdr)
 
         rows = [[Paragraph(section_label, col_hdr)] + [carrier_header(c) for c in carriers]]
         for label, fn, is_total in [
@@ -1490,14 +1482,14 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
         carriers = list(ma_plans.keys())
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
@@ -1549,11 +1541,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
     if ma_plans and drug_detail:
         elements.append(Paragraph("SECTION 3 — PHARMACY COST COMPARISON BY PLAN", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
         if client_address and client_city:
             location_label = client_address + ", " + client_city
@@ -1571,9 +1563,10 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 for pc in pc_list:
                     name = pc["name"]
                     dist = pc.get("distance_miles", 99)
+                    dist_approx = pc.get("dist_approximate", False)
                     annual = pc.get("annual_total", 0) or 0
                     if name not in pharm_totals:
-                        pharm_totals[name] = {"annual": 0, "distance": dist, "monthly": {}}
+                        pharm_totals[name] = {"annual": 0, "distance": dist, "dist_approximate": dist_approx, "monthly": {}}
                     pharm_totals[name]["annual"] += annual
                     for m in pc.get("monthly_costs", []):
                         mn = m["month"]
@@ -1582,13 +1575,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 return None
             min_cost = min(v["annual"] for v in pharm_totals.values())
             cheapest = sorted(
-                [{"name": k, "distance": v["distance"], "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
+                [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False), "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
                  for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) <= 1.0],
                 key=lambda x: x["distance"]
             )
             if len(cheapest) == 1:
                 others = sorted(
-                    [{"name": k, "distance": v["distance"], "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
+                    [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False), "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
                      for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) > 1.0],
                     key=lambda x: x["annual"]
                 )
@@ -1663,7 +1656,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             pharm_lines = []
             for p in summary["cheapest"][:3]:
                 name = p["name"].split("#")[0].strip()[:20]
-                dist = str(p["distance"]) + " mi"
+                dist_prefix = "~" if p.get("dist_approximate") else ""
+                dist = dist_prefix + str(p["distance"]) + " mi"
                 if p.get("is_runner_up"):
                     diff = p.get("cost_diff", 0)
                     pharm_lines.append(Paragraph(name + "  (" + dist + ")  +$" + "{:.0f}".format(diff) + "/yr", runner_s))
@@ -1702,8 +1696,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,0), (-1,0), CHARCOAL),
             ("GRID", (0,0), (-1,-1), 0.4, MID_GRAY),
             ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
             ("LEFTPADDING", (0,0), (-1,-1), 4),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
@@ -1717,17 +1711,17 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts_list))
         elements.append(t)
-        elements.append(Spacer(1, 0.05*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 0.05*mm))
+        elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.05*mm))
+        elements.append(Spacer(1, 0.3*mm))
 
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.1*mm, spaceAfter=0.1*mm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.5*mm, spaceAfter=0.5*mm))
     elements.append(Paragraph(
         "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
 
