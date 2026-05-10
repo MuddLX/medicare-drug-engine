@@ -1768,7 +1768,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     pharm_monthly_dict = p.get("monthly", {})
                     # Steady state = last month in the period (post-deductible)
                     if pharm_monthly_dict and months_remaining:
-                        last_month = [datetime(2026, m, 1).strftime("%B") for m in months_remaining][-1]
+                        last_month_num = months_remaining[-1]
+                        from datetime import datetime as _dt
+                        last_month = _dt(2026, last_month_num, 1).strftime("%B")
                         steady = pharm_monthly_dict.get(last_month, 0)
                     else:
                         steady = p.get("annual", 0) / len(months_remaining) if months_remaining else 0
