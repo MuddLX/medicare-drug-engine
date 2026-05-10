@@ -724,6 +724,8 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "brand_fee": float(brand_fee or 0),
                 "selected_fee": float(selected_fee or 0),
                 "in_network": True,
+                "_lat": pharm_lat,
+                "_lon": pharm_lon,
             })
 
     if not candidates:
@@ -736,14 +738,31 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
         if base not in seen or p["distance_miles"] < seen[base]["distance_miles"]:
             seen[base] = p
 
-    # Secondary dedup: remove pharmacies within 0.1 miles of a closer one
-    # Catches co-located pharmacies with different names (e.g. Sanford Health Pharm
-    # and SANFORD CLINIC NORTH at the same campus)
+    # Secondary dedup: remove pharmacies that are co-located (within 0.05 miles of each other)
+    # Uses actual GPS distance between pharmacies, not distance from client
+    # This catches same-campus pharmacies (e.g. Sanford Health Pharm + SANFORD CLINIC NORTH)
+    # but NOT separate pharmacies that happen to be the same distance from the client
     by_distance = sorted(seen.values(), key=lambda x: x["distance_miles"])
     proximity_deduped = []
     for p in by_distance:
-        too_close = any(abs(p["distance_miles"] - kept["distance_miles"]) <= 0.1
-                        for kept in proximity_deduped)
+        p_lat = p.get("_lat")
+        p_lon = p.get("_lon")
+        too_close = False
+        for kept in proximity_deduped:
+            k_lat = kept.get("_lat")
+            k_lon = kept.get("_lon")
+            # If we have real coords for both, use actual distance between them
+            if p_lat and p_lon and k_lat and k_lon:
+                dist_between = haversine_distance(p_lat, p_lon, k_lat, k_lon)
+                if dist_between < 0.1:
+                    too_close = True
+                    break
+            else:
+                # Fallback: if same distance from client (within 0.05mi) and same zip, likely co-located
+                if (abs(p["distance_miles"] - kept["distance_miles"]) < 0.05 and
+                        p.get("zip") == kept.get("zip")):
+                    too_close = True
+                    break
         if not too_close:
             proximity_deduped.append(p)
 
@@ -1652,41 +1671,42 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                         pharm_totals[name]["monthly"][mn] = pharm_totals[name]["monthly"].get(mn, 0) + (m["cost"] or 0)
             if not pharm_totals:
                 return None
-            min_cost = min(v["annual"] for v in pharm_totals.values())
-            cheapest = sorted(
+
+            # All pharmacies sorted by distance, each with their own price
+            all_pharmacies = sorted(
                 [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False),
-                  "preferred": v.get("preferred", True), "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
-                 for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) <= 1.0],
+                  "preferred": v.get("preferred", True), "annual": v["annual"], "monthly": v["monthly"]}
+                 for k, v in pharm_totals.items()],
                 key=lambda x: x["distance"]
             )
-            if len(cheapest) == 1:
-                others = sorted(
-                    [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False),
-                      "preferred": v.get("preferred", True), "annual": v["annual"], "monthly": v["monthly"],
-                      "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
-                     for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) > 1.0],
-                    key=lambda x: x["annual"]
-                )
-                if others:
-                    cheapest.append(others[0])
+
+            min_cost = min(v["annual"] for v in pharm_totals.values())
+            cheapest_name = min(pharm_totals, key=lambda k: pharm_totals[k]["annual"])
+
             mail_annual = sum(
                 (drug.get("plans", {}).get(carrier, {}).get("mail_order_costs", {}).get("annual_total", 0) or 0)
                 for drug in drug_detail
             )
-            monthly = cheapest[0]["monthly"] if cheapest else {}
-            costs_by_month = [(mn, monthly.get(mn, 0)) for mn in months_remaining] if months_remaining else []
+
+            # Use cheapest pharmacy for transition display
+            cheapest_monthly = pharm_totals[cheapest_name]["monthly"]
+            costs_by_month = [(mn, cheapest_monthly.get(mn, 0)) for mn in months_remaining] if months_remaining else []
             transitions = []
             prev_cost = None
             for mn, cost in costs_by_month:
                 if cost != prev_cost:
                     transitions.append((mn[:3], cost))
                     prev_cost = cost
+
+            prices_differ = len(set(round(v["annual"]) for v in pharm_totals.values())) > 1
+
             return {
                 "min_annual": min_cost,
-                "cheapest": cheapest,
+                "cheapest": all_pharmacies,
+                "cheapest_name": cheapest_name,
                 "mail_annual": mail_annual,
                 "transitions": transitions,
-                "all_same": len(transitions) <= 1
+                "all_same": not prices_differ
             }
 
         hdr_s  = S("sh",  fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", leading=8, alignment=TA_LEFT)
@@ -1736,14 +1756,21 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 continue
 
             pharm_lines = []
+            prices_differ = not summary["all_same"]
+            cheapest_name = summary.get("cheapest_name", "")
             for p in summary["cheapest"][:4]:
                 name = p["name"].split("#")[0].strip()[:22]
                 dist_prefix = "~" if p.get("dist_approximate") else ""
                 dist = dist_prefix + str(p["distance"]) + " mi"
                 pref_label = "" if p.get("preferred", True) else " (non-pref)"
-                if p.get("is_runner_up"):
-                    diff = p.get("cost_diff", 0)
-                    pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")  +$" + "{:.0f}".format(diff) + "/yr", runner_s))
+                # Show per-pharmacy monthly cost if prices differ between pharmacies
+                if prices_differ:
+                    pharm_annual = p.get("annual", 0)
+                    pharm_monthly = pharm_annual / len(months_remaining) if months_remaining else 0
+                    price_str = "  $" + "{:.2f}".format(pharm_monthly) + "/mo"
+                    is_cheapest = p["name"] == cheapest_name
+                    style = pharm_s if is_cheapest else runner_s
+                    pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")" + price_str, style))
                 else:
                     pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")", pharm_s))
             pharm_cell = Table([[p] for p in pharm_lines], colWidths=[pharm_col_w - 3*mm], style=inner_ts)
@@ -1760,7 +1787,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                         t_parts.append(mn + " $" + "{:.2f}".format(cost) + " steady")
                 steady = summary["transitions"][-1][1] if summary["transitions"] else 0
                 cost_parts = [
-                    Paragraph("$" + "{:.2f}".format(steady) + " / mo", cost_s),
+                    Paragraph("$" + "{:.2f}".format(steady) + " / mo (cheapest)", cost_s),
                     Paragraph("  →  ".join(t_parts), trans_s)
                 ]
             cost_cell = Table([[p] for p in cost_parts], colWidths=[cost_col_w - 3*mm], style=inner_ts)
