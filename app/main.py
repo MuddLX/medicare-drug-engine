@@ -1690,12 +1690,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
             # Use cheapest pharmacy for transition display
             cheapest_monthly = pharm_totals[cheapest_name]["monthly"]
-            costs_by_month = [(mn, cheapest_monthly.get(mn, 0)) for mn in months_remaining] if months_remaining else []
+            from datetime import datetime as _dt2
+            costs_by_month = [(_dt2(2026, mn, 1).strftime("%B"), cheapest_monthly.get(_dt2(2026, mn, 1).strftime("%B"), 0)) for mn in months_remaining] if months_remaining else []
             transitions = []
             prev_cost = None
-            for mn, cost in costs_by_month:
+            for mn_name, cost in costs_by_month:
                 if cost != prev_cost:
-                    transitions.append((mn[:3], cost))
+                    transitions.append((mn_name[:3], cost))
                     prev_cost = cost
 
             prices_differ = len(set(round(v["annual"]) for v in pharm_totals.values())) > 1
@@ -1768,9 +1769,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     pharm_monthly_dict = p.get("monthly", {})
                     # Steady state = last month in the period (post-deductible)
                     if pharm_monthly_dict and months_remaining:
-                        last_month_num = months_remaining[-1]
-                        from datetime import datetime as _dt
-                        last_month = _dt(2026, last_month_num, 1).strftime("%B")
+                        from datetime import datetime as _dt3
+                        last_month = _dt3(2026, months_remaining[-1], 1).strftime("%B")
                         steady = pharm_monthly_dict.get(last_month, 0)
                     else:
                         steady = p.get("annual", 0) / len(months_remaining) if months_remaining else 0
