@@ -673,10 +673,12 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             continue
 
         # Get pharmacies in this zip that are confirmed in-network
-        # Use pharmacy's actual lat/lon if available for precise distance
+        # Pull per-pharmacy dispensing fees directly (not zip-level aggregated)
         pharms = conn.execute("""
             SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain,
-                   pn.lat, pn.lon
+                   pn.lat, pn.lon,
+                   net.generic_fee_30, net.brand_fee_30, net.selected_fee_30,
+                   net.preferred_retail
             FROM pharmacy_names pn
             INNER JOIN pharmacy_network net ON net.npi = pn.npi
             WHERE pn.zip = ?
@@ -687,7 +689,8 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             AND pn.name IS NOT NULL
         """, (pharm_zip, contract_id, plan_id_padded)).fetchall()
 
-        for npi, name, address, city, is_chain, pharm_lat, pharm_lon in pharms:
+        for npi, name, address, city, is_chain, pharm_lat, pharm_lon, \
+                generic_fee, brand_fee, selected_fee, pref_retail in pharms:
             if not name:
                 continue
             # Use pharmacy's actual coordinates if available, else use zip centroid
@@ -701,13 +704,12 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             # Only mark as non-preferred if the plan actually distinguishes preferred/non-preferred
             plan_has_pref = info.get("plan_has_any_preferred", False)
             if not plan_has_pref:
-                # Plan treats all pharmacies equally — don't show non-pref label
                 is_preferred = True
             elif info.get("has_preferred") and info.get("has_nonpreferred"):
                 is_preferred = bool(is_chain)
             else:
-                is_preferred = info["preferred"] == "Y"
-            
+                is_preferred = pref_retail == "Y"
+
             candidates.append({
                 "npi": npi,
                 "name": name,
@@ -718,9 +720,9 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "dist_approximate": dist_approximate,
                 "preferred": is_preferred,
                 "is_chain": bool(is_chain),
-                "generic_fee": info["generic_fee"],
-                "brand_fee": info["brand_fee"],
-                "selected_fee": info["selected_fee"],
+                "generic_fee": float(generic_fee or 0),
+                "brand_fee": float(brand_fee or 0),
+                "selected_fee": float(selected_fee or 0),
                 "in_network": True,
             })
 
@@ -763,7 +765,12 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
     """
     plan_id_padded = plan_id.zfill(3)
     is_preferred = pharmacy.get("preferred", True)
-    disp_fee = pharmacy.get("generic_fee", 0) or pharmacy.get("selected_fee", 0)
+    # Per-pharmacy dispensing fees — use brand fee for Tier 3+ (brand drugs), generic for Tier 1-2
+    generic_fee = float(pharmacy.get("generic_fee", 0) or 0)
+    brand_fee = float(pharmacy.get("brand_fee", 0) or 0)
+    selected_fee = float(pharmacy.get("selected_fee", 0) or 0)
+    # Default to generic fee; will be updated to brand fee after tier is known
+    disp_fee = generic_fee
 
     # Get correct cost row based on preferred status
     cost_row = conn.execute("""
@@ -788,6 +795,12 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
     
     ded_applies_db = cost_row[4]
 
+    # Select dispensing fee based on tier — brand fee for Tier 3+, generic for Tier 1-2
+    if tier and tier >= 3:
+        disp_fee = brand_fee if brand_fee > 0 else generic_fee
+    else:
+        disp_fee = generic_fee
+
     # Apply insulin $35 cap first (overrides everything)
     drug_name_base = drug_name.split()[0] if drug_name else ""
     if is_insulin(drug_name) or is_insulin(drug_name_base):
@@ -800,7 +813,8 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
         unit_cost = mfp
         cost_type = 2
         cost_amt = 0.25
-        disp_fee = 0  # MFP coinsurance is the full patient cost, no additional dispensing fee
+        # Use brand dispensing fee for MFP drugs (they are all brand drugs)
+        disp_fee = brand_fee if brand_fee > 0 else generic_fee
 
     if ded_applies_db == "N" or deductible_remaining <= 0:
         if cost_type == 0:
