@@ -999,7 +999,15 @@ def lookup_providers_bcbs(providers_list, zip_code):
                 "bcbs_detail": "Not found in Blue Cross directory", "accepting": "",
             })
         else:
-            r = rows[0]
+            # Pick best row — prefer city match to input city
+            import re as _re
+            if city and len(rows) > 1:
+                city_match = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+                best_row = city_match[0] if city_match else rows[0]
+            else:
+                best_row = rows[0]
+
+            r = best_row
             creds  = r[2] or ""
             spec   = r[3] or specialty or ""
             r_city = r[4] or ""
@@ -1008,7 +1016,6 @@ def lookup_providers_bcbs(providers_list, zip_code):
             acc    = r[7] or "Y"
             source = r[8] or ""
             # Skip clinic_name if it looks like language codes (e.g. "HN, SP", "AR, FR, GR")
-            import re as _re
             if clinic and _re.match(r"^[A-Z]{2}(, [A-Z]{2})+$", clinic.strip()):
                 clinic = ""
             parts  = []
