@@ -2430,7 +2430,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 # Add detail line below status
                 detail_cell = Table([
                     [m_cell],
-                    [Paragraph(m_detail[:50] if m_detail and m_type == "IN" else "",
+                    [Paragraph(m_detail[:65] if m_detail and m_type == "IN" else "",
                                detail_s)],
                 ], colWidths=[carrier_w - 4*mm], style=inner_zero)
                 row_cells.append(detail_cell)
@@ -2450,7 +2450,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
                 detail_cell = Table([
                     [b_cell],
-                    [Paragraph(b_detail[:50] if b_detail and b_type == "IN" else "",
+                    [Paragraph(b_detail[:65] if b_detail and b_type == "IN" else "",
                                detail_s)],
                 ], colWidths=[carrier_w - 4*mm], style=inner_zero)
                 row_cells.append(detail_cell)
@@ -2692,12 +2692,23 @@ def process_soa():
                 "specialty":  p.get("specialty", ""),
                 "city":       p.get("city", ""),
             }
+            # Detect dental providers — Medica has no dental benefit
+            spec_lower = (p.get("specialty") or "").lower()
+            is_dental  = any(w in spec_lower for w in ("dent", "orthodont", "periodont",
+                                                        "endodont", "prosthodont", "oral surgery"))
             if show_medica:
-                m = provider_results_medica[i] if i < len(provider_results_medica) else {}
-                entry["medica_status"]      = m.get("medica_status", "Not Found")
-                entry["medica_detail"]      = m.get("medica_detail", "")
-                entry["medica_accepting"]   = m.get("accepting", "")
-                entry["credentials"]        = m.get("credentials", "")
+                if is_dental:
+                    # Medica has no dental coverage
+                    entry["medica_status"]    = "N/A"
+                    entry["medica_detail"]    = "No dental benefit"
+                    entry["medica_accepting"] = ""
+                    entry["credentials"]      = ""
+                else:
+                    m = provider_results_medica[i] if i < len(provider_results_medica) else {}
+                    entry["medica_status"]    = m.get("medica_status", "Not Found")
+                    entry["medica_detail"]    = m.get("medica_detail", "")
+                    entry["medica_accepting"] = m.get("accepting", "")
+                    entry["credentials"]      = m.get("credentials", "")
             if show_bcbs:
                 b = provider_results_bcbs[i] if i < len(provider_results_bcbs) else {}
                 entry["bcbs_status"]        = b.get("bcbs_status", "Not Found")
