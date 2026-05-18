@@ -17,7 +17,8 @@ from datetime import datetime, date
 
 app = Flask(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
+DB_PATH           = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
+PROVIDERS_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medica_providers.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
@@ -535,6 +536,151 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def lookup_providers(providers_list, zip_code):
+    """
+    Look up each provider against the Medica provider directory database.
+    providers_list: list of dicts from Claude extraction, each with keys:
+        raw_text, last_name, first_name, specialty, clinic_name, city
+    zip_code: client's zip code — used to find their county for filtering
+    Returns a list of result dicts, one per provider.
+    """
+    if not providers_list:
+        return []
+
+    results = []
+
+    # Get client's county from the main drug DB zip_county table
+    client_county = ""
+    try:
+        conn_main = sqlite3.connect(DB_PATH)
+        row = conn_main.execute(
+            "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
+        ).fetchone()
+        if row:
+            client_county = row[0].upper().replace(" COUNTY", "").strip()
+        conn_main.close()
+    except Exception:
+        pass
+
+    # Open provider directory DB
+    try:
+        conn = sqlite3.connect(PROVIDERS_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "medica_status": "Error",
+                "medica_detail": "Provider database unavailable", "accepting": "",
+            })
+        return results
+
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+
+        if not last_name and not clinic_name:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "medica_status": "Not Found",
+                "medica_detail": "No provider name to search", "accepting": "",
+            })
+            continue
+
+        rows = []
+
+        # Strategy 1: last name + county (strongest filter)
+        if last_name and client_county:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, county, accepting
+                FROM providers
+                WHERE last_name LIKE ? AND county LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, client_county)).fetchall()
+
+        # Strategy 2: last name anywhere in state
+        if not rows and last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, county, accepting
+                FROM providers
+                WHERE last_name LIKE ?
+                ORDER BY CASE WHEN county LIKE ? THEN 0 ELSE 1 END,
+                         CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, client_county or "%")).fetchall()
+
+        # Strategy 3: clinic name search
+        if not rows and clinic_name:
+            clinic_search = "%" + clinic_name.upper()[:20] + "%"
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, county, accepting
+                FROM providers
+                WHERE clinic_name LIKE ?
+                AND (county LIKE ? OR ? = '')
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (clinic_search, client_county, client_county)).fetchall()
+
+        # Narrow by first name if multiple matches
+        if len(rows) > 1 and first_name:
+            first_initial = first_name[0].upper() if first_name else ""
+            narrowed = [r for r in rows if r[1] and (
+                r[1].upper().startswith(first_name.upper()) or
+                r[1].upper().startswith(first_initial)
+            )]
+            if narrowed:
+                rows = narrowed
+
+        # Narrow by city if still multiple
+        if len(rows) > 1 and city:
+            city_narrowed = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            if city_narrowed:
+                rows = city_narrowed
+
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "medica_status": "Not Found",
+                "medica_detail": "Not found in Medica directory", "accepting": "",
+            })
+        else:
+            r = rows[0]
+            creds  = r[2] or ""
+            spec   = r[3] or specialty or ""
+            r_city = r[4] or ""
+            clinic = r[5] or ""
+            county = r[6] or ""
+            acc    = r[7] or "Y"
+            parts  = []
+            if clinic:
+                parts.append(clinic[:35])
+            if r_city:
+                parts.append(r_city)
+            if county and county != client_county:
+                parts.append(county + " County")
+            detail = " · ".join(parts) if parts else "Found in directory"
+            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
+            results.append({
+                "raw_text": raw_text, "last_name": r[0],
+                "first_name": r[1] or first_name, "credentials": creds,
+                "specialty": spec, "city": r_city,
+                "medica_status": "In Network",
+                "medica_detail": detail + suffix,
+                "accepting": acc,
+            })
+
+    conn.close()
+    return results
 
 
 def get_remaining_months(soa_date_str):
@@ -1341,7 +1487,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     }
 
 
-def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None):
+def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None, provider_results=None):
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
@@ -1842,6 +1988,137 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     elements.append(Paragraph(
         "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
 
+    # ── Page 2: Provider Network Directory ───────────────────────────────
+    if provider_results:
+        from reportlab.platypus import PageBreak
+        elements.append(PageBreak())
+
+        p2_title = S("p2t", fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
+        p2_sub   = S("p2s", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
+
+        elements.append(Paragraph("PROVIDER NETWORK DIRECTORY — MEDICA MEDICARE ADVANTAGE", p2_title))
+        elements.append(Paragraph(
+            "Verified against 2026 Medica Advantage Solution provider directory  ·  "
+            "Confirm network status with Medica before enrollment",
+            p2_sub))
+        elements.append(HRFlowable(width="100%", thickness=2, color=TEAL,
+                                   spaceAfter=1*mm, spaceBefore=0.5*mm))
+
+        # Column widths
+        name_w   = 55*mm
+        spec_w   = 40*mm
+        status_w = 35*mm
+        detail_w = 89*mm
+        acc_w    = 20*mm  # ~239mm total fits A4 landscape with margins
+
+        hdr_left_s = S("phl", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
+                        alignment=TA_LEFT, leading=8)
+        hdr_ctr_s  = S("phc", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
+                        alignment=TA_CENTER, leading=8)
+
+        prov_rows = [[
+            Paragraph("Provider",       hdr_left_s),
+            Paragraph("Specialty",      hdr_left_s),
+            Paragraph("Medica Status",  hdr_ctr_s),
+            Paragraph("Location / Notes", hdr_left_s),
+            Paragraph("New Pts",        hdr_ctr_s),
+        ]]
+
+        name_s   = S("pn2", fontSize=7, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
+        raw_s    = S("pr2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
+        spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
+        detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8)
+        in_net_s = S("in2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
+                     alignment=TA_CENTER, leading=8)
+        not_fnd_s= S("nf2", fontSize=6, textColor=colors.HexColor("#dc2626"),
+                     fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+        acc_y_s  = S("ay2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
+                     alignment=TA_CENTER, leading=8)
+        acc_n_s  = S("an2", fontSize=6, textColor=colors.HexColor("#dc2626"),
+                     fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+        acc_u_s  = S("au2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
+                     alignment=TA_CENTER, leading=8)
+
+        inner_zero = TableStyle([
+            ("TOPPADDING",    (0,0), (-1,-1), 0), ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0), ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ])
+
+        prov_ts = [
+            ("BACKGROUND",    (0,0), (-1,0),  CHARCOAL),
+            ("GRID",          (0,0), (-1,-1), 0.4, MID_GRAY),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("LEFTPADDING",   (0,0), (-1,-1), 4),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 4),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
+        ]
+
+        for i, r in enumerate(provider_results, start=1):
+            status    = r.get("medica_status", "")
+            last      = r.get("last_name", "")
+            first     = r.get("first_name", "")
+            creds     = r.get("credentials", "")
+            raw       = r.get("raw_text", "")
+            spec      = r.get("specialty", "") or ""
+            detail    = r.get("medica_detail", "")
+            acc       = r.get("accepting", "")
+
+            full_name = first + " " + last if first else last
+            if creds:
+                full_name += f", {creds}"
+            name_cell = Table([
+                [Paragraph(full_name[:40], name_s)],
+                [Paragraph(raw[:50],       raw_s)],
+            ], colWidths=[name_w - 4*mm], style=inner_zero)
+
+            if status == "In Network":
+                status_cell = Paragraph("✓ In Network", in_net_s)
+                prov_ts.append(("BACKGROUND", (2,i), (2,i), GREEN_BG))
+            elif status == "Not Found":
+                status_cell = Paragraph("✗ Not Found", not_fnd_s)
+                prov_ts.append(("BACKGROUND", (2,i), (2,i), RED_BG))
+            else:
+                status_cell = Paragraph("? Check", S("ck2", fontSize=6,
+                    textColor=colors.HexColor("#64748b"), fontName="Helvetica-Bold",
+                    alignment=TA_CENTER, leading=8))
+                prov_ts.append(("BACKGROUND", (2,i), (2,i), LIGHT_GRAY))
+
+            if acc == "Y":
+                acc_cell = Paragraph("Yes", acc_y_s)
+            elif acc == "N":
+                acc_cell = Paragraph("No",  acc_n_s)
+            else:
+                acc_cell = Paragraph("—",   acc_u_s)
+
+            prov_rows.append([
+                name_cell,
+                Paragraph(spec[:35]   if spec   else "—", spec_s2),
+                status_cell,
+                Paragraph(detail[:70] if detail else "—", detail_s),
+                acc_cell,
+            ])
+
+        pt = Table(prov_rows, colWidths=[name_w, spec_w, status_w, detail_w, acc_w])
+        pt.setStyle(TableStyle(prov_ts))
+        elements.append(pt)
+        elements.append(Spacer(1, 1*mm))
+
+        disc_s = S("d2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
+        elements.append(Paragraph(
+            "⚠  Network status reflects the 2026 Medica Advantage Solution provider directory. "
+            "Networks change throughout the year — verify directly with Medica before enrollment "
+            "at 1-800-952-3455 or medica.com.  "
+            "UnitedHealthcare, Blue Cross, and Alina network verification coming in a future update.",
+            disc_s))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY,
+                                   spaceBefore=0.5*mm, spaceAfter=0.1*mm))
+        elements.append(Paragraph(
+            "Internal use only · Agent reference · Medica 2026 Provider Directory",
+            S("fp2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
+              alignment=TA_CENTER, leading=8)))
+
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
@@ -1985,6 +2262,12 @@ def process_soa():
     client_state = data.get("client_state", "MN")
     confidence = data.get("confidence")
     custom_plans_str = data.get("custom_plans", "")
+    providers_raw = data.get("providers", [])
+    if isinstance(providers_raw, str):
+        try:
+            providers_raw = json.loads(providers_raw)
+        except Exception:
+            providers_raw = []
     try:
         confidence = float(confidence) if confidence else None
     except Exception:
@@ -2007,6 +2290,14 @@ def process_soa():
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
+    # Look up providers against Medica directory
+    provider_results = []
+    if providers_raw and os.path.exists(PROVIDERS_DB_PATH):
+        try:
+            provider_results = lookup_providers(providers_raw, zip_code)
+        except Exception:
+            provider_results = []
+
     try:
         pdf_bytes_out = build_pdf(
             client_name, dob, zip_code, soa_date,
@@ -2016,7 +2307,8 @@ def process_soa():
             confidence=confidence,
             warnings=result.get("warnings", []),
             client_address=client_address,
-            client_city=client_city
+            client_city=client_city,
+            provider_results=provider_results
         )
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
