@@ -2661,7 +2661,7 @@ def process_soa():
     # Detect which carriers appear in the plan results for this client
     MEDICA_CONTRACT_IDS = {"H8889", "H2450", "H6154"}
     BCBS_CONTRACT_IDS   = {"H5959"}
-    plan_contract_ids   = {p.get("contract_id", "") for p in result.get("plan_summaries", [])}
+    plan_contract_ids   = {v.get("contract_id", "") for v in result.get("plan_summaries", {}).values() if isinstance(v, dict)}
     show_medica = bool(plan_contract_ids & MEDICA_CONTRACT_IDS)
     show_bcbs   = bool(plan_contract_ids & BCBS_CONTRACT_IDS)
 
