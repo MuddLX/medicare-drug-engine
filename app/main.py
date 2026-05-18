@@ -2638,6 +2638,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BOTTOMPADDING", (0,0), (-1,-1), 2),
             ("LEFTPADDING",   (0,0), (-1,-1), 4),
             ("RIGHTPADDING",  (0,0), (-1,-1), 4),
+            ("ALIGN",         (2,0), (-1,-1), "CENTER"),
             ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
         ]
 
@@ -2710,14 +2711,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 m_detail   = r.get("medica_detail", "")
                 m_acc      = r.get("medica_accepting", "")
                 m_cell, m_type = make_status_cell(m_status, m_detail, m_acc)
-
-                # Add detail line below status
-                detail_cell = Table([
-                    [m_cell],
-                    [Paragraph(m_detail[:65] if m_detail and m_type == "IN" else "",
-                               detail_s)],
-                ], colWidths=[carrier_w], style=inner_zero)
-                row_cells.append(detail_cell)
+                detail_text = m_detail[:65] if m_detail and m_type == "IN" else ""
+                combined = Table([[m_cell],[Paragraph(detail_text, detail_s)]], colWidths=[carrier_w - 8*mm], style=inner_zero, hAlign="CENTER")
+                row_cells.append(combined)
 
                 if m_type == "IN":
                     prov_ts.append(("BACKGROUND", (medica_col_idx, i),
@@ -2731,13 +2727,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 b_detail   = r.get("bcbs_detail", "")
                 b_acc      = r.get("bcbs_accepting", "")
                 b_cell, b_type = make_status_cell(b_status, b_detail, b_acc)
-
-                detail_cell = Table([
-                    [b_cell],
-                    [Paragraph(b_detail[:65] if b_detail and b_type == "IN" else "",
-                               detail_s)],
-                ], colWidths=[carrier_w], style=inner_zero)
-                row_cells.append(detail_cell)
+                detail_text = b_detail[:65] if b_detail and b_type == "IN" else ""
+                combined = Table([[b_cell],[Paragraph(detail_text, detail_s)]], colWidths=[carrier_w - 8*mm], style=inner_zero, hAlign="CENTER")
+                row_cells.append(combined)
 
                 if b_type == "IN":
                     prov_ts.append(("BACKGROUND", (bcbs_col_idx, i),
@@ -2751,13 +2743,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 h_detail   = r.get("hp_detail", "")
                 h_acc      = r.get("hp_accepting", "")
                 h_cell, h_type = make_status_cell(h_status, h_detail, h_acc)
-
-                detail_cell = Table([
-                    [h_cell],
-                    [Paragraph(h_detail[:65] if h_detail and h_type == "IN" else "",
-                               detail_s)],
-                ], colWidths=[carrier_w], style=inner_zero)
-                row_cells.append(detail_cell)
+                detail_text = h_detail[:65] if h_detail and h_type == "IN" else ""
+                combined = Table([[h_cell],[Paragraph(detail_text, detail_s)]], colWidths=[carrier_w - 8*mm], style=inner_zero, hAlign="CENTER")
+                row_cells.append(combined)
 
                 if h_type == "IN":
                     prov_ts.append(("BACKGROUND", (hp_col_idx, i),
