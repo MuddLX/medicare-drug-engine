@@ -1333,6 +1333,13 @@ def lookup_providers_humana(providers_list, zip_code):
             city_other = [r for r in rows if not (r[4] and city.lower() in r[4].lower())]
             if city_match:
                 rows = city_match + city_other
+        # City proximity check: if we have a city and NONE of the results match it,
+        # return Not Found rather than a geographically wrong result.
+        # Exception: if no city was provided, keep all results.
+        if rows and city:
+            city_match = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            if not city_match:
+                rows = []  # no results in the right city
         if not rows:
             results.append({
                 "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
