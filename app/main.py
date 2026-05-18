@@ -909,7 +909,7 @@ def lookup_providers_bcbs(providers_list, zip_code):
                 LIMIT 10
             """, (last_name, "%" + city + "%")).fetchall()
 
-        # Strategy 3: last name state-wide
+        # Strategy 3: last name state-wide with higher limit to allow first-name narrowing
         if not rows and last_name:
             rows = conn.execute("""
                 SELECT last_name, first_name, credentials, specialty,
@@ -917,7 +917,7 @@ def lookup_providers_bcbs(providers_list, zip_code):
                 FROM providers
                 WHERE last_name LIKE ?
                 ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
-                LIMIT 10
+                LIMIT 50
             """, (last_name,)).fetchall()
 
         # Strategy 4: clinic name search
@@ -932,7 +932,8 @@ def lookup_providers_bcbs(providers_list, zip_code):
                 LIMIT 10
             """, (clinic_search,)).fetchall()
 
-        # Narrow by first name
+        # Narrow by first name — do this BEFORE city narrowing so we find
+        # the right person even if they're in a different city than the zip
         if len(rows) > 1 and first_name:
             first_initial = first_name[0].upper() if first_name else ""
             narrowed = [r for r in rows if r[1] and (
@@ -942,11 +943,33 @@ def lookup_providers_bcbs(providers_list, zip_code):
             if narrowed:
                 rows = narrowed
 
-        # Narrow by city
+        # Narrow by city (only if first name didn't already narrow to 1)
         if len(rows) > 1 and city:
             city_narrowed = [r for r in rows if r[4] and city.lower() in r[4].lower()]
             if city_narrowed:
                 rows = city_narrowed
+
+        # If Strategy 1 returned results from the wrong zip but first-name narrowing
+        # found nothing, try expanding to state-wide before giving up
+        if rows and first_name and len(rows) >= 1:
+            first_initial = first_name[0].upper()
+            if not any(r[1] and (r[1].upper().startswith(first_name.upper()) or
+                                  r[1].upper().startswith(first_initial))
+                       for r in rows):
+                # Current results don't match first name — expand search
+                expanded = conn.execute("""
+                    SELECT last_name, first_name, credentials, specialty,
+                           city, clinic_name, zip, accepting, source
+                    FROM providers
+                    WHERE last_name LIKE ? AND (
+                        first_name LIKE ? OR first_name LIKE ?
+                    )
+                    ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                    LIMIT 10
+                """, (last_name, first_name.upper() + "%",
+                      first_initial + "%")).fetchall()
+                if expanded:
+                    rows = expanded
 
         # Narrow by specialty
         if len(rows) > 1 and specialty:
