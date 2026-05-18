@@ -2357,7 +2357,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         prov_rows = [hdr_row]
 
         # ── Styles ────────────────────────────────────────────────────────
-        name_s   = S("pn2", fontSize=8, textColor=colors.black, fontName="Helvetica-Bold", leading=10)
+        name_s   = S("pn2", fontSize=7, textColor=colors.black, fontName="Helvetica-Bold", leading=9)
         raw_s    = S("pr2", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
         sub_s    = S("ps2", fontSize=6.5, textColor=CHARCOAL, leading=8)
         spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
