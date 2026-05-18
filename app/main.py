@@ -762,13 +762,12 @@ def lookup_providers(providers_list, zip_code):
             if county and county != client_county:
                 parts.append(county + " County")
             detail = " · ".join(parts) if parts else "Found in directory"
-            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
             results.append({
                 "raw_text": raw_text, "last_name": r[0],
                 "first_name": r[1] or first_name, "credentials": creds,
                 "specialty": spec, "city": r_city,
                 "medica_status": "In Network",
-                "medica_detail": detail + suffix,
+                "medica_detail": detail,
                 "accepting": acc,
             })
 
@@ -1037,13 +1036,12 @@ def lookup_providers_bcbs(providers_list, zip_code):
             if r_city:
                 parts.append(r_city)
             detail = " · ".join(parts) if parts else "Found in directory"
-            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
             results.append({
                 "raw_text": raw_text, "last_name": r[0],
                 "first_name": r[1] or first_name, "credentials": creds,
                 "specialty": spec, "city": r_city,
                 "bcbs_status": "In Network",
-                "bcbs_detail": detail + suffix,
+                "bcbs_detail": detail,
                 "accepting": acc,
             })
 
@@ -1236,13 +1234,12 @@ def lookup_providers_hp(providers_list, zip_code):
             if r_city:
                 parts.append(r_city)
             detail = " · ".join(parts) if parts else "Found in directory"
-            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
             results.append({
                 "raw_text": raw_text, "last_name": r[0],
                 "first_name": r[1] or first_name, "credentials": creds,
                 "specialty": r[3] or specialty, "city": r_city,
                 "hp_status": "In Network",
-                "hp_detail": detail + suffix,
+                "hp_detail": detail,
                 "accepting": acc,
             })
 
@@ -2679,7 +2676,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     full_name += f", {matched_creds}"
             else:
                 # Clinic lookup — extract clinic name from the detail string
-                # Detail format: "Clinic Name · City (+N other locations)"
+                # Detail format: "Clinic Name · City"
                 bcbs_detail   = r.get("bcbs_detail",  "")
                 medica_detail = r.get("medica_detail", "")
                 hp_detail     = r.get("hp_detail",     "")
@@ -2692,9 +2689,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     full_name = detail_str[:45] or raw[:45]
 
             # Extract city from whichever carrier found the provider
-            bcbs_city   = r.get("bcbs_detail",  "").split(" · ")[1].split(" (+")[0] if r.get("bcbs_status")   == "In Network" and " · " in r.get("bcbs_detail",  "") else ""
-            medica_city = r.get("medica_detail", "").split(" · ")[1].split(" (+")[0] if r.get("medica_status") == "In Network" and " · " in r.get("medica_detail", "") else ""
-            hp_city     = r.get("hp_detail",     "").split(" · ")[1].split(" (+")[0] if r.get("hp_status")     == "In Network" and " · " in r.get("hp_detail",     "") else ""
+            bcbs_city   = r.get("bcbs_detail",  "").split(" · ")[1] if r.get("bcbs_status")   == "In Network" and " · " in r.get("bcbs_detail",  "") else ""
+            medica_city = r.get("medica_detail", "").split(" · ")[1] if r.get("medica_status") == "In Network" and " · " in r.get("medica_detail", "") else ""
+            hp_city     = r.get("hp_detail",     "").split(" · ")[1] if r.get("hp_status")     == "In Network" and " · " in r.get("hp_detail",     "") else ""
             display_city = (bcbs_city or hp_city or medica_city or r.get("city", "") or "").strip()
 
             name_cell = Table([
