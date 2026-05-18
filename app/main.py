@@ -21,6 +21,7 @@ DB_PATH           = os.path.join(os.path.dirname(os.path.dirname(__file__)), "me
 PROVIDERS_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medica_providers.db")
 BCBS_DB_PATH      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bcbs_providers.db")
 HP_DB_PATH        = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hp_providers.db")
+HUMANA_DB_PATH    = os.path.join(os.path.dirname(os.path.dirname(__file__)), "humana_providers.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
@@ -1246,6 +1247,128 @@ def lookup_providers_hp(providers_list, zip_code):
     conn.close()
     return results
 
+
+
+
+def lookup_providers_humana(providers_list, zip_code):
+    if not providers_list:
+        return []
+    results = []
+    try:
+        conn = sqlite3.connect(HUMANA_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "humana_status": "Error",
+                "humana_detail": "Provider database unavailable", "accepting": "",
+            })
+        return results
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+        spec_lower = specialty.lower()
+        is_dental  = any(w in spec_lower for w in ("dent", "orthodont", "periodont",
+                                                    "endodont", "prosthodont", "oral surgery"))
+        source_filter = "dental" if is_dental else "medical"
+        if not last_name and not clinic_name:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "humana_status": "Not Found",
+                "humana_detail": "No provider name to search", "accepting": "",
+            })
+            continue
+        rows = []
+        if last_name and city:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, county, source
+                FROM providers
+                WHERE last_name LIKE ? AND city LIKE ? AND source = ?
+                ORDER BY city LIMIT 10
+            """, (last_name, "%" + city + "%", source_filter)).fetchall()
+        if not rows and last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, county, source
+                FROM providers
+                WHERE last_name LIKE ? AND source = ?
+                ORDER BY city LIMIT 50
+            """, (last_name, source_filter)).fetchall()
+        if not rows and clinic_name:
+            skip_words = {"medical", "group", "clinic", "center", "care", "health",
+                          "family", "associates", "services", "dental", "the", "and", "of"}
+            words = [w for w in clinic_name.lower().split()
+                     if len(w) > 4 and w not in skip_words]
+            for word in words[:3]:
+                clinic_rows = conn.execute("""
+                    SELECT last_name, first_name, credentials, specialty,
+                           city, clinic_name, zip, county, source
+                    FROM providers
+                    WHERE clinic_name LIKE ? AND source = ?
+                    ORDER BY city LIMIT 10
+                """, ("%" + word + "%", source_filter)).fetchall()
+                if clinic_rows:
+                    if city:
+                        city_match = [r for r in clinic_rows if r[4] and city.lower() in r[4].lower()]
+                        rows = city_match if city_match else clinic_rows
+                    else:
+                        rows = clinic_rows
+                    break
+        if len(rows) > 1 and first_name:
+            first_initial = first_name[0].upper()
+            narrowed = [r for r in rows if r[1] and (
+                r[1].upper().startswith(first_name.upper()) or
+                r[1].upper().startswith(first_initial)
+            )]
+            if narrowed:
+                rows = narrowed
+        if len(rows) > 1 and city:
+            city_match = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            city_other = [r for r in rows if not (r[4] and city.lower() in r[4].lower())]
+            if city_match:
+                rows = city_match + city_other
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "humana_status": "Not Found",
+                "humana_detail": "Not found in Humana directory", "accepting": "",
+            })
+        else:
+            best_row = rows[0]
+            if city and len(rows) > 1:
+                city_direct = conn.execute("""
+                    SELECT last_name, first_name, credentials, specialty,
+                           city, clinic_name, zip, county, source
+                    FROM providers
+                    WHERE last_name LIKE ? AND city LIKE ? AND source = ?
+                    ORDER BY city LIMIT 1
+                """, (last_name, "%" + city + "%", source_filter)).fetchone()
+                if city_direct:
+                    best_row = city_direct
+            r      = best_row
+            creds  = r[2] or ""
+            r_city = r[4] or ""
+            clinic = r[5] or ""
+            parts  = []
+            if clinic: parts.append(clinic[:35])
+            if r_city: parts.append(r_city)
+            detail = " · ".join(parts) if parts else "Found in directory"
+            results.append({
+                "raw_text": raw_text, "last_name": r[0],
+                "first_name": r[1] or first_name, "credentials": creds,
+                "specialty": r[3] or specialty, "city": r_city,
+                "humana_status": "In Network",
+                "humana_detail": detail,
+                "accepting": "",
+            })
+    conn.close()
+    return results
 
 def get_remaining_months(soa_date_str):
     try:
@@ -2565,9 +2688,11 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         has_medica_col = any("medica_status" in r for r in provider_results)
         has_bcbs_col   = any("bcbs_status"   in r for r in provider_results)
         has_hp_col     = any("hp_status"     in r for r in provider_results)
+        has_humana_col = any("humana_status" in r for r in provider_results)
         if has_medica_col: active_carriers.append("Medica")
         if has_bcbs_col:   active_carriers.append("Blue Cross")
         if has_hp_col:     active_carriers.append("HealthPartners")
+        if has_humana_col: active_carriers.append("Humana")
         carrier_label = " & ".join(active_carriers) if active_carriers else "Medicare Advantage"
 
         elements.append(Paragraph(
@@ -2582,7 +2707,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
         # ── Column widths — scale based on number of carrier columns ──────
         # Fixed cols: Provider name + Specialty. Dynamic: one col per carrier.
-        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0)
+        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0)
         total_w     = 239*mm   # fits landscape with margins
         name_w      = 58*mm
         spec_w      = 38*mm
@@ -2607,6 +2732,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             col_widths.append(carrier_w)
         if has_hp_col:
             hdr_row.append(Paragraph("HealthPartners", hdr_ctr_s))
+            col_widths.append(carrier_w)
+        if has_humana_col:
+            hdr_row.append(Paragraph("Humana", hdr_ctr_s))
             col_widths.append(carrier_w)
 
         prov_rows = [hdr_row]
@@ -2658,6 +2786,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         medica_col_idx = 2 if has_medica_col else None
         bcbs_col_idx   = (3 if has_medica_col else 2) if has_bcbs_col else None
         hp_col_idx     = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0)) if has_hp_col else None
+        humana_col_idx = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0)) if has_humana_col else None
 
         for i, r in enumerate(provider_results, start=1):
             last      = r.get("last_name", "")
@@ -2694,7 +2823,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             bcbs_city   = r.get("bcbs_detail",  "").split(" · ")[1] if r.get("bcbs_status")   == "In Network" and " · " in r.get("bcbs_detail",  "") else ""
             medica_city = r.get("medica_detail", "").split(" · ")[1] if r.get("medica_status") == "In Network" and " · " in r.get("medica_detail", "") else ""
             hp_city     = r.get("hp_detail",     "").split(" · ")[1] if r.get("hp_status")     == "In Network" and " · " in r.get("hp_detail",     "") else ""
-            display_city = (bcbs_city or hp_city or medica_city or r.get("city", "") or "").strip()
+            humana_city = r.get("humana_detail", "").split(" · ")[1] if r.get("humana_status") == "In Network" and " · " in r.get("humana_detail", "") else ""
+            display_city = (bcbs_city or hp_city or humana_city or medica_city or r.get("city", "") or "").strip()
 
             name_cell = Table([
                 [Paragraph(full_name[:45],       name_s)],
@@ -2754,6 +2884,23 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     prov_ts.append(("BACKGROUND", (hp_col_idx, i),
                                     (hp_col_idx, i), RED_BG))
 
+
+            if has_humana_col:
+                hu_status  = r.get("humana_status", "")
+                hu_detail  = r.get("humana_detail", "")
+                hu_acc     = r.get("humana_accepting", "")
+                hu_cell, hu_type = make_status_cell(hu_status, hu_detail, hu_acc)
+                detail_text = hu_detail[:65] if hu_detail and hu_type == "IN" else ""
+                combined = Table([[hu_cell],[Paragraph(detail_text, detail_s)]], colWidths=[carrier_w - 8*mm], style=inner_zero, hAlign="CENTER")
+                row_cells.append(combined)
+
+                if hu_type == "IN":
+                    prov_ts.append(("BACKGROUND", (humana_col_idx, i),
+                                    (humana_col_idx, i), GREEN_BG))
+                elif hu_type == "NF":
+                    prov_ts.append(("BACKGROUND", (humana_col_idx, i),
+                                    (humana_col_idx, i), RED_BG))
+
             prov_rows.append(row_cells)
 
         pt = Table(prov_rows, colWidths=col_widths)
@@ -2767,6 +2914,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             carrier_notes.append("Medica: 1-800-952-3455 or medica.com")
         if has_bcbs_col:
             carrier_notes.append("Blue Cross: 1-800-711-9865 or bluecrossmn.com")
+        if has_humana_col:
+            carrier_notes.append("Humana: 1-800-457-4708 or humana.com")
         elements.append(Paragraph(
             "⚠  Network status reflects 2026 provider directories. "
             "Networks change throughout the year — verify directly with carrier before enrollment.  "
@@ -2956,11 +3105,13 @@ def process_soa():
     show_medica = any("medica" in k for k in plan_carrier_keys)
     show_bcbs   = any("blue cross" in k or "freedom blue" in k for k in plan_carrier_keys)
     show_hp     = any("healthpartners" in k or "health partners" in k for k in plan_carrier_keys)
+    show_humana = any("humana" in k for k in plan_carrier_keys)
 
     # Run provider lookups only for carriers present in plan results
     provider_results_medica = []
     provider_results_bcbs   = []
     provider_results_hp     = []
+    provider_results_humana = []
 
     if providers_raw:
         if show_medica and os.path.exists(PROVIDERS_DB_PATH):
@@ -2978,11 +3129,16 @@ def process_soa():
                 provider_results_hp = lookup_providers_hp(providers_raw, zip_code)
             except Exception:
                 provider_results_hp = []
+        if show_humana and os.path.exists(HUMANA_DB_PATH):
+            try:
+                provider_results_humana = lookup_providers_humana(providers_raw, zip_code)
+            except Exception:
+                provider_results_humana = []
 
     # Build merged provider results list for page 2
     # Each entry has status for each active carrier
     provider_results = []
-    if providers_raw and (show_medica or show_bcbs or show_hp):
+    if providers_raw and (show_medica or show_bcbs or show_hp or show_humana):
         for i, p in enumerate(providers_raw):
             entry = {
                 "raw_text":  p.get("raw_text", ""),
@@ -3031,6 +3187,16 @@ def process_soa():
                     entry["matched_first"] = h.get("first_name", "")
                     if not entry.get("credentials"):
                         entry["credentials"] = h.get("credentials", "")
+            if show_humana:
+                hu = provider_results_humana[i] if i < len(provider_results_humana) else {}
+                entry["humana_status"]    = hu.get("humana_status", "Not Found")
+                entry["humana_detail"]    = hu.get("humana_detail", "")
+                entry["humana_accepting"] = hu.get("accepting", "")
+                if hu.get("humana_status") == "In Network":
+                    entry["matched_last"]  = hu.get("last_name", "")
+                    entry["matched_first"] = hu.get("first_name", "")
+                    if not entry.get("credentials"):
+                        entry["credentials"] = hu.get("credentials", "")
             provider_results.append(entry)
 
     try:
