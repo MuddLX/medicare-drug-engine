@@ -1,6 +1,5 @@
-"""
-startup.py — Railway startup script
-Downloads the latest medicare_mn.db and medica_providers.db from Cloudflare R2
+"""\nstartup.py — Railway startup script
+Downloads the latest medicare_mn.db, medica_providers.db, and bcbs_providers.db from Cloudflare R2
 before the app starts.
 Runs automatically via the Railway start command:
     python startup.py && gunicorn app.main:app
@@ -15,8 +14,9 @@ import time
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
-DB_PATH          = "medicare_mn.db"
+DB_PATH           = "medicare_mn.db"
 PROVIDERS_DB_PATH = "medica_providers.db"
+BCBS_DB_PATH      = "bcbs_providers.db"
 REQUIRED_ENV_VARS = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "R2_BUCKET_NAME"]
 
 
@@ -104,6 +104,7 @@ def download_db():
     client = get_r2_client()
     download_file_from_r2(client, bucket, "medicare_mn.db",      DB_PATH,           "medicare_mn.db")
     download_file_from_r2(client, bucket, "medica_providers.db", PROVIDERS_DB_PATH, "medica_providers.db")
+    download_file_from_r2(client, bucket, "bcbs_providers.db",   BCBS_DB_PATH,      "bcbs_providers.db")
 
 
 def validate_db():
@@ -167,6 +168,36 @@ def validate_db():
 
     except sqlite3.Error as e:
         print(f"ERROR: medica_providers.db validation failed: {e}")
+        sys.exit(1)
+
+    # ── Validate bcbs_providers.db ────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(BCBS_DB_PATH)
+        tables = [r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()]
+
+        if "providers" not in tables:
+            print("ERROR: bcbs_providers.db is missing the providers table.")
+            conn.close()
+            sys.exit(1)
+
+        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+        dental_count   = conn.execute(
+            "SELECT COUNT(*) FROM providers WHERE source='dental'"
+        ).fetchone()[0]
+        conn.close()
+
+        if provider_count < 20000:
+            print(f"ERROR: bcbs_providers.db has only {provider_count} providers. "
+                  f"Expected ~24,000. DB may be corrupt.")
+            sys.exit(1)
+
+        print(f"  bcbs_providers.db validation passed: {provider_count:,} providers "
+              f"({dental_count:,} dental).")
+
+    except sqlite3.Error as e:
+        print(f"ERROR: bcbs_providers.db validation failed: {e}")
         sys.exit(1)
 
 

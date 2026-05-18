@@ -19,6 +19,7 @@ app = Flask(__name__)
 
 DB_PATH           = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
 PROVIDERS_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medica_providers.db")
+BCBS_DB_PATH      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bcbs_providers.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
@@ -767,6 +768,228 @@ def lookup_providers(providers_list, zip_code):
                 "specialty": spec, "city": r_city,
                 "medica_status": "In Network",
                 "medica_detail": detail + suffix,
+                "accepting": acc,
+            })
+
+    conn.close()
+    return results
+
+
+def lookup_providers_bcbs(providers_list, zip_code):
+    """
+    Look up each provider against the BCBS provider directory database.
+    Uses zip code for geographic filtering (BCBS DB has city/zip, not county).
+    Handles both medical providers and dental providers.
+    Returns a list of result dicts, one per provider.
+    """
+    if not providers_list:
+        return []
+
+    results = []
+
+    try:
+        conn = sqlite3.connect(BCBS_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "bcbs_status": "Error",
+                "bcbs_detail": "Provider database unavailable", "accepting": "",
+            })
+        return results
+
+    # Get cities near the client's zip for geographic filtering
+    nearby_cities = set()
+    try:
+        conn_main = sqlite3.connect(DB_PATH)
+        # Get zip coords and find pharmacies/cities in same county area
+        row = conn_main.execute(
+            "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
+        ).fetchone()
+        conn_main.close()
+        # We'll use zip-based city lookup from bcbs DB itself
+        zip_rows = conn.execute(
+            "SELECT DISTINCT city FROM providers WHERE zip = ? AND city != ''",
+            (zip_code,)
+        ).fetchall()
+        for r in zip_rows:
+            nearby_cities.add(r[0].upper())
+    except Exception:
+        pass
+
+    # Specialty map — BCBS DB uses different specialty strings than Medica
+    BCBS_SPECIALTY_MAP = {
+        "eye":         ["Ophthalmology", "Optometry", "Eye/Vision Care/Ophthalmology",
+                        "Eye/Vision Care/Optometry"],
+        "vision":      ["Ophthalmology", "Optometry"],
+        "optom":       ["Optometry", "Eye/Vision Care/Optometry"],
+        "ophthal":     ["Ophthalmology", "Eye/Vision Care/Ophthalmology"],
+        "cardio":      ["Cardiology"],
+        "heart":       ["Cardiology"],
+        "primary":     ["Family Practice", "Internal Medicine", "General Practice"],
+        "family":      ["Family Practice", "General Practice"],
+        "internal":    ["Internal Medicine"],
+        "ortho":       ["Orthopedics", "Orthopedic Surgery"],
+        "derm":        ["Dermatology"],
+        "skin":        ["Dermatology"],
+        "neuro":       ["Neurology"],
+        "psych":       ["Psychiatry", "Psychology", "Mental Health/Outpatient"],
+        "mental":      ["Mental Health/Outpatient", "Psychology", "Psychiatry"],
+        "oncol":       ["Oncology/Hematology", "Surgery"],
+        "cancer":      ["Oncology/Hematology"],
+        "nephro":      ["Nephrology"],
+        "kidney":      ["Nephrology"],
+        "gastro":      ["Gastroenterology"],
+        "pulmo":       ["Pulmonology"],
+        "lung":        ["Pulmonology"],
+        "endo":        ["Endocrinology"],
+        "diabetes":    ["Endocrinology"],
+        "thyroid":     ["Endocrinology"],
+        "urol":        ["Urology"],
+        "dent":        ["General Dentist", "Oral Surgery", "Periodontist",
+                        "Endodontist", "Prosthodontist", "Orthodontist"],
+        "dental":      ["General Dentist", "Oral Surgery", "Periodontist",
+                        "Endodontist", "Prosthodontist", "Orthodontist"],
+        "ent":         ["Otolaryngology"],
+        "ear":         ["Otolaryngology"],
+        "throat":      ["Otolaryngology"],
+        "physical th": ["Physical Therapy"],
+        "rheuma":      ["Rheumatology"],
+        "arthrit":     ["Rheumatology"],
+        "podia":       ["Podiatry"],
+        "foot":        ["Podiatry"],
+        "feet":        ["Podiatry"],
+        "allerg":      ["Allergy/Immunology"],
+        "radiol":      ["Radiology"],
+        "sleep":       ["Sleep Medicine"],
+        "pain":        ["Pain Management"],
+        "chiro":       ["Chiropractors"],
+        "audit":       ["Audiology"],
+        "hearing":     ["Audiology"],
+    }
+
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+
+        if not last_name and not clinic_name:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "bcbs_status": "Not Found",
+                "bcbs_detail": "No provider name to search", "accepting": "",
+            })
+            continue
+
+        rows = []
+
+        # Strategy 1: last name + zip code (tightest filter)
+        if last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE last_name LIKE ? AND zip = ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, zip_code)).fetchall()
+
+        # Strategy 2: last name + city match
+        if not rows and last_name and city:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE last_name LIKE ? AND city LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, "%" + city + "%")).fetchall()
+
+        # Strategy 3: last name state-wide
+        if not rows and last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE last_name LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name,)).fetchall()
+
+        # Strategy 4: clinic name search
+        if not rows and clinic_name:
+            clinic_search = "%" + clinic_name.upper()[:20] + "%"
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE clinic_name LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (clinic_search,)).fetchall()
+
+        # Narrow by first name
+        if len(rows) > 1 and first_name:
+            first_initial = first_name[0].upper() if first_name else ""
+            narrowed = [r for r in rows if r[1] and (
+                r[1].upper().startswith(first_name.upper()) or
+                r[1].upper().startswith(first_initial)
+            )]
+            if narrowed:
+                rows = narrowed
+
+        # Narrow by city
+        if len(rows) > 1 and city:
+            city_narrowed = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            if city_narrowed:
+                rows = city_narrowed
+
+        # Narrow by specialty
+        if len(rows) > 1 and specialty:
+            spec_lower = specialty.lower()
+            db_specs = []
+            for keyword, mapped in BCBS_SPECIALTY_MAP.items():
+                if keyword in spec_lower:
+                    db_specs.extend(mapped)
+            if db_specs:
+                db_specs_lower = [s.lower() for s in db_specs]
+                spec_narrowed = [r for r in rows
+                                 if r[3] and r[3].lower() in db_specs_lower]
+                if spec_narrowed:
+                    rows = spec_narrowed
+
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "bcbs_status": "Not Found",
+                "bcbs_detail": "Not found in Blue Cross directory", "accepting": "",
+            })
+        else:
+            r = rows[0]
+            creds  = r[2] or ""
+            spec   = r[3] or specialty or ""
+            r_city = r[4] or ""
+            clinic = r[5] or ""
+            r_zip  = r[6] or ""
+            acc    = r[7] or "Y"
+            source = r[8] or ""
+            parts  = []
+            if clinic:
+                parts.append(clinic[:35])
+            if r_city:
+                parts.append(r_city)
+            detail = " · ".join(parts) if parts else "Found in directory"
+            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
+            results.append({
+                "raw_text": raw_text, "last_name": r[0],
+                "first_name": r[1] or first_name, "credentials": creds,
+                "specialty": spec, "city": r_city,
+                "bcbs_status": "In Network",
+                "bcbs_detail": detail + suffix,
                 "accepting": acc,
             })
 
@@ -2087,34 +2310,53 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         p2_title = S("p2t", fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
         p2_sub   = S("p2s", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
 
-        elements.append(Paragraph("PROVIDER NETWORK DIRECTORY — MEDICA MEDICARE ADVANTAGE", p2_title))
+        # Build dynamic title based on which carriers are present
+        active_carriers = []
+        has_medica_col = any("medica_status" in r for r in provider_results)
+        has_bcbs_col   = any("bcbs_status"   in r for r in provider_results)
+        if has_medica_col: active_carriers.append("Medica")
+        if has_bcbs_col:   active_carriers.append("Blue Cross")
+        carrier_label = " & ".join(active_carriers) if active_carriers else "Medicare Advantage"
+
         elements.append(Paragraph(
-            "Verified against 2026 Medica Advantage Solution provider directory  ·  "
-            "Confirm network status with Medica before enrollment",
+            f"PROVIDER NETWORK DIRECTORY — {carrier_label.upper()} MEDICARE ADVANTAGE",
+            p2_title))
+        elements.append(Paragraph(
+            "Verified against 2026 provider directories  ·  "
+            "Confirm network status with carrier before enrollment",
             p2_sub))
         elements.append(HRFlowable(width="100%", thickness=2, color=TEAL,
                                    spaceAfter=1*mm, spaceBefore=0.5*mm))
 
-        # Column widths
-        name_w   = 55*mm
-        spec_w   = 40*mm
-        status_w = 35*mm
-        detail_w = 89*mm
-        acc_w    = 20*mm  # ~239mm total fits A4 landscape with margins
+        # ── Column widths — scale based on number of carrier columns ──────
+        # Fixed cols: Provider name + Specialty. Dynamic: one col per carrier.
+        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0)
+        total_w     = 239*mm   # fits landscape with margins
+        name_w      = 58*mm
+        spec_w      = 38*mm
+        carrier_w   = (total_w - name_w - spec_w) / max(num_carrier_cols, 1)
 
         hdr_left_s = S("phl", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
                         alignment=TA_LEFT, leading=8)
         hdr_ctr_s  = S("phc", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
                         alignment=TA_CENTER, leading=8)
 
-        prov_rows = [[
-            Paragraph("Provider",       hdr_left_s),
-            Paragraph("Specialty",      hdr_left_s),
-            Paragraph("Medica Status",  hdr_ctr_s),
-            Paragraph("Location / Notes", hdr_left_s),
-            Paragraph("New Pts",        hdr_ctr_s),
-        ]]
+        # Build header row
+        hdr_row = [
+            Paragraph("Provider",  hdr_left_s),
+            Paragraph("Specialty", hdr_left_s),
+        ]
+        col_widths = [name_w, spec_w]
+        if has_medica_col:
+            hdr_row.append(Paragraph("Medica", hdr_ctr_s))
+            col_widths.append(carrier_w)
+        if has_bcbs_col:
+            hdr_row.append(Paragraph("Blue Cross", hdr_ctr_s))
+            col_widths.append(carrier_w)
 
+        prov_rows = [hdr_row]
+
+        # ── Styles ────────────────────────────────────────────────────────
         name_s   = S("pn2", fontSize=7, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
         raw_s    = S("pr2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
         spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
@@ -2123,11 +2365,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                      alignment=TA_CENTER, leading=8)
         not_fnd_s= S("nf2", fontSize=6, textColor=colors.HexColor("#dc2626"),
                      fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
-        acc_y_s  = S("ay2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
-                     alignment=TA_CENTER, leading=8)
-        acc_n_s  = S("an2", fontSize=6, textColor=colors.HexColor("#dc2626"),
-                     fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
-        acc_u_s  = S("au2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
+        na_s     = S("na2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
                      alignment=TA_CENTER, leading=8)
 
         inner_zero = TableStyle([
@@ -2146,67 +2384,106 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
         ]
 
+        def make_status_cell(status, detail, accepting):
+            """Build a status cell with detail line and accepting note if not accepting."""
+            if status == "In Network":
+                acc_note = ""
+                if accepting == "N":
+                    acc_note = " · Not Accepting"
+                return Paragraph(f"✓ In Network{acc_note}", in_net_s), "IN"
+            elif status == "Not Found":
+                return Paragraph("✗ Not Found", not_fnd_s), "NF"
+            else:
+                return Paragraph("—  N/A", na_s), "NA"
+
+        # Track carrier column indices for background coloring
+        medica_col_idx = 2 if has_medica_col else None
+        bcbs_col_idx   = (3 if has_medica_col else 2) if has_bcbs_col else None
+
         for i, r in enumerate(provider_results, start=1):
-            status    = r.get("medica_status", "")
             last      = r.get("last_name", "")
             first     = r.get("first_name", "")
             creds     = r.get("credentials", "")
             raw       = r.get("raw_text", "")
             spec      = r.get("specialty", "") or ""
-            detail    = r.get("medica_detail", "")
-            acc       = r.get("accepting", "")
 
-            full_name = first + " " + last if first else last
+            full_name = (first + " " + last).strip() if first else last
             if creds:
                 full_name += f", {creds}"
+
             name_cell = Table([
-                [Paragraph(full_name[:40], name_s)],
-                [Paragraph(raw[:50],       raw_s)],
+                [Paragraph(full_name[:42], name_s)],
+                [Paragraph(raw[:55],       raw_s)],
             ], colWidths=[name_w - 4*mm], style=inner_zero)
 
-            if status == "In Network":
-                status_cell = Paragraph("✓ In Network", in_net_s)
-                prov_ts.append(("BACKGROUND", (2,i), (2,i), GREEN_BG))
-            elif status == "Not Found":
-                status_cell = Paragraph("✗ Not Found", not_fnd_s)
-                prov_ts.append(("BACKGROUND", (2,i), (2,i), RED_BG))
-            else:
-                status_cell = Paragraph("? Check", S("ck2", fontSize=6,
-                    textColor=colors.HexColor("#64748b"), fontName="Helvetica-Bold",
-                    alignment=TA_CENTER, leading=8))
-                prov_ts.append(("BACKGROUND", (2,i), (2,i), LIGHT_GRAY))
-
-            if acc == "Y":
-                acc_cell = Paragraph("Yes", acc_y_s)
-            elif acc == "N":
-                acc_cell = Paragraph("No",  acc_n_s)
-            else:
-                acc_cell = Paragraph("—",   acc_u_s)
-
-            prov_rows.append([
+            row_cells = [
                 name_cell,
-                Paragraph(spec[:35]   if spec   else "—", spec_s2),
-                status_cell,
-                Paragraph(detail[:70] if detail else "—", detail_s),
-                acc_cell,
-            ])
+                Paragraph(spec[:35] if spec else "—", spec_s2),
+            ]
 
-        pt = Table(prov_rows, colWidths=[name_w, spec_w, status_w, detail_w, acc_w])
+            if has_medica_col:
+                m_status   = r.get("medica_status", "")
+                m_detail   = r.get("medica_detail", "")
+                m_acc      = r.get("medica_accepting", "")
+                m_cell, m_type = make_status_cell(m_status, m_detail, m_acc)
+
+                # Add detail line below status
+                detail_cell = Table([
+                    [m_cell],
+                    [Paragraph(m_detail[:50] if m_detail and m_type == "IN" else "",
+                               detail_s)],
+                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                row_cells.append(detail_cell)
+
+                if m_type == "IN":
+                    prov_ts.append(("BACKGROUND", (medica_col_idx, i),
+                                    (medica_col_idx, i), GREEN_BG))
+                elif m_type == "NF":
+                    prov_ts.append(("BACKGROUND", (medica_col_idx, i),
+                                    (medica_col_idx, i), RED_BG))
+
+            if has_bcbs_col:
+                b_status   = r.get("bcbs_status", "")
+                b_detail   = r.get("bcbs_detail", "")
+                b_acc      = r.get("bcbs_accepting", "")
+                b_cell, b_type = make_status_cell(b_status, b_detail, b_acc)
+
+                detail_cell = Table([
+                    [b_cell],
+                    [Paragraph(b_detail[:50] if b_detail and b_type == "IN" else "",
+                               detail_s)],
+                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                row_cells.append(detail_cell)
+
+                if b_type == "IN":
+                    prov_ts.append(("BACKGROUND", (bcbs_col_idx, i),
+                                    (bcbs_col_idx, i), GREEN_BG))
+                elif b_type == "NF":
+                    prov_ts.append(("BACKGROUND", (bcbs_col_idx, i),
+                                    (bcbs_col_idx, i), RED_BG))
+
+            prov_rows.append(row_cells)
+
+        pt = Table(prov_rows, colWidths=col_widths)
         pt.setStyle(TableStyle(prov_ts))
         elements.append(pt)
         elements.append(Spacer(1, 1*mm))
 
         disc_s = S("d2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
+        carrier_notes = []
+        if has_medica_col:
+            carrier_notes.append("Medica: 1-800-952-3455 or medica.com")
+        if has_bcbs_col:
+            carrier_notes.append("Blue Cross: 1-800-711-9865 or bluecrossmn.com")
         elements.append(Paragraph(
-            "⚠  Network status reflects the 2026 Medica Advantage Solution provider directory. "
-            "Networks change throughout the year — verify directly with Medica before enrollment "
-            "at 1-800-952-3455 or medica.com.  "
-            "UnitedHealthcare, Blue Cross, and Alina network verification coming in a future update.",
+            "⚠  Network status reflects 2026 provider directories. "
+            "Networks change throughout the year — verify directly with carrier before enrollment.  "
+            + "  ·  ".join(carrier_notes),
             disc_s))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY,
                                    spaceBefore=0.5*mm, spaceAfter=0.1*mm))
         elements.append(Paragraph(
-            "Internal use only · Agent reference · Medica 2026 Provider Directory",
+            f"Internal use only · Agent reference · {carrier_label} 2026 Provider Directories",
             S("fp2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
               alignment=TA_CENTER, leading=8)))
 
@@ -2381,13 +2658,55 @@ def process_soa():
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
-    # Look up providers against Medica directory
+    # Detect which carriers appear in the plan results for this client
+    MEDICA_CONTRACT_IDS = {"H8889", "H2450", "H6154"}
+    BCBS_CONTRACT_IDS   = {"H5959"}
+    plan_contract_ids   = {p.get("contract_id", "") for p in result.get("plan_summaries", [])}
+    show_medica = bool(plan_contract_ids & MEDICA_CONTRACT_IDS)
+    show_bcbs   = bool(plan_contract_ids & BCBS_CONTRACT_IDS)
+
+    # Run provider lookups only for carriers present in plan results
+    provider_results_medica = []
+    provider_results_bcbs   = []
+
+    if providers_raw:
+        if show_medica and os.path.exists(PROVIDERS_DB_PATH):
+            try:
+                provider_results_medica = lookup_providers(providers_raw, zip_code)
+            except Exception:
+                provider_results_medica = []
+        if show_bcbs and os.path.exists(BCBS_DB_PATH):
+            try:
+                provider_results_bcbs = lookup_providers_bcbs(providers_raw, zip_code)
+            except Exception:
+                provider_results_bcbs = []
+
+    # Build merged provider results list for page 2
+    # Each entry has status for each active carrier
     provider_results = []
-    if providers_raw and os.path.exists(PROVIDERS_DB_PATH):
-        try:
-            provider_results = lookup_providers(providers_raw, zip_code)
-        except Exception:
-            provider_results = []
+    if providers_raw and (show_medica or show_bcbs):
+        for i, p in enumerate(providers_raw):
+            entry = {
+                "raw_text":  p.get("raw_text", ""),
+                "last_name":  p.get("last_name", ""),
+                "first_name": p.get("first_name", ""),
+                "specialty":  p.get("specialty", ""),
+                "city":       p.get("city", ""),
+            }
+            if show_medica:
+                m = provider_results_medica[i] if i < len(provider_results_medica) else {}
+                entry["medica_status"]      = m.get("medica_status", "Not Found")
+                entry["medica_detail"]      = m.get("medica_detail", "")
+                entry["medica_accepting"]   = m.get("accepting", "")
+                entry["credentials"]        = m.get("credentials", "")
+            if show_bcbs:
+                b = provider_results_bcbs[i] if i < len(provider_results_bcbs) else {}
+                entry["bcbs_status"]        = b.get("bcbs_status", "Not Found")
+                entry["bcbs_detail"]        = b.get("bcbs_detail", "")
+                entry["bcbs_accepting"]     = b.get("accepting", "")
+                if not entry.get("credentials"):
+                    entry["credentials"]    = b.get("credentials", "")
+            provider_results.append(entry)
 
     try:
         pdf_bytes_out = build_pdf(
