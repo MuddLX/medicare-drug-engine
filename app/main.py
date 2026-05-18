@@ -2359,6 +2359,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         # ── Styles ────────────────────────────────────────────────────────
         name_s   = S("pn2", fontSize=8, textColor=colors.black, fontName="Helvetica-Bold", leading=10)
         raw_s    = S("pr2", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
+        sub_s    = S("ps2", fontSize=6.5, textColor=CHARCOAL, leading=8)
         spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
         detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8)
         in_net_s = S("in2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
@@ -2407,26 +2408,35 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             raw       = r.get("raw_text", "")
             spec      = r.get("specialty", "") or ""
 
-            # Build display name — use DB-matched name if available, else input name
+            # Build display name — prefer DB-matched name, then clinic from detail, then raw_text
             matched_last  = (r.get("matched_last")  or last  or "").strip()
             matched_first = (r.get("matched_first") or first or "").strip()
             matched_creds = (r.get("credentials")   or creds or "").strip()
 
             if matched_last or matched_first:
+                # Individual provider name
                 full_name = (matched_first + " " + matched_last).strip()
                 if matched_creds:
                     full_name += f", {matched_creds}"
             else:
-                full_name = raw[:40]
+                # Clinic lookup — extract clinic name from the detail string
+                # Detail format: "Clinic Name · City (+N other locations)"
+                bcbs_detail   = r.get("bcbs_detail",  "")
+                medica_detail = r.get("medica_detail", "")
+                detail_str    = bcbs_detail if r.get("bcbs_status") == "In Network" else medica_detail
+                if " · " in detail_str:
+                    full_name = detail_str.split(" · ")[0].strip()[:45]
+                else:
+                    full_name = detail_str[:45] or raw[:45]
 
             # Extract city from whichever carrier found the provider
             bcbs_city   = r.get("bcbs_detail",  "").split(" · ")[1].split(" (+")[0] if r.get("bcbs_status")   == "In Network" and " · " in r.get("bcbs_detail",  "") else ""
             medica_city = r.get("medica_detail", "").split(" · ")[1].split(" (+")[0] if r.get("medica_status") == "In Network" and " · " in r.get("medica_detail", "") else ""
-            display_city = (bcbs_city or medica_city or city or "").strip()
+            display_city = (bcbs_city or medica_city or r.get("city", "") or "").strip()
 
             name_cell = Table([
                 [Paragraph(full_name[:45],       name_s)],
-                [Paragraph(display_city[:35],    raw_s)],
+                [Paragraph(display_city[:35],    sub_s)],
             ], colWidths=[name_w - 4*mm], style=inner_zero)
 
             row_cells = [
