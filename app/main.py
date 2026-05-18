@@ -2307,8 +2307,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         from reportlab.platypus import PageBreak
         elements.append(PageBreak())
 
-        p2_title = S("p2t", fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
-        p2_sub   = S("p2s", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
+        p2_title = S("p2t", fontSize=11, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=14)
+        p2_sub   = S("p2s", fontSize=7.5, textColor=colors.HexColor("#64748b"), leading=10)
 
         # Build dynamic title based on which carriers are present
         active_carriers = []
@@ -2336,10 +2336,10 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         spec_w      = 38*mm
         carrier_w   = (total_w - name_w - spec_w) / max(num_carrier_cols, 1)
 
-        hdr_left_s = S("phl", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
-                        alignment=TA_LEFT, leading=8)
-        hdr_ctr_s  = S("phc", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
-                        alignment=TA_CENTER, leading=8)
+        hdr_left_s = S("phl", fontSize=8, textColor=WHITE, fontName="Helvetica-Bold",
+                        alignment=TA_LEFT, leading=10)
+        hdr_ctr_s  = S("phc", fontSize=8, textColor=WHITE, fontName="Helvetica-Bold",
+                        alignment=TA_CENTER, leading=10)
 
         # Build header row
         hdr_row = [
@@ -2357,16 +2357,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         prov_rows = [hdr_row]
 
         # ── Styles ────────────────────────────────────────────────────────
-        name_s   = S("pn2", fontSize=7, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
-        raw_s    = S("pr2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
-        spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
-        detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8)
-        in_net_s = S("in2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
-                     alignment=TA_CENTER, leading=8)
-        not_fnd_s= S("nf2", fontSize=6, textColor=colors.HexColor("#dc2626"),
-                     fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
-        na_s     = S("na2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
-                     alignment=TA_CENTER, leading=8)
+        name_s   = S("pn2", fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=11)
+        raw_s    = S("pr2", fontSize=6.5, textColor=colors.HexColor("#94a3b8"), leading=8)
+        spec_s2  = S("ps3", fontSize=8, textColor=DARK_GRAY, leading=10)
+        detail_s = S("pd2", fontSize=7.5, textColor=DARK_GRAY, leading=9)
+        in_net_s = S("in2", fontSize=8, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
+                     alignment=TA_CENTER, leading=10)
+        not_fnd_s= S("nf2", fontSize=8, textColor=colors.HexColor("#dc2626"),
+                     fontName="Helvetica-Bold", alignment=TA_CENTER, leading=10)
+        na_s     = S("na2", fontSize=8, textColor=colors.HexColor("#94a3b8"),
+                     alignment=TA_CENTER, leading=10)
 
         inner_zero = TableStyle([
             ("TOPPADDING",    (0,0), (-1,-1), 0), ("BOTTOMPADDING", (0,0), (-1,-1), 0),
@@ -2412,13 +2412,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 full_name += f", {creds}"
 
             name_cell = Table([
-                [Paragraph(full_name[:42], name_s)],
-                [Paragraph(raw[:55],       raw_s)],
+                [Paragraph(full_name[:38], name_s)],
+                [Paragraph(raw[:50],       raw_s)],
             ], colWidths=[name_w - 4*mm], style=inner_zero)
 
             row_cells = [
                 name_cell,
-                Paragraph(spec[:35] if spec else "—", spec_s2),
+                Paragraph(spec[:30] if spec else "—", spec_s2),
             ]
 
             if has_medica_col:
@@ -2469,7 +2469,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(pt)
         elements.append(Spacer(1, 1*mm))
 
-        disc_s = S("d2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
+        disc_s = S("d2", fontSize=6.5, textColor=colors.HexColor("#94a3b8"), leading=8.5)
         carrier_notes = []
         if has_medica_col:
             carrier_notes.append("Medica: 1-800-952-3455 or medica.com")
