@@ -970,6 +970,11 @@ def lookup_providers_bcbs(providers_list, zip_code):
                       first_initial + "%")).fetchall()
                 if expanded:
                     rows = expanded
+                    # Prefer match closest to input city
+                    if city:
+                        city_pref = [r for r in expanded if r[4] and city.lower() in r[4].lower()]
+                        if city_pref:
+                            rows = city_pref
 
         # Narrow by specialty
         if len(rows) > 1 and specialty:
@@ -1000,6 +1005,10 @@ def lookup_providers_bcbs(providers_list, zip_code):
             r_zip  = r[6] or ""
             acc    = r[7] or "Y"
             source = r[8] or ""
+            # Skip clinic_name if it looks like language codes (e.g. "HN, SP", "AR, FR, GR")
+            import re as _re
+            if clinic and _re.match(r"^[A-Z]{2}(, [A-Z]{2})+$", clinic.strip()):
+                clinic = ""
             parts  = []
             if clinic:
                 parts.append(clinic[:35])
