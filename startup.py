@@ -17,6 +17,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 DB_PATH           = "medicare_mn.db"
 PROVIDERS_DB_PATH = "medica_providers.db"
 BCBS_DB_PATH      = "bcbs_providers.db"
+HP_DB_PATH        = "hp_providers.db"
 REQUIRED_ENV_VARS = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "R2_BUCKET_NAME"]
 
 
@@ -107,6 +108,7 @@ def download_db():
     download_file_from_r2(client, bucket, "medicare_mn.db",      DB_PATH,           "medicare_mn.db")
     download_file_from_r2(client, bucket, "medica_providers.db", PROVIDERS_DB_PATH, "medica_providers.db")
     download_file_from_r2(client, bucket, "bcbs_providers.db",   BCBS_DB_PATH,      "bcbs_providers.db")
+    download_file_from_r2(client, bucket, "hp_providers.db",     HP_DB_PATH,        "hp_providers.db")
 
 
 def validate_db():
@@ -200,6 +202,36 @@ def validate_db():
 
     except sqlite3.Error as e:
         print(f"ERROR: bcbs_providers.db validation failed: {e}")
+        sys.exit(1)
+
+    # ── Validate hp_providers.db ──────────────────────────────────────────
+    try:
+        conn = sqlite3.connect(HP_DB_PATH)
+        tables = [r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()]
+
+        if "providers" not in tables:
+            print("ERROR: hp_providers.db is missing the providers table.")
+            conn.close()
+            sys.exit(1)
+
+        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+        dental_count   = conn.execute(
+            "SELECT COUNT(*) FROM providers WHERE source='dental'"
+        ).fetchone()[0]
+        conn.close()
+
+        if provider_count < 30000:
+            print(f"ERROR: hp_providers.db has only {provider_count} providers. "
+                  f"Expected ~43,000. DB may be corrupt.")
+            sys.exit(1)
+
+        print(f"  hp_providers.db validation passed: {provider_count:,} providers "
+              f"({dental_count:,} dental).")
+
+    except sqlite3.Error as e:
+        print(f"ERROR: hp_providers.db validation failed: {e}")
         sys.exit(1)
 
 
