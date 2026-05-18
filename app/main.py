@@ -17,7 +17,9 @@ from datetime import datetime, date
 
 app = Flask(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
+DB_PATH           = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
+PROVIDERS_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medica_providers.db")
+BCBS_DB_PATH      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bcbs_providers.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
@@ -112,10 +114,10 @@ def get_plans_for_zip(conn, zip_code):
 
     # Friendly name lookup — use short carrier names for known plans
     FRIENDLY_NAMES = {
-        ("H4882", "009"): "HealthPartners Pace",
-        ("H4882", "003"): "HealthPartners Steady",
-        ("H4882", "011"): "HealthPartners Stride",
-        ("H4882", "014"): "HealthPartners Smart",
+        ("H4882", "009"): "HealthPartners Journey Pace",
+        ("H4882", "003"): "HealthPartners Journey Steady",
+        ("H4882", "011"): "HealthPartners Journey Stride",
+        ("H4882", "014"): "HealthPartners Journey Smart",
         ("H6309", "001"): "HealthPartners Birch",
         ("H6309", "002"): "HealthPartners Cedar",
         ("H5959", "009"): "Blue Cross Choice",
@@ -129,19 +131,19 @@ def get_plans_for_zip(conn, zip_code):
         ("H6154", "001"): "Medica Advantage",
         ("H8889", "001"): "Medica Advantage",
         ("H8889", "002"): "Medica Advantage",
-        ("H8889", "003"): "Medica Advantage ($103)",
-        ("H8889", "004"): "Medica Advantage ($140)",
-        ("H8889", "005"): "Medica Advantage ($0)",
-        ("H8889", "008"): "Medica Advantage ($44)",
+        ("H8889", "003"): "Medica Advantage",
+        ("H8889", "004"): "Medica Advantage",
+        ("H8889", "005"): "Medica Advantage",
+        ("H8889", "008"): "Medica Advantage",
         ("H8889", "009"): "Medica Advantage (No Rx)",
         ("H8889", "010"): "Medica Value",
-        ("H8889", "011"): "Medica Preferred ($23)",
-        ("H8889", "012"): "Medica Select ($0)",
-        ("H8889", "013"): "Medica Preferred ($29)",
-        ("H8889", "014"): "Medica Value ($0)",
-        ("H8889", "015"): "Medica Select ($0/355)",
-        ("H8889", "017"): "Medica Value ($0/617)",
-        ("H8889", "018"): "Medica Select ($0/355b)",
+        ("H8889", "011"): "Medica Preferred",
+        ("H8889", "012"): "Medica Select",
+        ("H8889", "013"): "Medica Preferred",
+        ("H8889", "014"): "Medica Value",
+        ("H8889", "015"): "Medica Select",
+        ("H8889", "017"): "Medica Value",
+        ("H8889", "018"): "Medica Select",
         ("H2450", "002"): "Medica Cost Enhanced",
         ("H2450", "007"): "Medica Cost Thrift",
         ("H2450", "016"): "Medica Cost Basic",
@@ -149,23 +151,26 @@ def get_plans_for_zip(conn, zip_code):
         ("H2450", "037"): "Medica Cost Premier",
         ("H2450", "039"): "Medica Cost Focus",
         ("H2450", "049"): "Medica Cost Standard",
-        ("H5216", "275"): "Humana Choice ($0)",
-        ("H5216", "063"): "Humana Choice ($18)",
-        ("H5216", "092"): "Humana Choice ($22)",
-        ("H5216", "359"): "Humana Choice ($0/615b)",
+        ("H5216", "275"): "Humana Choice",
+        ("H5216", "063"): "Humana Choice",
+        ("H5216", "092"): "Humana Choice",
+        ("H5216", "359"): "Humana Choice",
         ("H3219", "001"): "Aetna Signature",
-        ("H3219", "002"): "Aetna Enhanced ($19)",
-        ("H3219", "003"): "Aetna Grand ($40)",
-        ("H3219", "004"): "Aetna Grand Extra ($69)",
+        ("H3219", "002"): "Aetna Enhanced",
+        ("H3219", "003"): "Aetna Grand",
+        ("H3219", "004"): "Aetna Grand Extra",
         ("H3219", "005"): "Aetna Eagle",
         ("H3219", "008"): "Aetna Signature Fit",
-        ("H3219", "012"): "Aetna Signature ($12)",
-        ("H3219", "014"): "Aetna Enhanced ($46)",
-        ("H2001", "116"): "UHC AARP ($0/600)",
-        ("H2001", "117"): "UHC AARP ($0/520)",
-        ("H2001", "123"): "UHC AARP ($0/520b)",
-        ("H3186", "001"): "Align ChoiceElite ($63)",
-        ("H3186", "002"): "Align ChoicePlus ($0)",
+        ("H3219", "012"): "Aetna Signature",
+        ("H3219", "014"): "Aetna Enhanced",
+        ("H2001", "116"): "UHC AARP",
+        ("H2001", "117"): "UHC AARP",
+        ("H2001", "118"): "UHC AARP FG",
+        ("H2001", "119"): "UHC AARP FG",
+        ("H2001", "120"): "UHC AARP FG",
+        ("H2001", "123"): "UHC AARP",
+        ("H3186", "001"): "Align ChoiceElite",
+        ("H3186", "002"): "Align ChoicePlus",
         ("H8145", "006"): "Humana Gold Choice",
         ("H9834", "001"): "Gundersen Quartz Elite",
         ("H9834", "003"): "Gundersen Quartz Value",
@@ -199,6 +204,9 @@ def get_plans_for_zip(conn, zip_code):
 
     # Pick best plan per carrier family (lowest premium from plans table, prefer $0)
     # service_area tells us WHICH plans are available, plans table has correct premiums
+    # Plan type preference order: PPO > HMO-POS > Cost > PFFS > HMO
+    PLAN_TYPE_RANK = {"PPO": 0, "HMO-POS": 1, "Cost": 2, "PFFS": 3, "HMO": 4}
+
     best_per_family = {}
     for row in ma_rows:
         cid, pid = row[0], row[1].zfill(3)
@@ -211,18 +219,22 @@ def get_plans_for_zip(conn, zip_code):
         ).fetchone()
         premium = float(plan_row[0]) if plan_row else (row[4] or 999)
         deductible = float(plan_row[1]) if plan_row else (row[5] or 0)
+        plan_type = row[6] or ""
+        type_rank = PLAN_TYPE_RANK.get(plan_type, 5)
         current = best_per_family.get(family)
+        curr_rank = PLAN_TYPE_RANK.get(current["plan_type"] or "", 5) if current else 5
         is_better = (
             current is None or
             premium < current["premium"] or
-            (premium == current["premium"] and deductible < current["deductible"])
+            (premium == current["premium"] and type_rank < curr_rank) or
+            (premium == current["premium"] and type_rank == curr_rank and deductible < current["deductible"])
         )
         if is_better:
             best_per_family[family] = {
                 "contract_id": cid, "plan_id": pid,
                 "plan_name": row[2], "org_name": row[3],
                 "premium": premium, "deductible": deductible,
-                "plan_type": row[6], "key": key
+                "plan_type": plan_type, "key": key
             }
 
     # First pass: best plan per carrier family
@@ -344,10 +356,10 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "elite", "plus", "standard", "focus", "thrift",
     }
     FN = {
-        ("H4882","009"): "HealthPartners Pace",
-        ("H4882","003"): "HealthPartners Steady",
-        ("H4882","011"): "HealthPartners Stride",
-        ("H4882","014"): "HealthPartners Smart",
+        ("H4882","009"): "HealthPartners Journey Pace",
+        ("H4882","003"): "HealthPartners Journey Steady",
+        ("H4882","011"): "HealthPartners Journey Stride",
+        ("H4882","014"): "HealthPartners Journey Smart",
         ("H6309","001"): "HealthPartners Birch",
         ("H6309","002"): "HealthPartners Cedar",
         ("H5959","009"): "Blue Cross Choice",
@@ -393,6 +405,9 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         ("H3219","014"): "Aetna Enhanced",
         ("H2001","116"): "UHC AARP",
         ("H2001","117"): "UHC AARP",
+        ("H2001","118"): "UHC AARP FG",
+        ("H2001","119"): "UHC AARP FG",
+        ("H2001","120"): "UHC AARP FG",
         ("H2001","123"): "UHC AARP",
         ("H3186","001"): "Align ChoiceElite",
         ("H3186","002"): "Align ChoicePlus",
@@ -524,6 +539,517 @@ def get_db():
     return conn
 
 
+def lookup_providers(providers_list, zip_code):
+    """
+    Look up each provider against the Medica provider directory database.
+    providers_list: list of dicts from Claude extraction, each with keys:
+        raw_text, last_name, first_name, specialty, clinic_name, city
+    zip_code: client's zip code — used to find their county for filtering
+    Returns a list of result dicts, one per provider.
+    """
+    if not providers_list:
+        return []
+
+    results = []
+
+    # Get client's county from the main drug DB zip_county table
+    client_county = ""
+    try:
+        conn_main = sqlite3.connect(DB_PATH)
+        row = conn_main.execute(
+            "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
+        ).fetchone()
+        if row:
+            client_county = row[0].upper().replace(" COUNTY", "").strip()
+        conn_main.close()
+    except Exception:
+        pass
+
+    # Open provider directory DB
+    try:
+        conn = sqlite3.connect(PROVIDERS_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "medica_status": "Error",
+                "medica_detail": "Provider database unavailable", "accepting": "",
+            })
+        return results
+
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+
+        if not last_name and not clinic_name:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "medica_status": "Not Found",
+                "medica_detail": "No provider name to search", "accepting": "",
+            })
+            continue
+
+        rows = []
+
+        # Strategy 1: last name + county (strongest filter)
+        if last_name and client_county:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, county, accepting
+                FROM providers
+                WHERE last_name LIKE ? AND county LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, client_county)).fetchall()
+
+        # Strategy 2: last name anywhere in state
+        if not rows and last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, county, accepting
+                FROM providers
+                WHERE last_name LIKE ?
+                ORDER BY CASE WHEN county LIKE ? THEN 0 ELSE 1 END,
+                         CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, client_county or "%")).fetchall()
+
+        # Strategy 3: clinic name search
+        if not rows and clinic_name:
+            clinic_search = "%" + clinic_name.upper()[:20] + "%"
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, county, accepting
+                FROM providers
+                WHERE clinic_name LIKE ?
+                AND (county LIKE ? OR ? = '')
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (clinic_search, client_county, client_county)).fetchall()
+
+        # Narrow by first name if multiple matches
+        if len(rows) > 1 and first_name:
+            first_initial = first_name[0].upper() if first_name else ""
+            narrowed = [r for r in rows if r[1] and (
+                r[1].upper().startswith(first_name.upper()) or
+                r[1].upper().startswith(first_initial)
+            )]
+            if narrowed:
+                rows = narrowed
+
+        # Narrow by city if still multiple
+        if len(rows) > 1 and city:
+            city_narrowed = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            if city_narrowed:
+                rows = city_narrowed
+
+        # Narrow by specialty if still multiple
+        # Maps fuzzy SOA terms to formal database specialty values
+        SPECIALTY_MAP = {
+            # Eyes / Vision
+            "eye":          ["OPHTHALMOLOGY", "OPTOMETRY"],
+            "vision":       ["OPHTHALMOLOGY", "OPTOMETRY"],
+            "optom":        ["OPTOMETRY"],
+            "ophthal":      ["OPHTHALMOLOGY"],
+            # Heart / Cardiology
+            "cardio":       ["CARDIOLOGY"],
+            "heart":        ["CARDIOLOGY"],
+            # Primary Care
+            "primary":      ["FAMILY PRACTICE", "INTERNAL MEDICINE", "GENERAL PRACTICE"],
+            "family":       ["FAMILY PRACTICE", "GENERAL PRACTICE"],
+            "general":      ["GENERAL PRACTICE", "FAMILY PRACTICE"],
+            "internal":     ["INTERNAL MEDICINE"],
+            # Bones / Joints
+            "ortho":        ["ORTHOPEDICS", "ORTHOPEDIC SURGERY"],
+            "bone":         ["ORTHOPEDICS"],
+            "joint":        ["ORTHOPEDICS"],
+            # Skin
+            "derm":         ["DERMATOLOGY"],
+            "skin":         ["DERMATOLOGY"],
+            # Neuro
+            "neuro":        ["NEUROLOGY"],
+            "brain":        ["NEUROLOGY"],
+            # Mental Health
+            "psych":        ["PSYCHIATRY", "PSYCHOLOGY"],
+            "mental":       ["PSYCHIATRY", "PSYCHOLOGY", "BEHAVIORAL HEALTH"],
+            "behav":        ["BEHAVIORAL HEALTH"],
+            # Cancer
+            "oncol":        ["ONCOLOGY", "MEDICAL ONCOLOGY", "HEMATOLOGY ONCOLOGY"],
+            "cancer":       ["ONCOLOGY", "MEDICAL ONCOLOGY"],
+            # Kidneys
+            "nephro":       ["NEPHROLOGY"],
+            "kidney":       ["NEPHROLOGY"],
+            # Stomach / GI
+            "gastro":       ["GASTROENTEROLOGY"],
+            "stomach":      ["GASTROENTEROLOGY"],
+            "gi ":          ["GASTROENTEROLOGY"],
+            # Lungs
+            "pulmo":        ["PULMONOLOGY"],
+            "lung":         ["PULMONOLOGY"],
+            # Endocrine / Diabetes
+            "endo":         ["ENDOCRINOLOGY"],
+            "diabetes":     ["ENDOCRINOLOGY"],
+            "thyroid":      ["ENDOCRINOLOGY"],
+            # Urology
+            "urol":         ["UROLOGY"],
+            "bladder":      ["UROLOGY"],
+            # Dentist
+            "dent":         ["DENTISTRY"],
+            "dental":       ["DENTISTRY"],
+            # ENT
+            "ent":          ["EAR NOSE & THROAT", "OTOLARYNGOLOGY"],
+            "ear":          ["EAR NOSE & THROAT", "OTOLARYNGOLOGY"],
+            "throat":       ["EAR NOSE & THROAT", "OTOLARYNGOLOGY"],
+            # Physical Therapy
+            "physical th":  ["PHYSICAL THERAPY"],
+            "pt ":          ["PHYSICAL THERAPY"],
+            # Rheumatology
+            "rheuma":       ["RHEUMATOLOGY"],
+            "arthrit":      ["RHEUMATOLOGY"],
+            # Podiatry / Feet
+            "podia":        ["PODIATRY"],
+            "foot":         ["PODIATRY"],
+            "feet":         ["PODIATRY"],
+            # Allergy
+            "allerg":       ["ALLERGY AND IMMUNOLOGY"],
+            # Radiology
+            "radiol":       ["RADIOLOGY"],
+            # Sleep
+            "sleep":        ["SLEEP MEDICINE"],
+            # Pain
+            "pain":         ["PAIN MANAGEMENT"],
+        }
+
+        if len(rows) > 1 and specialty:
+            spec_lower = specialty.lower()
+            # Find which db specialties the SOA term maps to
+            db_specs = []
+            for keyword, mapped in SPECIALTY_MAP.items():
+                if keyword in spec_lower:
+                    db_specs.extend(mapped)
+            if db_specs:
+                db_specs_upper = [s.upper() for s in db_specs]
+                spec_narrowed = [r for r in rows
+                                 if r[3] and r[3].upper() in db_specs_upper]
+                if spec_narrowed:
+                    rows = spec_narrowed
+
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "medica_status": "Not Found",
+                "medica_detail": "Not found in Medica directory", "accepting": "",
+            })
+        else:
+            r = rows[0]
+            creds  = r[2] or ""
+            spec   = r[3] or specialty or ""
+            r_city = r[4] or ""
+            clinic = r[5] or ""
+            county = r[6] or ""
+            acc    = r[7] or "Y"
+            parts  = []
+            if clinic:
+                parts.append(clinic[:35])
+            if r_city:
+                parts.append(r_city)
+            if county and county != client_county:
+                parts.append(county + " County")
+            detail = " · ".join(parts) if parts else "Found in directory"
+            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
+            results.append({
+                "raw_text": raw_text, "last_name": r[0],
+                "first_name": r[1] or first_name, "credentials": creds,
+                "specialty": spec, "city": r_city,
+                "medica_status": "In Network",
+                "medica_detail": detail + suffix,
+                "accepting": acc,
+            })
+
+    conn.close()
+    return results
+
+
+def lookup_providers_bcbs(providers_list, zip_code):
+    """
+    Look up each provider against the BCBS provider directory database.
+    Uses zip code for geographic filtering (BCBS DB has city/zip, not county).
+    Handles both medical providers and dental providers.
+    Returns a list of result dicts, one per provider.
+    """
+    if not providers_list:
+        return []
+
+    results = []
+
+    try:
+        conn = sqlite3.connect(BCBS_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "bcbs_status": "Error",
+                "bcbs_detail": "Provider database unavailable", "accepting": "",
+            })
+        return results
+
+    # Get cities near the client's zip for geographic filtering
+    nearby_cities = set()
+    try:
+        conn_main = sqlite3.connect(DB_PATH)
+        # Get zip coords and find pharmacies/cities in same county area
+        row = conn_main.execute(
+            "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
+        ).fetchone()
+        conn_main.close()
+        # We'll use zip-based city lookup from bcbs DB itself
+        zip_rows = conn.execute(
+            "SELECT DISTINCT city FROM providers WHERE zip = ? AND city != ''",
+            (zip_code,)
+        ).fetchall()
+        for r in zip_rows:
+            nearby_cities.add(r[0].upper())
+    except Exception:
+        pass
+
+    # Specialty map — BCBS DB uses different specialty strings than Medica
+    BCBS_SPECIALTY_MAP = {
+        "eye":         ["Ophthalmology", "Optometry", "Eye/Vision Care/Ophthalmology",
+                        "Eye/Vision Care/Optometry"],
+        "vision":      ["Ophthalmology", "Optometry"],
+        "optom":       ["Optometry", "Eye/Vision Care/Optometry"],
+        "ophthal":     ["Ophthalmology", "Eye/Vision Care/Ophthalmology"],
+        "cardio":      ["Cardiology"],
+        "heart":       ["Cardiology"],
+        "primary":     ["Family Practice", "Internal Medicine", "General Practice"],
+        "family":      ["Family Practice", "General Practice"],
+        "internal":    ["Internal Medicine"],
+        "ortho":       ["Orthopedics", "Orthopedic Surgery"],
+        "derm":        ["Dermatology"],
+        "skin":        ["Dermatology"],
+        "neuro":       ["Neurology"],
+        "psych":       ["Psychiatry", "Psychology", "Mental Health/Outpatient"],
+        "mental":      ["Mental Health/Outpatient", "Psychology", "Psychiatry"],
+        "oncol":       ["Oncology/Hematology", "Surgery"],
+        "cancer":      ["Oncology/Hematology"],
+        "nephro":      ["Nephrology"],
+        "kidney":      ["Nephrology"],
+        "gastro":      ["Gastroenterology"],
+        "pulmo":       ["Pulmonology"],
+        "lung":        ["Pulmonology"],
+        "endo":        ["Endocrinology"],
+        "diabetes":    ["Endocrinology"],
+        "thyroid":     ["Endocrinology"],
+        "urol":        ["Urology"],
+        "dent":        ["General Dentist", "Oral Surgery", "Periodontist",
+                        "Endodontist", "Prosthodontist", "Orthodontist"],
+        "dental":      ["General Dentist", "Oral Surgery", "Periodontist",
+                        "Endodontist", "Prosthodontist", "Orthodontist"],
+        "ent":         ["Otolaryngology"],
+        "ear":         ["Otolaryngology"],
+        "throat":      ["Otolaryngology"],
+        "physical th": ["Physical Therapy"],
+        "rheuma":      ["Rheumatology"],
+        "arthrit":     ["Rheumatology"],
+        "podia":       ["Podiatry"],
+        "foot":        ["Podiatry"],
+        "feet":        ["Podiatry"],
+        "allerg":      ["Allergy/Immunology"],
+        "radiol":      ["Radiology"],
+        "sleep":       ["Sleep Medicine"],
+        "pain":        ["Pain Management"],
+        "chiro":       ["Chiropractors"],
+        "audit":       ["Audiology"],
+        "hearing":     ["Audiology"],
+    }
+
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+
+        if not last_name and not clinic_name:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "bcbs_status": "Not Found",
+                "bcbs_detail": "No provider name to search", "accepting": "",
+            })
+            continue
+
+        rows = []
+
+        # Strategy 1: last name + zip code (tightest filter)
+        if last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE last_name LIKE ? AND zip = ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, zip_code)).fetchall()
+
+        # Strategy 2: last name + city match
+        if not rows and last_name and city:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE last_name LIKE ? AND city LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (last_name, "%" + city + "%")).fetchall()
+
+        # Strategy 3: last name state-wide with higher limit to allow first-name narrowing
+        if not rows and last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE last_name LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 50
+            """, (last_name,)).fetchall()
+
+        # Strategy 4: clinic name search
+        if not rows and clinic_name:
+            clinic_search = "%" + clinic_name.upper()[:20] + "%"
+            rows = conn.execute("""
+                SELECT last_name, first_name, credentials, specialty,
+                       city, clinic_name, zip, accepting, source
+                FROM providers
+                WHERE clinic_name LIKE ?
+                ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                LIMIT 10
+            """, (clinic_search,)).fetchall()
+
+        # Narrow by first name — do this BEFORE city narrowing so we find
+        # the right person even if they're in a different city than the zip
+        if len(rows) > 1 and first_name:
+            first_initial = first_name[0].upper() if first_name else ""
+            narrowed = [r for r in rows if r[1] and (
+                r[1].upper().startswith(first_name.upper()) or
+                r[1].upper().startswith(first_initial)
+            )]
+            if narrowed:
+                rows = narrowed
+
+        # Narrow by city — reorder so city match is first, keep others for count
+        if len(rows) > 1 and city:
+            city_match = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            city_other = [r for r in rows if not (r[4] and city.lower() in r[4].lower())]
+            if city_match:
+                rows = city_match + city_other
+
+        # If Strategy 1 returned results from the wrong zip but first-name narrowing
+        # found nothing, try expanding to state-wide before giving up
+        if rows and first_name and len(rows) >= 1:
+            first_initial = first_name[0].upper()
+            if not any(r[1] and (r[1].upper().startswith(first_name.upper()) or
+                                  r[1].upper().startswith(first_initial))
+                       for r in rows):
+                # Current results don't match first name — expand search
+                expanded = conn.execute("""
+                    SELECT last_name, first_name, credentials, specialty,
+                           city, clinic_name, zip, accepting, source
+                    FROM providers
+                    WHERE last_name LIKE ? AND (
+                        first_name LIKE ? OR first_name LIKE ?
+                    )
+                    ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END, city
+                    LIMIT 10
+                """, (last_name, first_name.upper() + "%",
+                      first_initial + "%")).fetchall()
+                if expanded:
+                    rows = expanded
+                    # Prefer match closest to input city — reorder so city match is first
+                    if city:
+                        city_pref  = [r for r in expanded if r[4] and city.lower() in r[4].lower()]
+                        city_other = [r for r in expanded if not (r[4] and city.lower() in r[4].lower())]
+                        if city_pref:
+                            rows = city_pref + city_other
+
+        # Narrow by specialty
+        if len(rows) > 1 and specialty:
+            spec_lower = specialty.lower()
+            db_specs = []
+            for keyword, mapped in BCBS_SPECIALTY_MAP.items():
+                if keyword in spec_lower:
+                    db_specs.extend(mapped)
+            if db_specs:
+                db_specs_lower = [s.lower() for s in db_specs]
+                spec_narrowed = [r for r in rows
+                                 if r[3] and r[3].lower() in db_specs_lower]
+                if spec_narrowed:
+                    rows = spec_narrowed
+
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "bcbs_status": "Not Found",
+                "bcbs_detail": "Not found in Blue Cross directory", "accepting": "",
+            })
+        else:
+            # Pick best row — prefer city match to input city
+            import re as _re
+            best_row = rows[0]  # default
+            if city and len(rows) > 1:
+                # Try direct DB query for this exact name + city combo
+                city_direct = conn.execute("""
+                    SELECT last_name, first_name, credentials, specialty,
+                           city, clinic_name, zip, accepting, source
+                    FROM providers
+                    WHERE last_name LIKE ? AND city LIKE ?
+                    ORDER BY CASE WHEN accepting='Y' THEN 0 ELSE 1 END
+                    LIMIT 1
+                """, (last_name, "%" + city + "%")).fetchone()
+                if city_direct:
+                    best_row = city_direct
+                else:
+                    city_match = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+                    if city_match:
+                        best_row = city_match[0]
+
+            r = best_row
+            creds  = r[2] or ""
+            spec   = r[3] or specialty or ""
+            r_city = r[4] or ""
+            clinic = r[5] or ""
+            r_zip  = r[6] or ""
+            acc    = r[7] or "Y"
+            source = r[8] or ""
+            # Skip clinic_name if it looks like language codes (e.g. "HN, SP", "AR, FR, GR")
+            if clinic and _re.match(r"^[A-Z]{2}(, [A-Z]{2})+$", clinic.strip()):
+                clinic = ""
+            parts  = []
+            if clinic:
+                parts.append(clinic[:35])
+            if r_city:
+                parts.append(r_city)
+            detail = " · ".join(parts) if parts else "Found in directory"
+            suffix = f" (+{len(rows)-1} other locations)" if len(rows) > 1 else ""
+            results.append({
+                "raw_text": raw_text, "last_name": r[0],
+                "first_name": r[1] or first_name, "credentials": creds,
+                "specialty": spec, "city": r_city,
+                "bcbs_status": "In Network",
+                "bcbs_detail": detail + suffix,
+                "accepting": acc,
+            })
+
+    conn.close()
+    return results
+
+
 def get_remaining_months(soa_date_str):
     try:
         soa = datetime.strptime(soa_date_str, "%m/%d/%Y").date()
@@ -615,6 +1141,10 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
         WHERE contract_id = ? AND plan_id = ? AND is_retail = 1
     """, (contract_id, plan_id_padded)).fetchall()
 
+    # Does this plan have ANY preferred pharmacies anywhere in MN?
+    # If not, all pharmacies are treated equally — don't show (non-pref) label
+    plan_has_any_preferred = any(row[1] == "Y" for row in pref_rows)
+
     # Build zip -> fees + preferred lookup
     # Track both preferred and non-preferred fees per zip
     zip_info = {}
@@ -626,6 +1156,7 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "preferred": pref,
                 "has_preferred": pref == "Y",
                 "has_nonpreferred": pref == "N",
+                "plan_has_any_preferred": plan_has_any_preferred,
                 "generic_fee": float(gen_fee or 0),
                 "brand_fee": float(brand_fee or 0),
                 "selected_fee": float(sel_fee or 0),
@@ -655,12 +1186,14 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             continue
 
         # Get pharmacies in this zip that are confirmed in-network
-        # Use pharmacy's actual lat/lon if available for precise distance
+        # Pull per-pharmacy dispensing fees directly (not zip-level aggregated)
         pharms = conn.execute("""
             SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain,
-                   pn.lat, pn.lon
+                   pn.lat, pn.lon,
+                   net.generic_fee_30, net.brand_fee_30, net.selected_fee_30,
+                   net.preferred_retail
             FROM pharmacy_names pn
-            INNER JOIN pharmacy_network net ON net.pharmacy_zip = pn.zip
+            INNER JOIN pharmacy_network net ON net.npi = pn.npi
             WHERE pn.zip = ?
             AND net.contract_id = ?
             AND net.plan_id = ?
@@ -669,51 +1202,86 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             AND pn.name IS NOT NULL
         """, (pharm_zip, contract_id, plan_id_padded)).fetchall()
 
-        for npi, name, address, city, is_chain, pharm_lat, pharm_lon in pharms:
+        for npi, name, address, city, is_chain, pharm_lat, pharm_lon, \
+                generic_fee, brand_fee, selected_fee, pref_retail in pharms:
             if not name:
                 continue
             # Use pharmacy's actual coordinates if available, else use zip centroid
             if pharm_lat and pharm_lon:
-                distance = haversine_distance(client_lat, client_lon, pharm_lat, pharm_lon)
-            # else distance already calculated from zip centroid above
+                precise_distance = haversine_distance(client_lat, client_lon, pharm_lat, pharm_lon)
+                dist_approximate = False
+            else:
+                precise_distance = distance  # zip centroid fallback
+                dist_approximate = True
             # Determine preferred status
-            if info.get("has_preferred") and info.get("has_nonpreferred"):
+            # Only mark as non-preferred if the plan actually distinguishes preferred/non-preferred
+            plan_has_pref = info.get("plan_has_any_preferred", False)
+            if not plan_has_pref:
+                is_preferred = True
+            elif info.get("has_preferred") and info.get("has_nonpreferred"):
                 is_preferred = bool(is_chain)
             else:
-                is_preferred = info["preferred"] == "Y"
-            
+                is_preferred = pref_retail == "Y"
+
             candidates.append({
                 "npi": npi,
                 "name": name,
                 "address": address or "",
                 "city": city or "",
                 "zip": pharm_zip,
-                "distance_miles": round(distance, 1),
+                "distance_miles": round(precise_distance, 1),
+                "dist_approximate": dist_approximate,
                 "preferred": is_preferred,
                 "is_chain": bool(is_chain),
-                "generic_fee": info["generic_fee"],
-                "brand_fee": info["brand_fee"],
-                "selected_fee": info["selected_fee"],
+                "generic_fee": float(generic_fee or 0),
+                "brand_fee": float(brand_fee or 0),
+                "selected_fee": float(selected_fee or 0),
                 "in_network": True,
+                "_lat": pharm_lat,
+                "_lon": pharm_lon,
             })
 
     if not candidates:
         return []
 
     # Deduplicate by base name, keep closest
-    # Add small address-based offset to distinguish same-zip pharmacies
     seen = {}
     for p in candidates:
         base = p["name"].split("#")[0].strip().upper()
-        # Add tiny distance variation based on address hash so same-zip pharmacies differ slightly
-        addr_hash = sum(ord(c) for c in p.get("address", "")) % 100
-        p["distance_miles"] = round(p["distance_miles"] + addr_hash * 0.001, 1)
         if base not in seen or p["distance_miles"] < seen[base]["distance_miles"]:
             seen[base] = p
 
+    # Secondary dedup: remove pharmacies that are co-located (within 0.05 miles of each other)
+    # Uses actual GPS distance between pharmacies, not distance from client
+    # This catches same-campus pharmacies (e.g. Sanford Health Pharm + SANFORD CLINIC NORTH)
+    # but NOT separate pharmacies that happen to be the same distance from the client
+    by_distance = sorted(seen.values(), key=lambda x: x["distance_miles"])
+    proximity_deduped = []
+    for p in by_distance:
+        p_lat = p.get("_lat")
+        p_lon = p.get("_lon")
+        too_close = False
+        for kept in proximity_deduped:
+            k_lat = kept.get("_lat")
+            k_lon = kept.get("_lon")
+            # If we have real coords for both, use actual distance between them
+            if p_lat and p_lon and k_lat and k_lon:
+                dist_between = haversine_distance(p_lat, p_lon, k_lat, k_lon)
+                if dist_between < 0.1:
+                    too_close = True
+                    break
+            else:
+                # Fallback: if same distance from client (within 0.05mi) and same zip, likely co-located
+                if (abs(p["distance_miles"] - kept["distance_miles"]) < 0.05 and
+                        p.get("zip") == kept.get("zip")):
+                    too_close = True
+                    break
+        if not too_close:
+            proximity_deduped.append(p)
+
     # Sort: preferred chains first, then by distance
     sorted_pharms = sorted(
-        seen.values(),
+        proximity_deduped,
         key=lambda x: (not x["preferred"], not x["is_chain"], x["distance_miles"])
     )
     return sorted_pharms[:max_results]
@@ -729,7 +1297,12 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
     """
     plan_id_padded = plan_id.zfill(3)
     is_preferred = pharmacy.get("preferred", True)
-    disp_fee = pharmacy.get("generic_fee", 0) or pharmacy.get("selected_fee", 0)
+    # Per-pharmacy dispensing fees — use brand fee for Tier 3+ (brand drugs), generic for Tier 1-2
+    generic_fee = float(pharmacy.get("generic_fee", 0) or 0)
+    brand_fee = float(pharmacy.get("brand_fee", 0) or 0)
+    selected_fee = float(pharmacy.get("selected_fee", 0) or 0)
+    # Default to generic fee; will be updated to brand fee after tier is known
+    disp_fee = generic_fee
 
     # Get correct cost row based on preferred status
     cost_row = conn.execute("""
@@ -754,6 +1327,12 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
     
     ded_applies_db = cost_row[4]
 
+    # Select dispensing fee based on tier — brand fee for Tier 3+, generic for Tier 1-2
+    if tier and tier >= 3:
+        disp_fee = brand_fee if brand_fee > 0 else generic_fee
+    else:
+        disp_fee = generic_fee
+
     # Apply insulin $35 cap first (overrides everything)
     drug_name_base = drug_name.split()[0] if drug_name else ""
     if is_insulin(drug_name) or is_insulin(drug_name_base):
@@ -766,7 +1345,8 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
         unit_cost = mfp
         cost_type = 2
         cost_amt = 0.25
-        disp_fee = 0  # MFP coinsurance is the full patient cost, no additional dispensing fee
+        # Use brand dispensing fee for MFP drugs (they are all brand drugs)
+        disp_fee = brand_fee if brand_fee > 0 else generic_fee
 
     if ded_applies_db == "N" or deductible_remaining <= 0:
         if cost_type == 0:
@@ -1194,6 +1774,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                             "address": pharmacy["address"],
                             "city": pharmacy["city"],
                             "distance_miles": pharmacy["distance_miles"],
+                            "dist_approximate": pharmacy.get("dist_approximate", False),
                             "preferred": pharmacy["preferred"],
                             "monthly_costs": pharm_monthly,
                             "annual_total": round(sum(m["cost"] for m in pharm_monthly), 2)
@@ -1273,7 +1854,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     }
 
 
-def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None):
+def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None, provider_results=None):
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
@@ -1305,37 +1886,49 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    h1        = S("h1",  fontSize=14, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=17)
-    h2        = S("h2",  fontSize=10,  textColor=colors.HexColor("#334155"), leading=13)
-    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=8)
-    col_hdr   = S("ch",  fontSize=7,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    row_lbl   = S("rl",  fontSize=7,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=9)
-    cell      = S("c",   fontSize=7,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=9)
-    badge_txt = S("bt",  fontSize=8,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=10)
-    gen_txt   = S("gt",  fontSize=7,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=9)
+    h1        = S("h1",  fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
+    h2        = S("h2",  fontSize=5,  textColor=colors.HexColor("#64748b"), leading=7)
+    sec_title = S("sec", fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", leading=9)
+    col_hdr   = S("ch",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+    row_lbl   = S("rl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
+    cell      = S("c",   fontSize=6,  textColor=DARK_GRAY, alignment=TA_CENTER, leading=8)
+    badge_txt = S("bt",  fontSize=6,  textColor=colors.HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=TA_RIGHT, leading=8)
+    gen_txt   = S("gt",  fontSize=6,  textColor=colors.HexColor("#64748b"), alignment=TA_RIGHT, leading=8)
     footer    = S("ft",  fontSize=6,  textColor=colors.HexColor("#94a3b8"), alignment=TA_CENTER, leading=8)
     drug_lbl  = S("dl",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
-    nc_style  = S("nc",  fontSize=7,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=9)
-    green_val = S("gv",  fontSize=7,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
-    bold_cell = S("bc",  fontSize=7,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=9)
+    nc_style  = S("nc",  fontSize=6,  textColor=colors.HexColor("#dc2626"), alignment=TA_CENTER, leading=8)
+    green_val = S("gv",  fontSize=6,  textColor=GREEN_TEXT, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+    bold_cell = S("bc",  fontSize=6,  textColor=CHARCOAL, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     month_lbl = S("ml",  fontSize=6,  textColor=DARK_GRAY, fontName="Helvetica-Bold", leading=8)
     ph_hdr    = S("ph",  fontSize=6,  textColor=WHITE, fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
     warn_s    = S("ws",  fontSize=6,  textColor=WARN_TEXT, leading=8)
 
-    def tier_badge(tier):
+    def tier_badge(tier, copay=None):
+        # If copay is $0 regardless of tier number, treat it as preferred (green)
+        is_free = copay is not None and copay == 0.0
         configs = {
-            1: ("#166534", "Tier 1"),
-            2: ("#1e40af", "Tier 2"),
-            3: ("#854d0e", "Tier 3"),
-            4: ("#991b1b", "Tier 4"),
+            1: ("#166534", "#dcfce7", "Tier 1"),   # green — preferred generic
+            2: ("#1e40af", "#dbeafe", "Tier 2"),   # blue — generic
+            3: ("#854d0e", "#fef9c3", "Tier 3"),   # amber — preferred brand
+            4: ("#991b1b", "#fee2e2", "Tier 4"),   # red — non-preferred brand
+            5: ("#6b21a8", "#f3e8ff", "Tier 5"),   # purple — specialty
+            6: ("#166534", "#dcfce7", "Tier 6"),   # green by default (usually $0 preferred)
         }
-        color, label = configs.get(tier, ("#334155", f"Tier {tier}"))
-        return Paragraph(f'<font color="{color}">{label}</font>',
-                         S(f"t{tier}", fontSize=7, fontName="Helvetica-Bold",
-                           alignment=TA_CENTER, textColor=colors.HexColor(color), leading=8))
+        if is_free and tier not in (1, 6):
+            # Override to green if $0 copay on any tier
+            text_color, bg_color, label = "#166534", "#dcfce7", f"Tier {tier}"
+        else:
+            text_color, bg_color, label = configs.get(tier, ("#334155", "#f1f5f9", f"Tier {tier}"))
+        return Paragraph(f'<font color="{text_color}">{label}</font>',
+                         S(f"t{tier}", fontSize=6, fontName="Helvetica-Bold",
+                           alignment=TA_CENTER, textColor=colors.HexColor(text_color), leading=8))
 
-    def tier_bg(tier):
-        return {1: GREEN_BG, 2: BLUE_BG, 3: AMBER_BG, 4: RED_BG}.get(tier, WHITE)
+    def tier_bg(tier, copay=None):
+        is_free = copay is not None and copay == 0.0
+        if is_free:
+            return GREEN_BG
+        return {1: GREEN_BG, 2: BLUE_BG, 3: AMBER_BG, 4: RED_BG,
+                5: colors.HexColor("#f3e8ff"), 6: GREEN_BG}.get(tier, WHITE)
 
     def best_plan(plans):
         def score(c):
@@ -1351,7 +1944,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=6*mm, leftMargin=6*mm,
-                            topMargin=2*mm, bottomMargin=2*mm)
+                            topMargin=3*mm, bottomMargin=3*mm)
     elements = []
 
     # Header
@@ -1362,31 +1955,16 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
                     [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
                     [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=7))]]
-
-    left_t = Table(header_left, colWidths=[200*mm], rowHeights=[14, 11])
-    left_t.setStyle(TableStyle([
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-    ]))
-    right_t = Table(header_right, colWidths=[80*mm])
-    right_t.setStyle(TableStyle([
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-    ]))
-    tl = Table([[left_t, right_t]], colWidths=[200*mm, 80*mm])
+    tl = Table([[Table(header_left, colWidths=[200*mm]),
+                 Table(header_right, colWidths=[80*mm])]],
+               colWidths=[200*mm, 80*mm])
     tl.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING", (0,0), (-1,-1), 0),
         ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     elements.append(tl)
-    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.5*mm))
+    elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.3*mm))
 
     # Warnings banner
     if warnings:
@@ -1445,7 +2023,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 if split > 0:
                     name = name[:split] + "\n" + name[split+1:]
             star = " ★" if c == best else ""
-            return Paragraph(f"{c}{star}<br/><font size='4'>{name}</font>", col_hdr)
+            return Paragraph(f"{c}{star}<br/><font size='5'>{name}</font>", col_hdr)
 
         rows = [[Paragraph(section_label, col_hdr)] + [carrier_header(c) for c in carriers]]
         for label, fn, is_total in [
@@ -1490,7 +2068,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
     if ma_plans:
         elements.append(Paragraph("SECTION 1 — MEDICARE ADVANTAGE PLAN OVERVIEW", sec_title))
-        elements.append(Spacer(1, 0.15*mm))
+        elements.append(Spacer(1, 0.1*mm))
         t, ma_best = make_plan_table(ma_plans, "Plan Feature")
         elements.append(t)
         elements.append(Spacer(1, 0.15*mm))
@@ -1521,7 +2099,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     row.append(Paragraph("Not Covered", nc_style))
                 else:
                     tier = pd.get("tier")
-                    row.append(tier_badge(tier) if tier else Paragraph("—", cell))
+                    copay = pd.get("steady_state_copay")
+                    row.append(tier_badge(tier, copay) if tier else Paragraph("—", cell))
             rows.append(row)
         t = Table(rows, colWidths=[label_w] + [col_w]*len(carriers))
         ts = [
@@ -1549,6 +2128,26 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts))
         elements.append(t)
+
+        # Tier legend
+        legend_s = S("leg", fontSize=4.5, textColor=colors.HexColor("#64748b"), leading=6)
+        legend_items = [
+            ('<font color="#166534">■</font> Tier 1 Preferred Generic ($0–low)',
+             '<font color="#1e40af">■</font> Tier 2 Generic',
+             '<font color="#854d0e">■</font> Tier 3 Preferred Brand',
+             '<font color="#991b1b">■</font> Tier 4 Non-Preferred Brand',
+             '<font color="#6b21a8">■</font> Tier 5 Specialty',
+             '<font color="#166534">■</font> Tier 6 $0 Preferred'),
+        ]
+        legend_row = Table([[Paragraph(item, legend_s) for item in legend_items[0]]],
+                           colWidths=[47*mm]*6)
+        legend_row.setStyle(TableStyle([
+            ("LEFTPADDING", (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+        ]))
+        elements.append(legend_row)
         elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
@@ -1562,6 +2161,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Paragraph(
             "Nearest in-network pharmacies to " + location_label + "  ·  Costs include deductible phase where applicable",
             S("note", fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)))
+        elements.append(Paragraph(
+            "Costs shown reflect CMS negotiated rates including pharmacy dispensing fees. Prices may vary by pharmacy.",
+            S("disc", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)))
         elements.append(Spacer(1, 0.1*mm))
 
         def get_plan_pharmacy_summary(carrier):
@@ -1571,47 +2173,54 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 for pc in pc_list:
                     name = pc["name"]
                     dist = pc.get("distance_miles", 99)
+                    dist_approx = pc.get("dist_approximate", False)
+                    preferred = pc.get("preferred", True)
                     annual = pc.get("annual_total", 0) or 0
                     if name not in pharm_totals:
-                        pharm_totals[name] = {"annual": 0, "distance": dist, "monthly": {}}
+                        pharm_totals[name] = {"annual": 0, "distance": dist, "dist_approximate": dist_approx, "preferred": preferred, "monthly": {}}
                     pharm_totals[name]["annual"] += annual
                     for m in pc.get("monthly_costs", []):
                         mn = m["month"]
                         pharm_totals[name]["monthly"][mn] = pharm_totals[name]["monthly"].get(mn, 0) + (m["cost"] or 0)
             if not pharm_totals:
                 return None
-            min_cost = min(v["annual"] for v in pharm_totals.values())
-            cheapest = sorted(
-                [{"name": k, "distance": v["distance"], "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": False}
-                 for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) <= 1.0],
+
+            # All pharmacies sorted by distance, each with their own price
+            all_pharmacies = sorted(
+                [{"name": k, "distance": v["distance"], "dist_approximate": v.get("dist_approximate", False),
+                  "preferred": v.get("preferred", True), "annual": v["annual"], "monthly": v["monthly"]}
+                 for k, v in pharm_totals.items()],
                 key=lambda x: x["distance"]
             )
-            if len(cheapest) == 1:
-                others = sorted(
-                    [{"name": k, "distance": v["distance"], "annual": v["annual"], "monthly": v["monthly"], "is_runner_up": True, "cost_diff": round(v["annual"] - min_cost, 2)}
-                     for k, v in pharm_totals.items() if abs(v["annual"] - min_cost) > 1.0],
-                    key=lambda x: x["annual"]
-                )
-                if others:
-                    cheapest.append(others[0])
+
+            min_cost = min(v["annual"] for v in pharm_totals.values())
+            cheapest_name = min(pharm_totals, key=lambda k: pharm_totals[k]["annual"])
+
             mail_annual = sum(
                 (drug.get("plans", {}).get(carrier, {}).get("mail_order_costs", {}).get("annual_total", 0) or 0)
                 for drug in drug_detail
             )
-            monthly = cheapest[0]["monthly"] if cheapest else {}
-            costs_by_month = [(mn, monthly.get(mn, 0)) for mn in months_remaining] if months_remaining else []
+
+            # Use cheapest pharmacy for transition display
+            cheapest_monthly = pharm_totals[cheapest_name]["monthly"]
+            from datetime import datetime as _dt2
+            costs_by_month = [(mn, cheapest_monthly.get(mn, 0)) for mn in months_remaining] if months_remaining else []
             transitions = []
             prev_cost = None
-            for mn, cost in costs_by_month:
+            for mn_name, cost in costs_by_month:
                 if cost != prev_cost:
-                    transitions.append((mn[:3], cost))
+                    transitions.append((mn_name[:3], cost))
                     prev_cost = cost
+
+            prices_differ = len(set(round(v["annual"]) for v in pharm_totals.values())) > 1
+
             return {
                 "min_annual": min_cost,
-                "cheapest": cheapest,
+                "cheapest": all_pharmacies,
+                "cheapest_name": cheapest_name,
                 "mail_annual": mail_annual,
                 "transitions": transitions,
-                "all_same": len(transitions) <= 1
+                "all_same": not prices_differ
             }
 
         hdr_s  = S("sh",  fontSize=6, textColor=WHITE, fontName="Helvetica-Bold", leading=8, alignment=TA_LEFT)
@@ -1661,14 +2270,29 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 continue
 
             pharm_lines = []
-            for p in summary["cheapest"][:3]:
-                name = p["name"].split("#")[0].strip()[:20]
-                dist = str(p["distance"]) + " mi"
-                if p.get("is_runner_up"):
-                    diff = p.get("cost_diff", 0)
-                    pharm_lines.append(Paragraph(name + "  (" + dist + ")  +$" + "{:.0f}".format(diff) + "/yr", runner_s))
+            prices_differ = not summary["all_same"]
+            cheapest_name = summary.get("cheapest_name", "")
+            for p in summary["cheapest"][:4]:
+                name = p["name"].split("#")[0].strip()[:22]
+                dist_prefix = "~" if p.get("dist_approximate") else ""
+                dist = dist_prefix + str(p["distance"]) + " mi"
+                pref_label = "" if p.get("preferred", True) else " (non-pref)"
+                # Show steady-state monthly cost (last month = post-deductible) per pharmacy
+                if prices_differ:
+                    pharm_monthly_dict = p.get("monthly", {})
+                    # Steady state = last month in the period (post-deductible)
+                    if pharm_monthly_dict and months_remaining:
+                        from datetime import datetime as _dt3
+                        last_month = months_remaining[-1]
+                        steady = pharm_monthly_dict.get(last_month, 0)
+                    else:
+                        steady = p.get("annual", 0) / len(months_remaining) if months_remaining else 0
+                    price_str = "  $" + "{:.2f}".format(steady) + "/mo"
+                    is_cheapest = p["name"] == cheapest_name
+                    style = pharm_s if is_cheapest else runner_s
+                    pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")" + price_str, style))
                 else:
-                    pharm_lines.append(Paragraph(name + "  (" + dist + ")", pharm_s))
+                    pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")", pharm_s))
             pharm_cell = Table([[p] for p in pharm_lines], colWidths=[pharm_col_w - 3*mm], style=inner_ts)
 
             if summary["all_same"]:
@@ -1683,7 +2307,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                         t_parts.append(mn + " $" + "{:.2f}".format(cost) + " steady")
                 steady = summary["transitions"][-1][1] if summary["transitions"] else 0
                 cost_parts = [
-                    Paragraph("$" + "{:.2f}".format(steady) + " / mo", cost_s),
+                    Paragraph("$" + "{:.2f}".format(steady) + " / mo (cheapest)", cost_s),
                     Paragraph("  →  ".join(t_parts), trans_s)
                 ]
             cost_cell = Table([[p] for p in cost_parts], colWidths=[cost_col_w - 3*mm], style=inner_ts)
@@ -1717,19 +2341,227 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ]
         t.setStyle(TableStyle(ts_list))
         elements.append(t)
-        elements.append(Spacer(1, 0.05*mm))
+        elements.append(Spacer(1, 0.15*mm))
 
 
     if pd_plans:
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
-        elements.append(Spacer(1, 0.05*mm))
+        elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
         elements.append(t)
-        elements.append(Spacer(1, 0.05*mm))
+        elements.append(Spacer(1, 0.1*mm))
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.1*mm, spaceAfter=0.1*mm))
     elements.append(Paragraph(
         "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
+
+    # ── Page 2: Provider Network Directory ───────────────────────────────
+    if provider_results:
+        from reportlab.platypus import PageBreak
+        elements.append(PageBreak())
+
+        p2_title = S("p2t", fontSize=9, textColor=CHARCOAL, fontName="Helvetica-Bold", leading=12)
+        p2_sub   = S("p2s", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
+
+        # Build dynamic title based on which carriers are present
+        active_carriers = []
+        has_medica_col = any("medica_status" in r for r in provider_results)
+        has_bcbs_col   = any("bcbs_status"   in r for r in provider_results)
+        if has_medica_col: active_carriers.append("Medica")
+        if has_bcbs_col:   active_carriers.append("Blue Cross")
+        carrier_label = " & ".join(active_carriers) if active_carriers else "Medicare Advantage"
+
+        elements.append(Paragraph(
+            f"PROVIDER NETWORK DIRECTORY — {carrier_label.upper()} MEDICARE ADVANTAGE",
+            p2_title))
+        elements.append(Paragraph(
+            "Verified against 2026 provider directories  ·  "
+            "Confirm network status with carrier before enrollment",
+            p2_sub))
+        elements.append(HRFlowable(width="100%", thickness=2, color=TEAL,
+                                   spaceAfter=1*mm, spaceBefore=0.5*mm))
+
+        # ── Column widths — scale based on number of carrier columns ──────
+        # Fixed cols: Provider name + Specialty. Dynamic: one col per carrier.
+        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0)
+        total_w     = 239*mm   # fits landscape with margins
+        name_w      = 58*mm
+        spec_w      = 38*mm
+        carrier_w   = (total_w - name_w - spec_w) / max(num_carrier_cols, 1)
+
+        hdr_left_s = S("phl", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
+                        alignment=TA_LEFT, leading=8)
+        hdr_ctr_s  = S("phc", fontSize=6, textColor=WHITE, fontName="Helvetica-Bold",
+                        alignment=TA_CENTER, leading=8)
+
+        # Build header row
+        hdr_row = [
+            Paragraph("Provider",  hdr_left_s),
+            Paragraph("Specialty", hdr_left_s),
+        ]
+        col_widths = [name_w, spec_w]
+        if has_medica_col:
+            hdr_row.append(Paragraph("Medica", hdr_ctr_s))
+            col_widths.append(carrier_w)
+        if has_bcbs_col:
+            hdr_row.append(Paragraph("Blue Cross", hdr_ctr_s))
+            col_widths.append(carrier_w)
+
+        prov_rows = [hdr_row]
+
+        # ── Styles ────────────────────────────────────────────────────────
+        name_s   = S("pn2", fontSize=7, textColor=colors.black, fontName="Helvetica-Bold", leading=9)
+        raw_s    = S("pr2", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
+        sub_s    = S("ps2", fontSize=6.5, textColor=CHARCOAL, leading=8)
+        spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
+        detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8)
+        in_net_s = S("in2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
+                     alignment=TA_CENTER, leading=8)
+        not_fnd_s= S("nf2", fontSize=6, textColor=colors.HexColor("#dc2626"),
+                     fontName="Helvetica-Bold", alignment=TA_CENTER, leading=8)
+        na_s     = S("na2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
+                     alignment=TA_CENTER, leading=8)
+
+        inner_zero = TableStyle([
+            ("TOPPADDING",    (0,0), (-1,-1), 0), ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0), ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ])
+
+        prov_ts = [
+            ("BACKGROUND",    (0,0), (-1,0),  CHARCOAL),
+            ("GRID",          (0,0), (-1,-1), 0.4, MID_GRAY),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("LEFTPADDING",   (0,0), (-1,-1), 4),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 4),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
+        ]
+
+        def make_status_cell(status, detail, accepting):
+            """Build a status cell with detail line and accepting note if not accepting."""
+            if status == "In Network":
+                acc_note = ""
+                if accepting == "N":
+                    acc_note = " · Not Accepting"
+                return Paragraph(f"✓ In Network{acc_note}", in_net_s), "IN"
+            elif status == "Not Found":
+                return Paragraph("✗ Not Found", not_fnd_s), "NF"
+            else:
+                return Paragraph("—  N/A", na_s), "NA"
+
+        # Track carrier column indices for background coloring
+        medica_col_idx = 2 if has_medica_col else None
+        bcbs_col_idx   = (3 if has_medica_col else 2) if has_bcbs_col else None
+
+        for i, r in enumerate(provider_results, start=1):
+            last      = r.get("last_name", "")
+            first     = r.get("first_name", "")
+            creds     = r.get("credentials", "")
+            raw       = r.get("raw_text", "")
+            spec      = r.get("specialty", "") or ""
+
+            # Build display name — prefer DB-matched name, then clinic from detail, then raw_text
+            matched_last  = (r.get("matched_last")  or last  or "").strip()
+            matched_first = (r.get("matched_first") or first or "").strip()
+            matched_creds = (r.get("credentials")   or creds or "").strip()
+
+            if matched_last or matched_first:
+                # Individual provider name
+                full_name = (matched_first + " " + matched_last).strip()
+                if matched_creds:
+                    full_name += f", {matched_creds}"
+            else:
+                # Clinic lookup — extract clinic name from the detail string
+                # Detail format: "Clinic Name · City (+N other locations)"
+                bcbs_detail   = r.get("bcbs_detail",  "")
+                medica_detail = r.get("medica_detail", "")
+                detail_str    = bcbs_detail if r.get("bcbs_status") == "In Network" else medica_detail
+                if " · " in detail_str:
+                    full_name = detail_str.split(" · ")[0].strip()[:45]
+                else:
+                    full_name = detail_str[:45] or raw[:45]
+
+            # Extract city from whichever carrier found the provider
+            bcbs_city   = r.get("bcbs_detail",  "").split(" · ")[1].split(" (+")[0] if r.get("bcbs_status")   == "In Network" and " · " in r.get("bcbs_detail",  "") else ""
+            medica_city = r.get("medica_detail", "").split(" · ")[1].split(" (+")[0] if r.get("medica_status") == "In Network" and " · " in r.get("medica_detail", "") else ""
+            display_city = (bcbs_city or medica_city or r.get("city", "") or "").strip()
+
+            name_cell = Table([
+                [Paragraph(full_name[:45],       name_s)],
+                [Paragraph(display_city[:35],    sub_s)],
+            ], colWidths=[name_w - 4*mm], style=inner_zero)
+
+            row_cells = [
+                name_cell,
+                Paragraph(spec[:35] if spec else "—", spec_s2),
+            ]
+
+            if has_medica_col:
+                m_status   = r.get("medica_status", "")
+                m_detail   = r.get("medica_detail", "")
+                m_acc      = r.get("medica_accepting", "")
+                m_cell, m_type = make_status_cell(m_status, m_detail, m_acc)
+
+                # Add detail line below status
+                detail_cell = Table([
+                    [m_cell],
+                    [Paragraph(m_detail[:65] if m_detail and m_type == "IN" else "",
+                               detail_s)],
+                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                row_cells.append(detail_cell)
+
+                if m_type == "IN":
+                    prov_ts.append(("BACKGROUND", (medica_col_idx, i),
+                                    (medica_col_idx, i), GREEN_BG))
+                elif m_type == "NF":
+                    prov_ts.append(("BACKGROUND", (medica_col_idx, i),
+                                    (medica_col_idx, i), RED_BG))
+
+            if has_bcbs_col:
+                b_status   = r.get("bcbs_status", "")
+                b_detail   = r.get("bcbs_detail", "")
+                b_acc      = r.get("bcbs_accepting", "")
+                b_cell, b_type = make_status_cell(b_status, b_detail, b_acc)
+
+                detail_cell = Table([
+                    [b_cell],
+                    [Paragraph(b_detail[:65] if b_detail and b_type == "IN" else "",
+                               detail_s)],
+                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                row_cells.append(detail_cell)
+
+                if b_type == "IN":
+                    prov_ts.append(("BACKGROUND", (bcbs_col_idx, i),
+                                    (bcbs_col_idx, i), GREEN_BG))
+                elif b_type == "NF":
+                    prov_ts.append(("BACKGROUND", (bcbs_col_idx, i),
+                                    (bcbs_col_idx, i), RED_BG))
+
+            prov_rows.append(row_cells)
+
+        pt = Table(prov_rows, colWidths=col_widths)
+        pt.setStyle(TableStyle(prov_ts))
+        elements.append(pt)
+        elements.append(Spacer(1, 1*mm))
+
+        disc_s = S("d2", fontSize=5, textColor=colors.HexColor("#94a3b8"), leading=7)
+        carrier_notes = []
+        if has_medica_col:
+            carrier_notes.append("Medica: 1-800-952-3455 or medica.com")
+        if has_bcbs_col:
+            carrier_notes.append("Blue Cross: 1-800-711-9865 or bluecrossmn.com")
+        elements.append(Paragraph(
+            "⚠  Network status reflects 2026 provider directories. "
+            "Networks change throughout the year — verify directly with carrier before enrollment.  "
+            + "  ·  ".join(carrier_notes),
+            disc_s))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY,
+                                   spaceBefore=0.5*mm, spaceAfter=0.1*mm))
+        elements.append(Paragraph(
+            f"Internal use only · Agent reference · {carrier_label} 2026 Provider Directories",
+            S("fp2", fontSize=6, textColor=colors.HexColor("#94a3b8"),
+              alignment=TA_CENTER, leading=8)))
 
     doc.build(elements)
     buffer.seek(0)
@@ -1874,6 +2706,12 @@ def process_soa():
     client_state = data.get("client_state", "MN")
     confidence = data.get("confidence")
     custom_plans_str = data.get("custom_plans", "")
+    providers_raw = data.get("providers", [])
+    if isinstance(providers_raw, str):
+        try:
+            providers_raw = json.loads(providers_raw)
+        except Exception:
+            providers_raw = []
     try:
         confidence = float(confidence) if confidence else None
     except Exception:
@@ -1896,6 +2734,72 @@ def process_soa():
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
+    # Detect which carriers appear in the plan results for this client
+    # plan_summaries is keyed by carrier friendly name e.g. "Blue Cross Core", "Medica Advantage"
+    plan_carrier_keys = [k.lower() for k in result.get("plan_summaries", {}).keys()]
+    show_medica = any("medica" in k for k in plan_carrier_keys)
+    show_bcbs   = any("blue cross" in k or "freedom blue" in k for k in plan_carrier_keys)
+
+    # Run provider lookups only for carriers present in plan results
+    provider_results_medica = []
+    provider_results_bcbs   = []
+
+    if providers_raw:
+        if show_medica and os.path.exists(PROVIDERS_DB_PATH):
+            try:
+                provider_results_medica = lookup_providers(providers_raw, zip_code)
+            except Exception:
+                provider_results_medica = []
+        if show_bcbs and os.path.exists(BCBS_DB_PATH):
+            try:
+                provider_results_bcbs = lookup_providers_bcbs(providers_raw, zip_code)
+            except Exception:
+                provider_results_bcbs = []
+
+    # Build merged provider results list for page 2
+    # Each entry has status for each active carrier
+    provider_results = []
+    if providers_raw and (show_medica or show_bcbs):
+        for i, p in enumerate(providers_raw):
+            entry = {
+                "raw_text":  p.get("raw_text", ""),
+                "last_name":  p.get("last_name", ""),
+                "first_name": p.get("first_name", ""),
+                "specialty":  p.get("specialty", ""),
+                "city":       p.get("city", ""),
+            }
+            # Detect dental providers — Medica has no dental benefit
+            spec_lower = (p.get("specialty") or "").lower()
+            is_dental  = any(w in spec_lower for w in ("dent", "orthodont", "periodont",
+                                                        "endodont", "prosthodont", "oral surgery"))
+            if show_medica:
+                if is_dental:
+                    entry["medica_status"]    = "N/A"
+                    entry["medica_detail"]    = "No dental benefit"
+                    entry["medica_accepting"] = ""
+                else:
+                    m = provider_results_medica[i] if i < len(provider_results_medica) else {}
+                    entry["medica_status"]    = m.get("medica_status", "Not Found")
+                    entry["medica_detail"]    = m.get("medica_detail", "")
+                    entry["medica_accepting"] = m.get("accepting", "")
+                    # Store matched name from Medica if found
+                    if m.get("medica_status") == "In Network":
+                        entry["matched_last"]  = m.get("last_name", "")
+                        entry["matched_first"] = m.get("first_name", "")
+                        entry["credentials"]   = m.get("credentials", "")
+            if show_bcbs:
+                b = provider_results_bcbs[i] if i < len(provider_results_bcbs) else {}
+                entry["bcbs_status"]        = b.get("bcbs_status", "Not Found")
+                entry["bcbs_detail"]        = b.get("bcbs_detail", "")
+                entry["bcbs_accepting"]     = b.get("accepting", "")
+                # BCBS match overrides Medica for name (more likely to be right for dental)
+                if b.get("bcbs_status") == "In Network":
+                    entry["matched_last"]  = b.get("last_name", "")
+                    entry["matched_first"] = b.get("first_name", "")
+                    if not entry.get("credentials"):
+                        entry["credentials"] = b.get("credentials", "")
+            provider_results.append(entry)
+
     try:
         pdf_bytes_out = build_pdf(
             client_name, dob, zip_code, soa_date,
@@ -1905,7 +2809,8 @@ def process_soa():
             confidence=confidence,
             warnings=result.get("warnings", []),
             client_address=client_address,
-            client_city=client_city
+            client_city=client_city,
+            provider_results=provider_results
         )
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
