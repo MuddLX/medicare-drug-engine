@@ -943,11 +943,12 @@ def lookup_providers_bcbs(providers_list, zip_code):
             if narrowed:
                 rows = narrowed
 
-        # Narrow by city (only if first name didn't already narrow to 1)
+        # Narrow by city — reorder so city match is first, keep others for count
         if len(rows) > 1 and city:
-            city_narrowed = [r for r in rows if r[4] and city.lower() in r[4].lower()]
-            if city_narrowed:
-                rows = city_narrowed
+            city_match = [r for r in rows if r[4] and city.lower() in r[4].lower()]
+            city_other = [r for r in rows if not (r[4] and city.lower() in r[4].lower())]
+            if city_match:
+                rows = city_match + city_other
 
         # If Strategy 1 returned results from the wrong zip but first-name narrowing
         # found nothing, try expanding to state-wide before giving up
@@ -970,11 +971,12 @@ def lookup_providers_bcbs(providers_list, zip_code):
                       first_initial + "%")).fetchall()
                 if expanded:
                     rows = expanded
-                    # Prefer match closest to input city
+                    # Prefer match closest to input city — reorder so city match is first
                     if city:
-                        city_pref = [r for r in expanded if r[4] and city.lower() in r[4].lower()]
+                        city_pref  = [r for r in expanded if r[4] and city.lower() in r[4].lower()]
+                        city_other = [r for r in expanded if not (r[4] and city.lower() in r[4].lower())]
                         if city_pref:
-                            rows = city_pref
+                            rows = city_pref + city_other
 
         # Narrow by specialty
         if len(rows) > 1 and specialty:
