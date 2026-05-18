@@ -59,12 +59,14 @@ def download_file_from_r2(client, bucket, r2_key, local_path, label):
 
         if os.path.exists(local_path):
             local_size = os.path.getsize(local_path)
-            if local_size == remote_size:
+            local_mtime = os.path.getmtime(local_path)
+            import datetime
+            remote_dt = remote_modified.timestamp() if hasattr(remote_modified, 'timestamp') else 0
+            if local_size == remote_size and local_mtime >= remote_dt:
                 print(f"  Local {label} already up to date ({local_size / 1024 / 1024:.1f} MB). Skipping download.")
                 return
             else:
-                print(f"  Local {label} differs ({local_size / 1024 / 1024:.1f} MB local vs "
-                      f"{remote_size / 1024 / 1024:.1f} MB remote). Downloading...")
+                print(f"  Local {label} differs or outdated. Downloading {remote_size / 1024 / 1024:.1f} MB...")
         else:
             print(f"  No local {label} found. Downloading {remote_size / 1024 / 1024:.1f} MB...")
 
