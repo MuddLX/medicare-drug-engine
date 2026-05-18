@@ -2716,7 +2716,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     [m_cell],
                     [Paragraph(m_detail[:65] if m_detail and m_type == "IN" else "",
                                detail_s)],
-                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                ], colWidths=[carrier_w], style=inner_zero)
                 row_cells.append(detail_cell)
 
                 if m_type == "IN":
@@ -2736,7 +2736,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     [b_cell],
                     [Paragraph(b_detail[:65] if b_detail and b_type == "IN" else "",
                                detail_s)],
-                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                ], colWidths=[carrier_w], style=inner_zero)
                 row_cells.append(detail_cell)
 
                 if b_type == "IN":
@@ -2756,7 +2756,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     [h_cell],
                     [Paragraph(h_detail[:65] if h_detail and h_type == "IN" else "",
                                detail_s)],
-                ], colWidths=[carrier_w - 4*mm], style=inner_zero)
+                ], colWidths=[carrier_w], style=inner_zero)
                 row_cells.append(detail_cell)
 
                 if h_type == "IN":
