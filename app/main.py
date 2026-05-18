@@ -2659,11 +2659,10 @@ def process_soa():
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
     # Detect which carriers appear in the plan results for this client
-    MEDICA_CONTRACT_IDS = {"H8889", "H2450", "H6154"}
-    BCBS_CONTRACT_IDS   = {"H5959"}
-    plan_contract_ids   = {v.get("contract_id", "") for v in result.get("plan_summaries", {}).values() if isinstance(v, dict)}
-    show_medica = bool(plan_contract_ids & MEDICA_CONTRACT_IDS)
-    show_bcbs   = bool(plan_contract_ids & BCBS_CONTRACT_IDS)
+    # plan_summaries is keyed by carrier friendly name e.g. "Blue Cross Core", "Medica Advantage"
+    plan_carrier_keys = [k.lower() for k in result.get("plan_summaries", {}).keys()]
+    show_medica = any("medica" in k for k in plan_carrier_keys)
+    show_bcbs   = any("blue cross" in k or "freedom blue" in k for k in plan_carrier_keys)
 
     # Run provider lookups only for carriers present in plan results
     provider_results_medica = []
