@@ -647,6 +647,97 @@ def lookup_providers(providers_list, zip_code):
             if city_narrowed:
                 rows = city_narrowed
 
+        # Narrow by specialty if still multiple
+        # Maps fuzzy SOA terms to formal database specialty values
+        SPECIALTY_MAP = {
+            # Eyes / Vision
+            "eye":          ["OPHTHALMOLOGY", "OPTOMETRY"],
+            "vision":       ["OPHTHALMOLOGY", "OPTOMETRY"],
+            "optom":        ["OPTOMETRY"],
+            "ophthal":      ["OPHTHALMOLOGY"],
+            # Heart / Cardiology
+            "cardio":       ["CARDIOLOGY"],
+            "heart":        ["CARDIOLOGY"],
+            # Primary Care
+            "primary":      ["FAMILY PRACTICE", "INTERNAL MEDICINE", "GENERAL PRACTICE"],
+            "family":       ["FAMILY PRACTICE", "GENERAL PRACTICE"],
+            "general":      ["GENERAL PRACTICE", "FAMILY PRACTICE"],
+            "internal":     ["INTERNAL MEDICINE"],
+            # Bones / Joints
+            "ortho":        ["ORTHOPEDICS", "ORTHOPEDIC SURGERY"],
+            "bone":         ["ORTHOPEDICS"],
+            "joint":        ["ORTHOPEDICS"],
+            # Skin
+            "derm":         ["DERMATOLOGY"],
+            "skin":         ["DERMATOLOGY"],
+            # Neuro
+            "neuro":        ["NEUROLOGY"],
+            "brain":        ["NEUROLOGY"],
+            # Mental Health
+            "psych":        ["PSYCHIATRY", "PSYCHOLOGY"],
+            "mental":       ["PSYCHIATRY", "PSYCHOLOGY", "BEHAVIORAL HEALTH"],
+            "behav":        ["BEHAVIORAL HEALTH"],
+            # Cancer
+            "oncol":        ["ONCOLOGY", "MEDICAL ONCOLOGY", "HEMATOLOGY ONCOLOGY"],
+            "cancer":       ["ONCOLOGY", "MEDICAL ONCOLOGY"],
+            # Kidneys
+            "nephro":       ["NEPHROLOGY"],
+            "kidney":       ["NEPHROLOGY"],
+            # Stomach / GI
+            "gastro":       ["GASTROENTEROLOGY"],
+            "stomach":      ["GASTROENTEROLOGY"],
+            "gi ":          ["GASTROENTEROLOGY"],
+            # Lungs
+            "pulmo":        ["PULMONOLOGY"],
+            "lung":         ["PULMONOLOGY"],
+            # Endocrine / Diabetes
+            "endo":         ["ENDOCRINOLOGY"],
+            "diabetes":     ["ENDOCRINOLOGY"],
+            "thyroid":      ["ENDOCRINOLOGY"],
+            # Urology
+            "urol":         ["UROLOGY"],
+            "bladder":      ["UROLOGY"],
+            # Dentist
+            "dent":         ["DENTISTRY"],
+            "dental":       ["DENTISTRY"],
+            # ENT
+            "ent":          ["EAR NOSE & THROAT", "OTOLARYNGOLOGY"],
+            "ear":          ["EAR NOSE & THROAT", "OTOLARYNGOLOGY"],
+            "throat":       ["EAR NOSE & THROAT", "OTOLARYNGOLOGY"],
+            # Physical Therapy
+            "physical th":  ["PHYSICAL THERAPY"],
+            "pt ":          ["PHYSICAL THERAPY"],
+            # Rheumatology
+            "rheuma":       ["RHEUMATOLOGY"],
+            "arthrit":      ["RHEUMATOLOGY"],
+            # Podiatry / Feet
+            "podia":        ["PODIATRY"],
+            "foot":         ["PODIATRY"],
+            "feet":         ["PODIATRY"],
+            # Allergy
+            "allerg":       ["ALLERGY AND IMMUNOLOGY"],
+            # Radiology
+            "radiol":       ["RADIOLOGY"],
+            # Sleep
+            "sleep":        ["SLEEP MEDICINE"],
+            # Pain
+            "pain":         ["PAIN MANAGEMENT"],
+        }
+
+        if len(rows) > 1 and specialty:
+            spec_lower = specialty.lower()
+            # Find which db specialties the SOA term maps to
+            db_specs = []
+            for keyword, mapped in SPECIALTY_MAP.items():
+                if keyword in spec_lower:
+                    db_specs.extend(mapped)
+            if db_specs:
+                db_specs_upper = [s.upper() for s in db_specs]
+                spec_narrowed = [r for r in rows
+                                 if r[3] and r[3].upper() in db_specs_upper]
+                if spec_narrowed:
+                    rows = spec_narrowed
+
         if not rows:
             results.append({
                 "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
