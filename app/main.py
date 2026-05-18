@@ -2627,6 +2627,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         inner_zero = TableStyle([
             ("TOPPADDING",    (0,0), (-1,-1), 0), ("BOTTOMPADDING", (0,0), (-1,-1), 0),
             ("LEFTPADDING",   (0,0), (-1,-1), 0), ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
         ])
 
         prov_ts = [
