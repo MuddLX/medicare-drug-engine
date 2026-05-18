@@ -1082,6 +1082,12 @@ def lookup_providers_hp(providers_list, zip_code):
         raw_text    = (p.get("raw_text")    or "").strip()
         specialty   = (p.get("specialty")   or "").strip()
 
+        # Detect dental — search only dental source for dental providers
+        spec_lower = specialty.lower()
+        is_dental  = any(w in spec_lower for w in ("dent", "orthodont", "periodont",
+                                                    "endodont", "prosthodont", "oral surgery"))
+        source_filter = "dental" if is_dental else "medical"
+
         if not last_name and not clinic_name:
             results.append({
                 "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
@@ -1092,50 +1098,65 @@ def lookup_providers_hp(providers_list, zip_code):
 
         rows = []
 
-        # Strategy 1: last name + zip code
+        # Strategy 1: last name + zip code (source-filtered)
         if last_name:
             rows = conn.execute("""
                 SELECT last_name, first_name, credentials, specialty,
                        city, clinic_name, zip, accepting, source
                 FROM providers
-                WHERE last_name LIKE ? AND zip = ?
+                WHERE last_name LIKE ? AND zip = ? AND source = ?
                 ORDER BY city
                 LIMIT 10
-            """, (last_name, zip_code)).fetchall()
+            """, (last_name, zip_code, source_filter)).fetchall()
 
-        # Strategy 2: last name + city
+        # Strategy 2: last name + city (source-filtered)
         if not rows and last_name and city:
             rows = conn.execute("""
                 SELECT last_name, first_name, credentials, specialty,
                        city, clinic_name, zip, accepting, source
                 FROM providers
-                WHERE last_name LIKE ? AND city LIKE ?
+                WHERE last_name LIKE ? AND city LIKE ? AND source = ?
                 ORDER BY city
                 LIMIT 10
-            """, (last_name, "%" + city + "%")).fetchall()
+            """, (last_name, "%" + city + "%", source_filter)).fetchall()
 
-        # Strategy 3: last name state-wide (higher limit for first-name narrowing)
+        # Strategy 3: last name state-wide (source-filtered, higher limit for first-name narrowing)
         if not rows and last_name:
             rows = conn.execute("""
                 SELECT last_name, first_name, credentials, specialty,
                        city, clinic_name, zip, accepting, source
                 FROM providers
-                WHERE last_name LIKE ?
+                WHERE last_name LIKE ? AND source = ?
                 ORDER BY city
                 LIMIT 50
-            """, (last_name,)).fetchall()
+            """, (last_name, source_filter)).fetchall()
 
-        # Strategy 4: clinic name search
+        # Strategy 4: clinic name search against HP's specific location naming
+        # HP stores clinics as e.g. "HealthPartners Riverway Clinic Anoka" not "HealthPartners Medical Group"
+        # So we search for any word from the clinic name that's distinctive (>5 chars, not generic)
         if not rows and clinic_name:
-            clinic_search = "%" + clinic_name[:25] + "%"
-            rows = conn.execute("""
-                SELECT last_name, first_name, credentials, specialty,
-                       city, clinic_name, zip, accepting, source
-                FROM providers
-                WHERE clinic_name LIKE ?
-                ORDER BY city
-                LIMIT 10
-            """, (clinic_search,)).fetchall()
+            # Extract the most distinctive word from the clinic name
+            skip_words = {"medical", "group", "clinic", "center", "care", "health",
+                          "family", "associates", "services", "dental", "the", "and", "of"}
+            words = [w for w in clinic_name.lower().split()
+                     if len(w) > 5 and w not in skip_words]
+            for word in words[:3]:  # try up to 3 distinctive words
+                clinic_rows = conn.execute("""
+                    SELECT last_name, first_name, credentials, specialty,
+                           city, clinic_name, zip, accepting, source
+                    FROM providers
+                    WHERE clinic_name LIKE ? AND source = ?
+                    ORDER BY city
+                    LIMIT 10
+                """, ("%" + word + "%", source_filter)).fetchall()
+                if clinic_rows:
+                    # Prefer rows where city also matches
+                    if city:
+                        city_match = [r for r in clinic_rows if r[4] and city.lower() in r[4].lower()]
+                        rows = city_match if city_match else clinic_rows
+                    else:
+                        rows = clinic_rows
+                    break
 
         # Narrow by first name
         if len(rows) > 1 and first_name:
@@ -1157,12 +1178,12 @@ def lookup_providers_hp(providers_list, zip_code):
                     SELECT last_name, first_name, credentials, specialty,
                            city, clinic_name, zip, accepting, source
                     FROM providers
-                    WHERE last_name LIKE ? AND (
+                    WHERE last_name LIKE ? AND source = ? AND (
                         first_name LIKE ? OR first_name LIKE ?
                     )
                     ORDER BY city
                     LIMIT 10
-                """, (last_name, first_name.upper() + "%",
+                """, (last_name, source_filter, first_name.upper() + "%",
                       first_initial + "%")).fetchall()
                 if expanded:
                     rows = expanded
@@ -1193,10 +1214,10 @@ def lookup_providers_hp(providers_list, zip_code):
                     SELECT last_name, first_name, credentials, specialty,
                            city, clinic_name, zip, accepting, source
                     FROM providers
-                    WHERE last_name LIKE ? AND city LIKE ?
+                    WHERE last_name LIKE ? AND city LIKE ? AND source = ?
                     ORDER BY city
                     LIMIT 1
-                """, (last_name, "%" + city + "%")).fetchone()
+                """, (last_name, "%" + city + "%", source_filter)).fetchone()
                 if city_direct:
                     best_row = city_direct
                 else:
