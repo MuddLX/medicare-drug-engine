@@ -2358,7 +2358,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
         # ── Styles ────────────────────────────────────────────────────────
         name_s   = S("pn2", fontSize=8, textColor=colors.black, fontName="Helvetica-Bold", leading=10)
-        raw_s    = S("pr2", fontSize=6, textColor=colors.HexColor("#94a3b8"), leading=7)
+        raw_s    = S("pr2", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
         spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
         detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8)
         in_net_s = S("in2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
@@ -2407,13 +2407,26 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             raw       = r.get("raw_text", "")
             spec      = r.get("specialty", "") or ""
 
-            full_name = (first + " " + last).strip() if first else last
-            if creds:
-                full_name += f", {creds}"
+            # Build display name — use DB-matched name if available, else input name
+            matched_last  = (r.get("matched_last")  or last  or "").strip()
+            matched_first = (r.get("matched_first") or first or "").strip()
+            matched_creds = (r.get("credentials")   or creds or "").strip()
+
+            if matched_last or matched_first:
+                full_name = (matched_first + " " + matched_last).strip()
+                if matched_creds:
+                    full_name += f", {matched_creds}"
+            else:
+                full_name = raw[:40]
+
+            # Extract city from whichever carrier found the provider
+            bcbs_city   = r.get("bcbs_detail",  "").split(" · ")[1].split(" (+")[0] if r.get("bcbs_status")   == "In Network" and " · " in r.get("bcbs_detail",  "") else ""
+            medica_city = r.get("medica_detail", "").split(" · ")[1].split(" (+")[0] if r.get("medica_status") == "In Network" and " · " in r.get("medica_detail", "") else ""
+            display_city = (bcbs_city or medica_city or city or "").strip()
 
             name_cell = Table([
-                [Paragraph(full_name[:42], name_s)],
-                [Paragraph(raw[:55],       raw_s)],
+                [Paragraph(full_name[:45],       name_s)],
+                [Paragraph(display_city[:35],    raw_s)],
             ], colWidths=[name_w - 4*mm], style=inner_zero)
 
             row_cells = [
@@ -2698,24 +2711,30 @@ def process_soa():
                                                         "endodont", "prosthodont", "oral surgery"))
             if show_medica:
                 if is_dental:
-                    # Medica has no dental coverage
                     entry["medica_status"]    = "N/A"
                     entry["medica_detail"]    = "No dental benefit"
                     entry["medica_accepting"] = ""
-                    entry["credentials"]      = ""
                 else:
                     m = provider_results_medica[i] if i < len(provider_results_medica) else {}
                     entry["medica_status"]    = m.get("medica_status", "Not Found")
                     entry["medica_detail"]    = m.get("medica_detail", "")
                     entry["medica_accepting"] = m.get("accepting", "")
-                    entry["credentials"]      = m.get("credentials", "")
+                    # Store matched name from Medica if found
+                    if m.get("medica_status") == "In Network":
+                        entry["matched_last"]  = m.get("last_name", "")
+                        entry["matched_first"] = m.get("first_name", "")
+                        entry["credentials"]   = m.get("credentials", "")
             if show_bcbs:
                 b = provider_results_bcbs[i] if i < len(provider_results_bcbs) else {}
                 entry["bcbs_status"]        = b.get("bcbs_status", "Not Found")
                 entry["bcbs_detail"]        = b.get("bcbs_detail", "")
                 entry["bcbs_accepting"]     = b.get("accepting", "")
-                if not entry.get("credentials"):
-                    entry["credentials"]    = b.get("credentials", "")
+                # BCBS match overrides Medica for name (more likely to be right for dental)
+                if b.get("bcbs_status") == "In Network":
+                    entry["matched_last"]  = b.get("last_name", "")
+                    entry["matched_first"] = b.get("first_name", "")
+                    if not entry.get("credentials"):
+                        entry["credentials"] = b.get("credentials", "")
             provider_results.append(entry)
 
     try:
