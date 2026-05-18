@@ -2616,7 +2616,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         raw_s    = S("pr2", fontSize=6, textColor=colors.HexColor("#64748b"), leading=8)
         sub_s    = S("ps2", fontSize=6.5, textColor=CHARCOAL, leading=8)
         spec_s2  = S("ps3", fontSize=6, textColor=DARK_GRAY, leading=8)
-        detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8)
+        detail_s = S("pd2", fontSize=6, textColor=DARK_GRAY, leading=8, alignment=TA_CENTER)
         in_net_s = S("in2", fontSize=6, textColor=GREEN_TEXT, fontName="Helvetica-Bold",
                      alignment=TA_CENTER, leading=8)
         not_fnd_s= S("nf2", fontSize=6, textColor=colors.HexColor("#dc2626"),
