@@ -2801,6 +2801,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         has_bcbs_col   = any("bcbs_status"   in r for r in provider_results)
         has_hp_col     = any("hp_status"     in r for r in provider_results)
         has_humana_col = any("humana_status" in r for r in provider_results)
+        has_uhc_col    = any("uhc_status"    in r for r in provider_results)
         if has_medica_col: active_carriers.append("Medica")
         if has_bcbs_col:   active_carriers.append("Blue Cross")
         if has_hp_col:     active_carriers.append("HealthPartners")
