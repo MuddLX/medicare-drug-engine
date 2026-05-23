@@ -1,6 +1,7 @@
 """\nstartup.py — Railway startup script
 Downloads the latest medicare_mn.db, medica_providers.db, bcbs_providers.db,
-hp_providers.db, and humana_providers.db from Cloudflare R2 before the app starts.
+hp_providers.db, humana_providers.db, and uhc_providers.db from Cloudflare R2
+before the app starts.
 Runs automatically via the Railway start command:
     python startup.py && gunicorn app.main:app
 
@@ -19,6 +20,7 @@ PROVIDERS_DB_PATH = "medica_providers.db"
 BCBS_DB_PATH      = "bcbs_providers.db"
 HP_DB_PATH        = "hp_providers.db"
 HUMANA_DB_PATH    = "humana_providers.db"
+UHC_DB_PATH       = "uhc_providers.db"
 REQUIRED_ENV_VARS = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "R2_BUCKET_NAME"]
 
 
@@ -26,7 +28,7 @@ def check_env():
     missing = [v for v in REQUIRED_ENV_VARS if not os.environ.get(v)]
     if missing:
         print(f"ERROR: Missing required environment variables: {', '.join(missing)}")
-        print("Set these in Railway → Service → Variables before deploying.")
+        print("Set these in Railway -> Service -> Variables before deploying.")
         sys.exit(1)
 
 
@@ -105,12 +107,13 @@ def download_db():
     download_file_from_r2(client, bucket, "bcbs_providers.db",    BCBS_DB_PATH,      "bcbs_providers.db")
     download_file_from_r2(client, bucket, "hp_providers.db",      HP_DB_PATH,        "hp_providers.db")
     download_file_from_r2(client, bucket, "humana_providers.db",  HUMANA_DB_PATH,    "humana_providers.db")
+    download_file_from_r2(client, bucket, "uhc_providers.db",     UHC_DB_PATH,       "uhc_providers.db")
 
 
 def validate_db():
     import sqlite3
 
-    # ── Validate medicare_mn.db ───────────────────────────────────────────
+    # -- Validate medicare_mn.db -----------------------------------------------
     try:
         conn = sqlite3.connect(DB_PATH)
         tables = [r[0] for r in conn.execute(
@@ -137,7 +140,7 @@ def validate_db():
         print(f"ERROR: medicare_mn.db validation failed: {e}")
         sys.exit(1)
 
-    # ── Validate medica_providers.db ──────────────────────────────────────
+    # -- Validate medica_providers.db ------------------------------------------
     try:
         conn = sqlite3.connect(PROVIDERS_DB_PATH)
         if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
@@ -152,7 +155,7 @@ def validate_db():
     except sqlite3.Error as e:
         print(f"ERROR: medica_providers.db validation failed: {e}"); sys.exit(1)
 
-    # ── Validate bcbs_providers.db ────────────────────────────────────────
+    # -- Validate bcbs_providers.db --------------------------------------------
     try:
         conn = sqlite3.connect(BCBS_DB_PATH)
         if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
@@ -168,7 +171,7 @@ def validate_db():
     except sqlite3.Error as e:
         print(f"ERROR: bcbs_providers.db validation failed: {e}"); sys.exit(1)
 
-    # ── Validate hp_providers.db ──────────────────────────────────────────
+    # -- Validate hp_providers.db ----------------------------------------------
     try:
         conn = sqlite3.connect(HP_DB_PATH)
         if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
@@ -184,7 +187,7 @@ def validate_db():
     except sqlite3.Error as e:
         print(f"ERROR: hp_providers.db validation failed: {e}"); sys.exit(1)
 
-    # ── Validate humana_providers.db ──────────────────────────────────────
+    # -- Validate humana_providers.db ------------------------------------------
     try:
         conn = sqlite3.connect(HUMANA_DB_PATH)
         if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
@@ -199,6 +202,21 @@ def validate_db():
         print(f"  humana_providers.db validation passed: {provider_count:,} providers ({dental_count:,} dental).")
     except sqlite3.Error as e:
         print(f"ERROR: humana_providers.db validation failed: {e}"); sys.exit(1)
+
+    # -- Validate uhc_providers.db ---------------------------------------------
+    try:
+        conn = sqlite3.connect(UHC_DB_PATH)
+        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
+            print("ERROR: uhc_providers.db is missing the providers table.")
+            conn.close(); sys.exit(1)
+        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+        conn.close()
+        if provider_count < 400:
+            print(f"ERROR: uhc_providers.db has only {provider_count} providers. Expected ~600+.")
+            sys.exit(1)
+        print(f"  uhc_providers.db validation passed: {provider_count:,} providers.")
+    except sqlite3.Error as e:
+        print(f"ERROR: uhc_providers.db validation failed: {e}"); sys.exit(1)
 
 
 if __name__ == "__main__":

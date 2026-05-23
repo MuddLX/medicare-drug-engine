@@ -22,6 +22,7 @@ PROVIDERS_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "me
 BCBS_DB_PATH      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bcbs_providers.db")
 HP_DB_PATH        = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hp_providers.db")
 HUMANA_DB_PATH    = os.path.join(os.path.dirname(os.path.dirname(__file__)), "humana_providers.db")
+UHC_DB_PATH       = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uhc_providers.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
@@ -1374,6 +1375,110 @@ def lookup_providers_humana(providers_list, zip_code):
                 "humana_detail": detail,
                 "accepting": "",
             })
+    conn.close()
+    return results
+
+
+def lookup_providers_uhc(providers_list, zip_code):
+    """
+    Look up each provider against the UHC provider directory database.
+    Source: UHC public FHIR API (flex.optum.com/fhirpublic/R4), H2001 MN network.
+    604 MN providers with NPI, name, city, address.
+    Returns a list of result dicts, one per provider.
+    """
+    if not providers_list:
+        return []
+
+    results = []
+
+    try:
+        conn = sqlite3.connect(UHC_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "uhc_status": "Error",
+                "uhc_detail": "Provider database unavailable",
+            })
+        return results
+
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+
+        if not last_name and not clinic_name:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "uhc_status": "Not Found",
+                "uhc_detail": "No provider name to search",
+            })
+            continue
+
+        rows = []
+
+        # Strategy 1: last name + city
+        if last_name and city:
+            rows = conn.execute("""
+                SELECT last_name, first_name, specialty, city, address, npi
+                FROM providers
+                WHERE last_name LIKE ? AND city LIKE ?
+                ORDER BY city
+                LIMIT 10
+            """, (last_name, city)).fetchall()
+
+        # Strategy 2: last name statewide
+        if not rows and last_name:
+            rows = conn.execute("""
+                SELECT last_name, first_name, specialty, city, address, npi
+                FROM providers
+                WHERE last_name LIKE ?
+                ORDER BY city
+                LIMIT 10
+            """, (last_name,)).fetchall()
+
+        # Narrow by first name if multiple
+        if len(rows) > 1 and first_name:
+            narrowed = [r for r in rows if r[1] and (
+                r[1].upper().startswith(first_name.upper()) or
+                r[1][0].upper() == first_name[0].upper()
+            )]
+            if narrowed:
+                rows = narrowed
+
+        # City proximity check — if statewide results don't include requested city, return Not Found
+        if rows and city:
+            city_match = [r for r in rows if r[3] and city.lower() in r[3].lower()]
+            if not city_match and len(rows) > 3:
+                # Too many results from wrong cities — likely wrong person
+                rows = []
+
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "uhc_status": "Not Found",
+                "uhc_detail": "Not found in UHC directory",
+            })
+        else:
+            r = rows[0]
+            r_city = r[3] or ""
+            parts = []
+            if r_city:
+                parts.append(r_city)
+            detail = " · ".join(parts) if parts else "Found in directory"
+            results.append({
+                "raw_text": raw_text, "last_name": r[0],
+                "first_name": r[1] or first_name,
+                "specialty": r[2] or specialty,
+                "city": r_city,
+                "uhc_status": "In Network",
+                "uhc_detail": detail,
+            })
+
     conn.close()
     return results
 
@@ -3113,12 +3218,14 @@ def process_soa():
     show_bcbs   = any("blue cross" in k or "freedom blue" in k for k in plan_carrier_keys)
     show_hp     = any("healthpartners" in k or "health partners" in k for k in plan_carrier_keys)
     show_humana = any("humana" in k for k in plan_carrier_keys)
+    show_uhc    = any("uhc" in k or "aarp" in k or "united" in k for k in plan_carrier_keys)
 
     # Run provider lookups only for carriers present in plan results
     provider_results_medica = []
     provider_results_bcbs   = []
     provider_results_hp     = []
     provider_results_humana = []
+    provider_results_uhc     = []
 
     if providers_raw:
         if show_medica and os.path.exists(PROVIDERS_DB_PATH):
@@ -3141,11 +3248,16 @@ def process_soa():
                 provider_results_humana = lookup_providers_humana(providers_raw, zip_code)
             except Exception:
                 provider_results_humana = []
+        if show_uhc and os.path.exists(UHC_DB_PATH):
+            try:
+                provider_results_uhc = lookup_providers_uhc(providers_raw, zip_code)
+            except Exception:
+                provider_results_uhc = []
 
     # Build merged provider results list for page 2
     # Each entry has status for each active carrier
     provider_results = []
-    if providers_raw and (show_medica or show_bcbs or show_hp or show_humana):
+    if providers_raw and (show_medica or show_bcbs or show_hp or show_humana or show_uhc):
         for i, p in enumerate(providers_raw):
             entry = {
                 "raw_text":  p.get("raw_text", ""),
