@@ -2901,6 +2901,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         bcbs_col_idx   = (3 if has_medica_col else 2) if has_bcbs_col else None
         hp_col_idx     = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0)) if has_hp_col else None
         humana_col_idx = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0)) if has_humana_col else None
+        uhc_col_idx    = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0)) if has_uhc_col else None
 
         for i, r in enumerate(provider_results, start=1):
             last      = r.get("last_name", "")
