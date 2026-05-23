@@ -2806,7 +2806,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         if has_bcbs_col:   active_carriers.append("Blue Cross")
         if has_hp_col:     active_carriers.append("HealthPartners")
         if has_humana_col: active_carriers.append("Humana")
-        if has_uhc_col:    active_carriers.append("UHC/AARP")
+        if has_uhc_col:    active_carriers.append("UHC")
         carrier_label = " & ".join(active_carriers) if active_carriers else "Medicare Advantage"
 
         elements.append(Paragraph(
@@ -2849,6 +2849,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             col_widths.append(carrier_w)
         if has_humana_col:
             hdr_row.append(Paragraph("Humana", hdr_ctr_s))
+            col_widths.append(carrier_w)
+        if has_uhc_col:
+            hdr_row.append(Paragraph("UHC", hdr_ctr_s))
             col_widths.append(carrier_w)
 
         prov_rows = [hdr_row]
@@ -3048,7 +3051,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         if has_humana_col:
             carrier_notes.append("Humana: 1-800-457-4708 or humana.com")
         if has_uhc_col:
-            carrier_notes.append("UHC/AARP: 1-844-867-3487 or myAARPMedicare.com")
+            carrier_notes.append("UHC: 1-844-867-3487 or myAARPMedicare.com")
         elements.append(Paragraph(
             "⚠  Network status reflects 2026 provider directories. "
             "Networks change throughout the year — verify directly with carrier before enrollment.  "
