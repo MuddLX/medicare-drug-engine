@@ -166,12 +166,12 @@ def get_plans_for_zip(conn, zip_code):
         ("H3219", "008"): "Aetna Signature Fit",
         ("H3219", "012"): "Aetna Signature",
         ("H3219", "014"): "Aetna Enhanced",
-        ("H2001", "116"): "UHC AARP",
-        ("H2001", "117"): "UHC AARP",
-        ("H2001", "118"): "UHC AARP FG",
-        ("H2001", "119"): "UHC AARP FG",
-        ("H2001", "120"): "UHC AARP FG",
-        ("H2001", "123"): "UHC AARP",
+        ("H2001", "116"): "UHC",
+        ("H2001", "117"): "UHC",
+        ("H2001", "118"): "UHC FG",
+        ("H2001", "119"): "UHC FG",
+        ("H2001", "120"): "UHC FG",
+        ("H2001", "123"): "UHC",
         ("H3186", "001"): "Align ChoiceElite",
         ("H3186", "002"): "Align ChoicePlus",
         ("H8145", "006"): "Humana Gold Choice",
@@ -200,7 +200,7 @@ def get_plans_for_zip(conn, zip_code):
         "H6154": "Medica", "H8889": "Medica", "H2450": "Medica Cost",
         "H5216": "Humana", "H8145": "Humana",
         "H3219": "Aetna",
-        "H2001": "UHC AARP",
+        "H2001": "UHC",
         "H3186": "Align",
         "H9834": "Quartz",
     }
@@ -301,7 +301,7 @@ def get_plans_for_zip(conn, zip_code):
     # Part D: one plan per carrier family, pick 3 cheapest from different carriers
     PD_CARRIER_FAMILY = {
         "S5884": "Humana", "S4802": "WellCare", "S5601": "SilverScript",
-        "S5743": "MedicareBlue", "S5921": "UHC AARP", "S5660": "Cigna",
+        "S5743": "MedicareBlue", "S5921": "UHC", "S5660": "Cigna",
     }
     pd_best_per_carrier = {}
     for row in pd_rows:
@@ -406,12 +406,12 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         ("H3219","008"): "Aetna Signature Fit",
         ("H3219","012"): "Aetna Signature",
         ("H3219","014"): "Aetna Enhanced",
-        ("H2001","116"): "UHC AARP",
-        ("H2001","117"): "UHC AARP",
-        ("H2001","118"): "UHC AARP FG",
-        ("H2001","119"): "UHC AARP FG",
-        ("H2001","120"): "UHC AARP FG",
-        ("H2001","123"): "UHC AARP",
+        ("H2001","116"): "UHC",
+        ("H2001","117"): "UHC",
+        ("H2001","118"): "UHC FG",
+        ("H2001","119"): "UHC FG",
+        ("H2001","120"): "UHC FG",
+        ("H2001","123"): "UHC",
         ("H3186","001"): "Align ChoiceElite",
         ("H3186","002"): "Align ChoicePlus",
         ("H8145","006"): "Humana Gold Choice",
@@ -430,7 +430,7 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "H5959": "Blue Cross",
         "H6154": "Medica", "H8889": "Medica", "H2450": "Medica Cost",
         "H5216": "Humana", "H8145": "Humana",
-        "H3219": "Aetna", "H2001": "UHC AARP", "H3186": "Align", "H9834": "Quartz",
+        "H3219": "Aetna", "H2001": "UHC", "H3186": "Align", "H9834": "Quartz",
     }
     all_plans = conn.execute("SELECT contract_id, plan_id, plan_name, premium, deductible FROM plans").fetchall()
 
