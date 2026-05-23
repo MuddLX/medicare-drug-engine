@@ -3335,6 +3335,16 @@ def process_soa():
                     entry["matched_first"] = hu.get("first_name", "")
                     if not entry.get("credentials"):
                         entry["credentials"] = hu.get("credentials", "")
+            if show_uhc:
+                uh = provider_results_uhc[i] if i < len(provider_results_uhc) else {}
+                entry["uhc_status"]    = uh.get("uhc_status", "Not Found")
+                entry["uhc_detail"]    = uh.get("uhc_detail", "")
+                entry["uhc_accepting"] = uh.get("accepting", "")
+                if uh.get("uhc_status") == "In Network":
+                    entry["matched_last"]  = uh.get("last_name", "")
+                    entry["matched_first"] = uh.get("first_name", "")
+                    if not entry.get("credentials"):
+                        entry["credentials"] = uh.get("credentials", "")
             provider_results.append(entry)
 
     try:
