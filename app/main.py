@@ -2805,6 +2805,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         if has_bcbs_col:   active_carriers.append("Blue Cross")
         if has_hp_col:     active_carriers.append("HealthPartners")
         if has_humana_col: active_carriers.append("Humana")
+        if has_uhc_col:    active_carriers.append("UHC/AARP")
         carrier_label = " & ".join(active_carriers) if active_carriers else "Medicare Advantage"
 
         elements.append(Paragraph(
@@ -2819,7 +2820,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
         # ── Column widths — scale based on number of carrier columns ──────
         # Fixed cols: Provider name + Specialty. Dynamic: one col per carrier.
-        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0)
+        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0) + (1 if has_uhc_col else 0)
         total_w     = 239*mm   # fits landscape with margins
         name_w      = 58*mm
         spec_w      = 38*mm
@@ -3013,6 +3014,22 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     prov_ts.append(("BACKGROUND", (humana_col_idx, i),
                                     (humana_col_idx, i), RED_BG))
 
+            if has_uhc_col:
+                uh_status  = r.get("uhc_status", "")
+                uh_detail  = r.get("uhc_detail", "")
+                uh_acc     = r.get("uhc_accepting", "")
+                uh_cell, uh_type = make_status_cell(uh_status, uh_detail, uh_acc)
+                detail_text = uh_detail[:65] if uh_detail and uh_type == "IN" else ""
+                combined = Table([[uh_cell],[Paragraph(detail_text, detail_s)]], colWidths=[carrier_w - 8*mm], style=inner_zero, hAlign="CENTER")
+                row_cells.append(combined)
+
+                if uh_type == "IN":
+                    prov_ts.append(("BACKGROUND", (uhc_col_idx, i),
+                                    (uhc_col_idx, i), GREEN_BG))
+                elif uh_type == "NF":
+                    prov_ts.append(("BACKGROUND", (uhc_col_idx, i),
+                                    (uhc_col_idx, i), RED_BG))
+
             prov_rows.append(row_cells)
 
         pt = Table(prov_rows, colWidths=col_widths)
@@ -3028,6 +3045,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             carrier_notes.append("Blue Cross: 1-800-711-9865 or bluecrossmn.com")
         if has_humana_col:
             carrier_notes.append("Humana: 1-800-457-4708 or humana.com")
+        if has_uhc_col:
+            carrier_notes.append("UHC/AARP: 1-844-867-3487 or myAARPMedicare.com")
         elements.append(Paragraph(
             "⚠  Network status reflects 2026 provider directories. "
             "Networks change throughout the year — verify directly with carrier before enrollment.  "
