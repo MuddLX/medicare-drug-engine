@@ -1,7 +1,8 @@
-"""\nstartup.py — Railway startup script
+"""
+startup.py — Railway startup script
 Downloads the latest medicare_mn.db, medica_providers.db, bcbs_providers.db,
-hp_providers.db, humana_providers.db, and uhc_providers.db from Cloudflare R2
-before the app starts.
+hp_providers.db, humana_providers.db, uhc_providers.db, and aetna_providers.db
+from Cloudflare R2 before the app starts.
 Runs automatically via the Railway start command:
     python startup.py && gunicorn app.main:app
 
@@ -21,6 +22,7 @@ BCBS_DB_PATH      = "bcbs_providers.db"
 HP_DB_PATH        = "hp_providers.db"
 HUMANA_DB_PATH    = "humana_providers.db"
 UHC_DB_PATH       = "uhc_providers.db"
+AETNA_DB_PATH     = "aetna_providers.db"
 REQUIRED_ENV_VARS = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "R2_BUCKET_NAME"]
 
 
@@ -108,6 +110,7 @@ def download_db():
     download_file_from_r2(client, bucket, "hp_providers.db",      HP_DB_PATH,        "hp_providers.db")
     download_file_from_r2(client, bucket, "humana_providers.db",  HUMANA_DB_PATH,    "humana_providers.db")
     download_file_from_r2(client, bucket, "uhc_providers.db",     UHC_DB_PATH,       "uhc_providers.db")
+    download_file_from_r2(client, bucket, "aetna_providers.db",   AETNA_DB_PATH,     "aetna_providers.db")
 
 
 def validate_db():
@@ -217,6 +220,21 @@ def validate_db():
         print(f"  uhc_providers.db validation passed: {provider_count:,} providers.")
     except sqlite3.Error as e:
         print(f"ERROR: uhc_providers.db validation failed: {e}"); sys.exit(1)
+
+    # -- Validate aetna_providers.db -------------------------------------------
+    try:
+        conn = sqlite3.connect(AETNA_DB_PATH)
+        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
+            print("ERROR: aetna_providers.db is missing the providers table.")
+            conn.close(); sys.exit(1)
+        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+        conn.close()
+        if provider_count < 100:
+            print(f"ERROR: aetna_providers.db has only {provider_count} providers. Expected ~279.")
+            sys.exit(1)
+        print(f"  aetna_providers.db validation passed: {provider_count:,} providers.")
+    except sqlite3.Error as e:
+        print(f"ERROR: aetna_providers.db validation failed: {e}"); sys.exit(1)
 
 
 if __name__ == "__main__":
