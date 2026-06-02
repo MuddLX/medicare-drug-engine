@@ -23,6 +23,7 @@ BCBS_DB_PATH      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bc
 HP_DB_PATH        = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hp_providers.db")
 HUMANA_DB_PATH    = os.path.join(os.path.dirname(os.path.dirname(__file__)), "humana_providers.db")
 UHC_DB_PATH       = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uhc_providers.db")
+AETNA_DB_PATH     = os.path.join(os.path.dirname(os.path.dirname(__file__)), "aetna_providers.db")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
@@ -1482,6 +1483,119 @@ def lookup_providers_uhc(providers_list, zip_code):
     conn.close()
     return results
 
+def lookup_providers_aetna(providers_list, zip_code):
+    if not providers_list:
+        return []
+    results = []
+    try:
+        conn = sqlite3.connect(AETNA_DB_PATH)
+    except Exception:
+        for p in providers_list:
+            results.append({
+                "raw_text": p.get("raw_text", ""), "last_name": p.get("last_name", ""),
+                "first_name": p.get("first_name", ""), "specialty": p.get("specialty", ""),
+                "city": p.get("city", ""), "aetna_status": "Error",
+                "aetna_detail": "Provider database unavailable",
+            })
+        return results
+    for p in providers_list:
+        last_name   = (p.get("last_name")   or "").strip()
+        first_name  = (p.get("first_name")  or "").strip()
+        clinic_name = (p.get("clinic_name") or "").strip()
+        city        = (p.get("city")        or "").strip()
+        raw_text    = (p.get("raw_text")    or "").strip()
+        specialty   = (p.get("specialty")   or "").strip()
+        if not last_name and not clinic_name and not raw_text:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "aetna_status": "Not Found",
+                "aetna_detail": "No provider name to search",
+            })
+            continue
+        rows = []
+        search_terms = []
+        if clinic_name:
+            skip_words = {"medical", "group", "clinic", "center", "care", "health",
+                          "family", "associates", "services", "dental", "the", "and", "of",
+                          "dr", "doctor", "physicians"}
+            words = [w for w in clinic_name.lower().split() if len(w) > 4 and w not in skip_words]
+            search_terms.extend(words[:2])
+        if last_name and len(last_name) > 3:
+            search_terms.append(last_name.lower())
+        if raw_text:
+            raw_words = [w for w in raw_text.lower().split()
+                         if len(w) > 5 and w not in {"health", "clinic", "medical", "center",
+                                                       "allina", "hospital", "partners"}]
+            search_terms.extend(raw_words[:2])
+        seen_terms = set()
+        unique_terms = []
+        for t in search_terms:
+            if t not in seen_terms:
+                seen_terms.add(t)
+                unique_terms.append(t)
+        search_terms = unique_terms
+        for term in search_terms[:3]:
+            if city:
+                sql = (
+                    'SELECT full_name, specialty, city, address, zip, npi'
+                    ' FROM providers'
+                    ' WHERE full_name LIKE ? AND city LIKE ?'
+                    ' ORDER BY city LIMIT 10'
+                )
+                candidate_rows = conn.execute(sql, ("%" + term + "%", "%" + city + "%")).fetchall()
+                if candidate_rows:
+                    rows = candidate_rows
+                    break
+        if not rows:
+            for term in search_terms[:3]:
+                sql = (
+                    'SELECT full_name, specialty, city, address, zip, npi'
+                    ' FROM providers'
+                    ' WHERE full_name LIKE ?'
+                    ' ORDER BY city LIMIT 10'
+                )
+                candidate_rows = conn.execute(sql, ("%" + term + "%",)).fetchall()
+                if candidate_rows:
+                    rows = candidate_rows
+                    break
+        if not rows and "allina" in raw_text.lower():
+            if city:
+                sql = (
+                    'SELECT full_name, specialty, city, address, zip, npi'
+                    ' FROM providers WHERE city LIKE ? ORDER BY city LIMIT 5'
+                )
+                rows = conn.execute(sql, ("%" + city + "%",)).fetchall()
+            if not rows:
+                sql = 'SELECT full_name, specialty, city, address, zip, npi FROM providers LIMIT 1'
+                rows = conn.execute(sql).fetchall()
+        if len(rows) > 1 and city:
+            city_match = [r for r in rows if r[2] and city.lower() in r[2].lower()]
+            if city_match:
+                rows = city_match
+        if not rows:
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": specialty, "city": city, "aetna_status": "Not Found",
+                "aetna_detail": "Not found in Aetna directory",
+            })
+        else:
+            r = rows[0]
+            r_name = r[0] or ""
+            r_spec = r[1] or specialty or ""
+            r_city = r[2] or ""
+            parts = []
+            if r_name: parts.append(r_name[:35])
+            if r_city: parts.append(r_city)
+            detail = " · ".join(parts) if parts else "Found in Allina directory"
+            results.append({
+                "raw_text": raw_text, "last_name": last_name, "first_name": first_name,
+                "specialty": r_spec, "city": r_city,
+                "aetna_status": "In Network",
+                "aetna_detail": detail,
+            })
+    conn.close()
+    return results
+
 def get_remaining_months(soa_date_str):
     try:
         soa = datetime.strptime(soa_date_str, "%m/%d/%Y").date()
@@ -2802,11 +2916,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         has_hp_col     = any("hp_status"     in r for r in provider_results)
         has_humana_col = any("humana_status" in r for r in provider_results)
         has_uhc_col    = any("uhc_status"    in r for r in provider_results)
+        has_aetna_col  = any("aetna_status"  in r for r in provider_results)
         if has_medica_col: active_carriers.append("Medica")
         if has_bcbs_col:   active_carriers.append("Blue Cross")
         if has_hp_col:     active_carriers.append("HealthPartners")
         if has_humana_col: active_carriers.append("Humana")
         if has_uhc_col:    active_carriers.append("UHC")
+        if has_aetna_col:  active_carriers.append("Aetna")
         carrier_label = " & ".join(active_carriers) if active_carriers else "Medicare Advantage"
 
         elements.append(Paragraph(
@@ -2821,7 +2937,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
         # ── Column widths — scale based on number of carrier columns ──────
         # Fixed cols: Provider name + Specialty. Dynamic: one col per carrier.
-        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0) + (1 if has_uhc_col else 0)
+        num_carrier_cols = (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0) + (1 if has_uhc_col else 0) + (1 if has_aetna_col else 0)
         total_w     = 239*mm   # fits landscape with margins
         name_w      = 58*mm
         spec_w      = 38*mm
@@ -2852,6 +2968,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             col_widths.append(carrier_w)
         if has_uhc_col:
             hdr_row.append(Paragraph("UHC", hdr_ctr_s))
+            col_widths.append(carrier_w)
+        if has_aetna_col:
+            hdr_row.append(Paragraph("Aetna", hdr_ctr_s))
             col_widths.append(carrier_w)
 
         prov_rows = [hdr_row]
@@ -2905,6 +3024,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         hp_col_idx     = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0)) if has_hp_col else None
         humana_col_idx = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0)) if has_humana_col else None
         uhc_col_idx    = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0)) if has_uhc_col else None
+        aetna_col_idx  = (2 + (1 if has_medica_col else 0) + (1 if has_bcbs_col else 0) + (1 if has_hp_col else 0) + (1 if has_humana_col else 0) + (1 if has_uhc_col else 0)) if has_aetna_col else None
 
         for i, r in enumerate(provider_results, start=1):
             last      = r.get("last_name", "")
@@ -3035,6 +3155,22 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                     prov_ts.append(("BACKGROUND", (uhc_col_idx, i),
                                     (uhc_col_idx, i), RED_BG))
 
+            if has_aetna_col:
+                ae_status  = r.get("aetna_status", "")
+                ae_detail  = r.get("aetna_detail", "")
+                ae_acc     = r.get("aetna_accepting", "")
+                ae_cell, ae_type = make_status_cell(ae_status, ae_detail, ae_acc)
+                detail_text = ae_detail[:65] if ae_detail and ae_type == "IN" else ""
+                combined = Table([[ae_cell],[Paragraph(detail_text, detail_s)]], colWidths=[carrier_w - 8*mm], style=inner_zero, hAlign="CENTER")
+                row_cells.append(combined)
+
+                if ae_type == "IN":
+                    prov_ts.append(("BACKGROUND", (aetna_col_idx, i),
+                                    (aetna_col_idx, i), GREEN_BG))
+                elif ae_type == "NF":
+                    prov_ts.append(("BACKGROUND", (aetna_col_idx, i),
+                                    (aetna_col_idx, i), RED_BG))
+
             prov_rows.append(row_cells)
 
         pt = Table(prov_rows, colWidths=col_widths)
@@ -3052,6 +3188,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             carrier_notes.append("Humana: 1-800-457-4708 or humana.com")
         if has_uhc_col:
             carrier_notes.append("UHC: 1-844-867-3487 or myAARPMedicare.com")
+        if has_aetna_col:
+            carrier_notes.append("Aetna: 1-800-307-4830 or AllinaHealthAetnaMedicare.com")
         elements.append(Paragraph(
             "⚠  Network status reflects 2026 provider directories. "
             "Networks change throughout the year — verify directly with carrier before enrollment.  "
@@ -3243,6 +3381,7 @@ def process_soa():
     show_hp     = any("healthpartners" in k or "health partners" in k for k in plan_carrier_keys)
     show_humana = any("humana" in k for k in plan_carrier_keys)
     show_uhc    = any("uhc" in k or "aarp" in k or "united" in k for k in plan_carrier_keys)
+    show_aetna  = any("aetna" in k or "allina" in k for k in plan_carrier_keys)
 
     # Run provider lookups only for carriers present in plan results
     provider_results_medica = []
@@ -3250,6 +3389,7 @@ def process_soa():
     provider_results_hp     = []
     provider_results_humana = []
     provider_results_uhc     = []
+    provider_results_aetna  = []
 
     if providers_raw:
         if show_medica and os.path.exists(PROVIDERS_DB_PATH):
@@ -3277,6 +3417,11 @@ def process_soa():
                 provider_results_uhc = lookup_providers_uhc(providers_raw, zip_code)
             except Exception:
                 provider_results_uhc = []
+        if show_aetna and os.path.exists(AETNA_DB_PATH):
+            try:
+                provider_results_aetna = lookup_providers_aetna(providers_raw, zip_code)
+            except Exception:
+                provider_results_aetna = []
 
     # Build merged provider results list for page 2
     # Each entry has status for each active carrier
@@ -3350,6 +3495,11 @@ def process_soa():
                     entry["matched_first"] = uh.get("first_name", "")
                     if not entry.get("credentials"):
                         entry["credentials"] = uh.get("credentials", "")
+            if show_aetna:
+                ae = provider_results_aetna[i] if i < len(provider_results_aetna) else {}
+                entry["aetna_status"]    = ae.get("aetna_status", "Not Found")
+                entry["aetna_detail"]    = ae.get("aetna_detail", "")
+                entry["aetna_accepting"] = ae.get("accepting", "")
             provider_results.append(entry)
 
     try:
