@@ -2620,6 +2620,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
+        elements.append(Spacer(1, 2.0*mm))
         elements.append(Paragraph("SECTION 2 — DRUG FORMULARY TIERS", sec_title))
         elements.append(Spacer(1, 0.15*mm))
         carriers = list(ma_plans.keys())
@@ -2697,6 +2698,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         elements.append(Spacer(1, 0.15*mm))
 
     if ma_plans and drug_detail:
+        elements.append(Spacer(1, 2.0*mm))
         elements.append(Paragraph("SECTION 3 — PHARMACY COST COMPARISON BY PLAN", sec_title))
         elements.append(Spacer(1, 0.15*mm))
 
@@ -2780,8 +2782,8 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         runner_s=S("rs",  fontSize=5, textColor=colors.HexColor("#64748b"), leading=7)
 
         plan_col_w = 42*mm
-        pharm_col_w= 62*mm
-        cost_col_w = 88*mm
+        pharm_col_w= 80*mm
+        cost_col_w = 70*mm
         mail_col_w = 82*mm
         total_w = plan_col_w + pharm_col_w + cost_col_w + mail_col_w
         scale = 274*mm / total_w
@@ -2819,7 +2821,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             prices_differ = not summary["all_same"]
             cheapest_name = summary.get("cheapest_name", "")
             for p in summary["cheapest"][:4]:
-                name = p["name"].split("#")[0].strip()[:22]
+                name = p["name"].split("#")[0].replace(" Pharmacy", "").replace(" Pharm", "").strip()[:18]
                 dist_prefix = "~" if p.get("dist_approximate") else ""
                 dist = dist_prefix + str(p["distance"]) + " mi"
                 pref_label = "" if p.get("preferred", True) else " (non-pref)"
@@ -2833,13 +2835,18 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                         steady = pharm_monthly_dict.get(last_month, 0)
                     else:
                         steady = p.get("annual", 0) / len(months_remaining) if months_remaining else 0
-                    price_str = "  $" + "{:.2f}".format(steady) + "/mo"
+                    price_str = " $" + "{:.0f}".format(steady)
                     is_cheapest = p["name"] == cheapest_name
                     style = pharm_s if is_cheapest else runner_s
                     pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")" + price_str, style))
                 else:
                     pharm_lines.append(Paragraph(name + pref_label + "  (" + dist + ")", pharm_s))
-            pharm_cell = Table([[p] for p in pharm_lines], colWidths=[pharm_col_w - 3*mm], style=inner_ts)
+            # pair pharmacies two-across to compress Section 3 vertically
+            _pl = pharm_lines
+            _blank = Paragraph("", pharm_s)
+            _prows = [[_pl[i] if i < len(_pl) else _blank, _pl[i+1] if i+1 < len(_pl) else _blank] for i in range(0, max(len(_pl), 1), 2)]
+            _pair_ts = TableStyle([("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),1),("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(0,-1),6),("RIGHTPADDING",(1,0),(1,-1),0)])
+            pharm_cell = Table(_prows, colWidths=[(pharm_col_w - 3*mm)/2.0]*2, style=_pair_ts)
 
             if summary["all_same"]:
                 monthly_amt = summary["min_annual"] / len(months_remaining) if months_remaining else 0
@@ -2891,6 +2898,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
 
 
     if pd_plans:
+        elements.append(Spacer(1, 2.0*mm))
         elements.append(Paragraph("SECTION 4 — PART D STANDALONE PLANS", sec_title))
         elements.append(Spacer(1, 0.1*mm))
         t, _ = make_plan_table(pd_plans, "Plan Feature")
