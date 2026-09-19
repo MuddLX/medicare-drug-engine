@@ -2409,12 +2409,12 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     import io
 
-    CHARCOAL   = colors.HexColor("#1c1917")
+    CHARCOAL   = colors.HexColor("#1e293b")
     TEAL       = colors.HexColor("#0d9488")
     TEAL_LIGHT = colors.HexColor("#ccfbf1")
     LIGHT_GRAY = colors.HexColor("#f8fafc")
     MID_GRAY   = colors.HexColor("#e2e8f0")
-    DARK_GRAY  = colors.HexColor("#292524")
+    DARK_GRAY  = colors.HexColor("#334155")
     WHITE      = colors.white
     GREEN_BG   = colors.HexColor("#dcfce7")
     GREEN_TEXT = colors.HexColor("#166534")
@@ -2568,7 +2568,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 split = name.rfind(" ", 0, mid+10)
                 if split > 0:
                     name = name[:split] + "\n" + name[split+1:]
-            star = " ★" if c == best else ""
+            star = ""
             return Paragraph(f"{c}{star}<br/><font size='5'>{name}</font>", col_hdr)
 
         rows = [[Paragraph(section_label, col_hdr)] + [carrier_header(c) for c in carriers]]
@@ -2583,7 +2583,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             for c in carriers:
                 val = fn(c)
                 if is_total:
-                    row.append(Paragraph(val, green_val if c == best else bold_cell))
+                    row.append(Paragraph(val, bold_cell))
                 else:
                     row.append(Paragraph(val, cell))
             rows.append(row)
@@ -2601,7 +2601,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#f0fdf4")),
             ("LINEABOVE", (0,-1), (-1,-1), 1, TEAL),
         ]
-        if best in carriers:
+        if False:  # best-plan column highlight removed
             ci = carriers.index(best) + 1
             ts += [
                 ("BACKGROUND", (ci,0), (ci,0), TEAL),
@@ -2626,7 +2626,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
         label_w = 50*mm
         col_w = (274*mm - label_w) / len(carriers)
         rows = [[Paragraph("Medication", col_hdr)] +
-                [Paragraph(c + (" ★" if c == ma_best else ""), col_hdr) for c in carriers]]
+                [Paragraph(c, col_hdr) for c in carriers]]
         for drug in drug_detail:
             name = drug.get("drug_name","")
             dosage = drug.get("dosage","")
@@ -2804,7 +2804,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             plan_data = ma_plans[carrier]
             summary = get_plan_pharmacy_summary(carrier)
             is_best = carrier == ma_best
-            star = " ★" if is_best else ""
+            star = ""
 
             plan_cell = Table([
                 [Paragraph(carrier + star, plan_s)],
