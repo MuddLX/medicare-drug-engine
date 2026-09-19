@@ -2666,7 +2666,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
                 tier = pd.get("tier")
                 if tier and pd.get("covered"):
                     ts.append(("BACKGROUND", (ci,ri), (ci,ri), tier_bg(tier)))
-        if ma_best in carriers:
+        if False:  # best-plan column highlight removed (Section 2)
             ci = carriers.index(ma_best) + 1
             ts += [
                 ("BACKGROUND", (ci,0), (ci,0), TEAL),
@@ -2885,7 +2885,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
             ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT_GRAY]),
         ]
-        if ma_best in carriers:
+        if False:  # best-plan row highlight removed (Section 3)
             bi = carriers.index(ma_best) + 1
             ts_list += [
                 ("BACKGROUND", (0,bi), (-1,bi), GREEN_BG),
