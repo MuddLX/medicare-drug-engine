@@ -3510,6 +3510,35 @@ def process_soa():
                 entry["aetna_accepting"] = ae.get("accepting", "")
             provider_results.append(entry)
 
+    # -- Extraction flags -> report warnings ----------------------------
+    # Fold Claude's extraction flags (sent from n8n) into the warnings the
+    # report already renders, so they surface in the "Drug Verification
+    # Required" banner. Tolerant of shape: flags may arrive as null, a JSON
+    # string, a list of strings, or a list of dicts.
+    flags_raw = data.get("flags", [])
+    if isinstance(flags_raw, str):
+        try:
+            flags_raw = json.loads(flags_raw)
+        except Exception:
+            flags_raw = [flags_raw] if flags_raw.strip() else []
+    if not isinstance(flags_raw, list):
+        flags_raw = [flags_raw] if flags_raw else []
+    extraction_warnings = []
+    for f in flags_raw:
+        if f is None:
+            continue
+        if isinstance(f, dict):
+            drug_txt = (f.get("drug") or f.get("drug_name") or f.get("medication") or "").strip()
+            msg_txt = (f.get("flag") or f.get("message") or f.get("issue")
+                       or f.get("note") or f.get("text") or f.get("description")
+                       or f.get("reason") or "").strip()
+            text = (drug_txt + ": " + msg_txt) if (drug_txt and msg_txt) else (msg_txt or drug_txt)
+        else:
+            text = str(f).strip()
+        if text:
+            extraction_warnings.append({"drug": text, "normalized_to": "", "flag": ""})
+    merged_warnings = list(result.get("warnings", [])) + extraction_warnings
+
     try:
         pdf_bytes_out = build_pdf(
             client_name, dob, zip_code, soa_date,
@@ -3517,7 +3546,7 @@ def process_soa():
             result["drug_detail"],
             result["months_remaining"],
             confidence=confidence,
-            warnings=result.get("warnings", []),
+            warnings=merged_warnings,
             client_address=client_address,
             client_city=client_city,
             provider_results=provider_results
