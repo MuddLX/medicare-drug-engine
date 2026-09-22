@@ -1,8 +1,8 @@
 """
 startup.py — Railway startup script
 Downloads the latest medicare_mn.db, medica_providers.db, bcbs_providers.db,
-hp_providers.db, humana_providers.db, uhc_providers.db, and aetna_providers.db
-from Cloudflare R2 before the app starts.
+hp_providers.db, humana_providers.db, uhc_providers.db, aetna_providers.db, and
+pbp_benefits.db (client-facing plan benefits) from Cloudflare R2 before the app starts.
 Runs automatically via the Railway start command:
     python startup.py && gunicorn app.main:app
 
@@ -23,6 +23,7 @@ HP_DB_PATH        = "hp_providers.db"
 HUMANA_DB_PATH    = "humana_providers.db"
 UHC_DB_PATH       = "uhc_providers.db"
 AETNA_DB_PATH     = "aetna_providers.db"
+PBP_DB_PATH       = "pbp_benefits.db"
 REQUIRED_ENV_VARS = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "R2_BUCKET_NAME"]
 
 
@@ -111,6 +112,7 @@ def download_db():
     download_file_from_r2(client, bucket, "humana_providers.db",  HUMANA_DB_PATH,    "humana_providers.db")
     download_file_from_r2(client, bucket, "uhc_providers.db",     UHC_DB_PATH,       "uhc_providers.db")
     download_file_from_r2(client, bucket, "aetna_providers.db",   AETNA_DB_PATH,     "aetna_providers.db")
+    download_file_from_r2(client, bucket, "pbp_benefits.db",      PBP_DB_PATH,       "pbp_benefits.db")
 
 
 def validate_db():
@@ -235,6 +237,21 @@ def validate_db():
         print(f"  aetna_providers.db validation passed: {provider_count:,} providers.")
     except sqlite3.Error as e:
         print(f"ERROR: aetna_providers.db validation failed: {e}"); sys.exit(1)
+
+    # -- Validate pbp_benefits.db (client-facing plan benefits) ----------------
+    try:
+        conn = sqlite3.connect(PBP_DB_PATH)
+        if "plan_benefits" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
+            print("ERROR: pbp_benefits.db is missing the plan_benefits table.")
+            conn.close(); sys.exit(1)
+        benefit_count = conn.execute("SELECT COUNT(*) FROM plan_benefits").fetchone()[0]
+        conn.close()
+        if benefit_count < 40:
+            print(f"ERROR: pbp_benefits.db has only {benefit_count} plans. Expected ~56.")
+            sys.exit(1)
+        print(f"  pbp_benefits.db validation passed: {benefit_count} plan benefit rows.")
+    except sqlite3.Error as e:
+        print(f"ERROR: pbp_benefits.db validation failed: {e}"); sys.exit(1)
 
 
 if __name__ == "__main__":
