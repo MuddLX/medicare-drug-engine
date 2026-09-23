@@ -2379,6 +2379,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 all_covered = False
         premium_annual = round(plan["premium_monthly"] * len(months_remaining), 2)
         plan_summaries[carrier] = {
+            "contract_id": plan["contract_id"], "plan_id": plan["plan_id"],
             "plan_name": plan["plan_name"], "plan_type": plan["plan_type"],
             "premium_monthly": plan["premium_monthly"], "premium_remaining_year": premium_annual,
             "deductible": plan["deductible"],
@@ -3562,6 +3563,90 @@ def process_soa():
     )
 
 
+@app.route("/client-comparison", methods=["POST"])
+def client_comparison_route():
+    """
+    Client-facing plan-comparison PDF (Phase 3). Takes the same flat fields as
+    /process-soa (already-extracted CIS data), runs a FULL plan-year (Jan-1) cost
+    computation, picks plans deterministically, merges real CMS benefits, and
+    returns the one-page client PDF. Isolated from /process-soa: separate selection
+    and renderer, never handed provider names or drug tiers.
+    NOTE: test data only until the engine moves to a BAA host.
+    """
+    from app.client_comparison import plan_summaries_to_candidates, assemble_renderer_payload
+    from app.client_selection import select_plans, NeutralNetworkFit
+    from app.client_pdf import render_client_comparison
+
+    data = request.get_json(force=True, silent=True) or {}
+    client_name = data.get("client_name", "Client")
+    zip_code = data.get("zip_code", "55441")
+    drug_names = data.get("drug_names", "")
+    drug_dosages = data.get("drug_dosages", "")
+    client_address = data.get("client_address", "")
+    client_city = data.get("client_city", "")
+    client_state = data.get("client_state", "MN")
+    county = data.get("county", "")
+    try:
+        plan_year = int(data.get("plan_year", 2027))
+    except Exception:
+        plan_year = 2027
+
+    providers_raw = data.get("providers", [])
+    if isinstance(providers_raw, str):
+        try:
+            providers_raw = json.loads(providers_raw)
+        except Exception:
+            providers_raw = []
+    num_providers = len(providers_raw) if isinstance(providers_raw, list) else 0
+
+    names = [n.strip() for n in drug_names.split(",") if n.strip()]
+    dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
+    drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
+             for i in range(len(names))]
+    if not drugs:
+        return jsonify({"error": "No drugs provided"}), 400
+
+    try:
+        result = compute_drug_costs(drugs, zip_code, f"01/01/{plan_year}",
+                                    client_address=client_address,
+                                    client_city=client_city,
+                                    client_state=client_state)
+    except Exception as e:
+        return jsonify({"error": f"Cost computation failed: {str(e)}"}), 500
+
+    plan_summaries = result.get("plan_summaries", {})
+    drug_detail = result.get("drug_detail", [])
+
+    appointed = data.get("appointed_carriers") or [
+        "HealthPartners", "Blue Cross", "Medica", "Humana", "UHC", "Aetna", "UCare", "Align"]
+    try:
+        max_plans = int(data.get("max_plans", 3))
+    except Exception:
+        max_plans = 3
+
+    agency_meta = {
+        "agency_name": "Twin Cities Health", "agency_sub": "Insurance Solutions",
+        "agency_phone": "763-280-8882", "agency_email": "info@tchealthsolutions.com",
+    }
+    config = {"appointed_carriers": appointed, "max_plans": max_plans}
+    client = {"county": county, "systems": [], "num_providers": num_providers}
+
+    try:
+        candidates = plan_summaries_to_candidates(plan_summaries, county)
+        selection = select_plans(candidates, config, client, NeutralNetworkFit())
+        if not selection["selected"]:
+            return jsonify({"error": "No eligible plans for this client/area"}), 404
+        payload = assemble_renderer_payload(selection, plan_summaries, drug_detail,
+                                            agency_meta, client, plan_year)
+        pdf_bytes = render_client_comparison(payload)
+    except Exception as e:
+        return jsonify({"error": f"Client comparison failed: {str(e)}"}), 500
+
+    filename = f"{client_name.replace(' ', '_')}_Plan_Comparison.pdf"
+    return Response(pdf_bytes, mimetype="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
 @app.route("/drug-costs", methods=["POST"])
 def drug_costs():
     """JSON endpoint for testing."""
@@ -3606,3 +3691,4 @@ if __name__ == "__main__":
 # Last updated: 2026-05-22 21:12:26
 
 # Updated: 2026-05-22 21:22:46
+# deployed 09/22/2026 23:04:40
