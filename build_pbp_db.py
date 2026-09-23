@@ -227,11 +227,51 @@ def build_b14(mn):
     return out
 
 
+def build_star_ratings(mn_contract_ids, base_dir):
+    """Overall CMS star rating per contract, from the Star Ratings Summary xlsx.
+    Contract-level: every plan under an H-number shares its contract's rating.
+    Matches the rating column on 'Overall' so the 2027 file drops in unchanged."""
+    import glob
+    paths = glob.glob(os.path.join(base_dir, "Star Ratings", "**", "*Summary Ratings*.xlsx"),
+                      recursive=True)
+    if not paths:
+        print("  WARNING: Star Ratings Summary xlsx not found - stars skipped.")
+        return {}
+    import openpyxl
+    wb = openpyxl.load_workbook(paths[0], read_only=True, data_only=True)
+    ws = wb["Summary_Rating"] if "Summary_Rating" in wb.sheetnames else wb[wb.sheetnames[0]]
+    rows = ws.iter_rows(values_only=True)
+    header = None
+    for row in rows:
+        cells = [str(c).strip() if c is not None else "" for c in row]
+        if "Contract Number" in cells:
+            header = cells
+            break
+    if not header:
+        print("  WARNING: star header row not found - stars skipped.")
+        return {}
+    c_col = header.index("Contract Number")
+    o_col = next((i for i, h in enumerate(header) if "overall" in h.lower()), None)
+    if o_col is None:
+        print("  WARNING: star 'Overall' column not found - stars skipped.")
+        return {}
+    out = {}
+    for row in rows:
+        if row is None or len(row) <= max(c_col, o_col):
+            continue
+        cid = str(row[c_col]).strip() if row[c_col] is not None else ""
+        if cid not in mn_contract_ids:
+            continue
+        val = row[o_col]
+        out[cid] = float(val) if isinstance(val, (int, float)) else None
+    return out
+
+
 COLUMNS = ["oop_max_inn", "oop_max_comb", "medical_deductible", "part_b_giveback",
            "premium_pbp", "pcp_copay", "pcp_coins", "spec_copay", "spec_coins",
            "er_copay", "er_coins", "hosp_copay", "hosp_coins", "hosp_day_begin", "hosp_day_end",
            "dental_allowance", "vision_allowance", "hearing_allowance", "otc_amount",
-           "fitness_included"]
+           "fitness_included", "star_rating"]
 
 
 def main():
@@ -257,6 +297,11 @@ def main():
             row.update(src_map.get(key, {}))
         benefits[key] = row
 
+    stars = build_star_ratings({cid for cid, pid in mn}, HERE)
+    for (cid, pid), row in benefits.items():
+        row["star_rating"] = stars.get(cid)
+    print(f"Star ratings: {sum(1 for v in stars.values() if v is not None)}/{len(stars)} MN contracts rated")
+
     if os.path.exists(OUT_DB):
         os.remove(OUT_DB)
     conn = sqlite3.connect(OUT_DB)
@@ -276,12 +321,13 @@ def main():
     def dollar(v):
         return f"${v:.0f}" if v is not None else "none/?"
     for row in conn.execute("""SELECT contract_id, plan_id, dental_allowance,
-        vision_allowance, hearing_allowance, otc_amount, fitness_included
+        vision_allowance, hearing_allowance, otc_amount, fitness_included, star_rating
         FROM plan_benefits ORDER BY contract_id, plan_id LIMIT 30"""):
-        cid, pid, dent, vis, hear, otc, fitn = row
+        cid, pid, dent, vis, hear, otc, fitn, star = row
         fitstr = "yes" if fitn == 1 else "no"
+        starstr = f"{star:g}\u2605" if star is not None else "unrated"
         print(f"  {cid} {pid}  dental={dollar(dent)}  vision={dollar(vis)}  "
-              f"hearing={dollar(hear)}  OTC={dollar(otc)}  fitness={fitstr}")
+              f"hearing={dollar(hear)}  OTC={dollar(otc)}  fitness={fitstr}  star={starstr}")
     fit = conn.execute("SELECT COUNT(*) FROM plan_benefits WHERE fitness_included=1").fetchone()[0]
     tot = conn.execute("SELECT COUNT(*) FROM plan_benefits").fetchone()[0]
     print(f"\nFitness benefit: {fit} of {tot} plans include it")

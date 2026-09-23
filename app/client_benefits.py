@@ -15,7 +15,7 @@ _FIELDS = ["oop_max_inn", "oop_max_comb", "medical_deductible", "part_b_giveback
            "premium_pbp", "pcp_copay", "pcp_coins", "spec_copay", "spec_coins",
            "er_copay", "er_coins", "hosp_copay", "hosp_coins", "hosp_day_begin",
            "hosp_day_end", "dental_allowance", "vision_allowance", "hearing_allowance",
-           "otc_amount", "fitness_included"]
+           "otc_amount", "fitness_included", "star_rating"]
 
 
 def lookup_benefits(contract_id, plan_id, db_path=None):
@@ -26,7 +26,7 @@ def lookup_benefits(contract_id, plan_id, db_path=None):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     row = conn.execute(
-        f"SELECT {', '.join(_FIELDS)} FROM plan_benefits WHERE contract_id=? AND plan_id=?",
+        "SELECT * FROM plan_benefits WHERE contract_id=? AND plan_id=?",
         (str(contract_id).strip(), str(plan_id).strip().zfill(3))).fetchone()
     conn.close()
     return dict(row) if row else None
@@ -84,4 +84,5 @@ def format_benefits(raw):
         "hearing": _allowance(raw.get("hearing_allowance")),
         "otc": _allowance(raw.get("otc_amount")),
         "fitness": "Included" if raw.get("fitness_included") == 1 else "\u2014",
+        "star_rating": raw.get("star_rating"),
     }
