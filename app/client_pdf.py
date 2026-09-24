@@ -59,7 +59,7 @@ _SECTION = ParagraphStyle("section", fontName="Helvetica-Bold", fontSize=8.5, le
                           textColor=NAVY, alignment=TA_LEFT)
 _CARRIER = ParagraphStyle("carrier", fontName="Helvetica-Bold", fontSize=13.5, leading=16,
                           textColor=NAVY, alignment=TA_CENTER)
-_PNAME   = ParagraphStyle("pname",   fontName="Helvetica",      fontSize=10.5, leading=12.5,
+_PNAME   = ParagraphStyle("pname",   fontName="Helvetica-Bold", fontSize=10.5, leading=12.5,
                           textColor=HexColor("#38414B"), alignment=TA_CENTER)
 _RATING  = ParagraphStyle("rating",  fontName="Helvetica",      fontSize=9,   leading=11,
                           textColor=SLATE, alignment=TA_CENTER)
