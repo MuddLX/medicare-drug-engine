@@ -57,10 +57,10 @@ _CELL    = ParagraphStyle("cell",    fontName="Helvetica",      fontSize=10,  le
                           textColor=HexColor("#2B333C"), alignment=TA_CENTER)
 _SECTION = ParagraphStyle("section", fontName="Helvetica-Bold", fontSize=8.5, leading=10,
                           textColor=NAVY, alignment=TA_LEFT)
-_CARRIER = ParagraphStyle("carrier", fontName="Helvetica-Bold", fontSize=10.5, leading=12.5,
+_CARRIER = ParagraphStyle("carrier", fontName="Helvetica-Bold", fontSize=13.5, leading=16,
                           textColor=NAVY, alignment=TA_CENTER)
-_PNAME   = ParagraphStyle("pname",   fontName="Helvetica-Bold", fontSize=11.5, leading=13,
-                          textColor=NAVY, alignment=TA_CENTER)
+_PNAME   = ParagraphStyle("pname",   fontName="Helvetica",      fontSize=10.5, leading=12.5,
+                          textColor=HexColor("#38414B"), alignment=TA_CENTER)
 _RATING  = ParagraphStyle("rating",  fontName="Helvetica",      fontSize=9,   leading=11,
                           textColor=SLATE, alignment=TA_CENTER)
 _PREM    = ParagraphStyle("prem",    fontName="Helvetica-Bold", fontSize=16,  leading=17,
@@ -108,8 +108,8 @@ def _name_layout(plans, text_w):
     across every column. Carrier: 1 line. Plan name: 2 lines, 3 only if unavoidable."""
     out, max_h = [], 0
     for p in plans:
-        carrier = CARRIER_DISPLAY.get(p["carrier"], p["carrier"]).upper()
-        c_style, _ = _fit_style(_CARRIER, carrier, text_w, 1, 7)
+        carrier = CARRIER_DISPLAY.get(p["carrier"], p["carrier"])   # normal case, not ALL CAPS
+        c_style, _ = _fit_style(_CARRIER, carrier, text_w, 1, 8)
         n_style, n_lines = _fit_style(_PNAME, p["plan_name"], text_w, 2, 9)
         if n_lines > 2:
             n_style, n_lines = _fit_style(_PNAME, p["plan_name"], text_w, 3, 8.5)
