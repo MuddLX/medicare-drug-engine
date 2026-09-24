@@ -56,8 +56,8 @@ _CELL    = ParagraphStyle("cell",    fontName="Helvetica",      fontSize=10,  le
                           textColor=HexColor("#2B333C"), alignment=TA_CENTER)
 _SECTION = ParagraphStyle("section", fontName="Helvetica-Bold", fontSize=8.5, leading=10,
                           textColor=NAVY, alignment=TA_LEFT)
-_CARRIER = ParagraphStyle("carrier", fontName="Helvetica-Bold", fontSize=8,   leading=10,
-                          textColor=SLATE, alignment=TA_CENTER)
+_CARRIER = ParagraphStyle("carrier", fontName="Helvetica-Bold", fontSize=10.5, leading=12.5,
+                          textColor=NAVY, alignment=TA_CENTER)
 _PNAME   = ParagraphStyle("pname",   fontName="Helvetica-Bold", fontSize=11.5, leading=13,
                           textColor=NAVY, alignment=TA_CENTER)
 _RATING  = ParagraphStyle("rating",  fontName="Helvetica",      fontSize=9,   leading=11,
