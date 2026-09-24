@@ -2497,7 +2497,7 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     # Header
     conf_text = f"Extraction confidence: {confidence:.0%}" if confidence else ""
     header_left = [[Paragraph(client_name, h1)],
-                   [Paragraph(f"DOB: {dob}  ·  Zip: {zip_code}  ·  SOA Date: {soa_date}", h2)]]
+                   [Paragraph("DOB: " + (str(dob) if dob else "—") + "  ·  Zip: " + (str(zip_code) if zip_code else "—"), h2)]]
     header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
                     [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
@@ -2513,42 +2513,85 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
     elements.append(tl)
     elements.append(HRFlowable(width="100%", thickness=2, color=TEAL, spaceAfter=0.3*mm))
 
-    # Warnings banner
+    # Warnings banner - compact + grouped (Sept 2026). One row per GROUP, items joined
+    # with " · ", instead of one full-width row per warning (18 rows -> ~4 lines).
+    #   Medications to verify: engine drug-lookup warnings + extraction flags about drugs
+    #   Form notes:            other extraction flags (missing DOB, unclear ZIP, ...)
+    #   Plan requests:         agent-requested plans that couldn't be added
+    # Extraction flags (folded in by process_soa) arrive with EMPTY normalized_to AND flag;
+    # engine warnings always carry a flag - that is how the two are told apart.
+    # Flags about SOA-era fields that don't exist on the Client Information Sheet are
+    # dropped here (the source fix is the extraction prompt - roadmap #9).
+    # Plain words only: the built-in font has no warning-sign or arrow glyphs.
     if warnings:
-        drug_warnings = [w for w in warnings if w.get("drug") != "Plan Request"]
-        plan_warnings = [w for w in warnings if w.get("drug") == "Plan Request"]
-        warn_rows = []
-        if drug_warnings:
-            warn_rows.append([
-                Paragraph("⚠ Drug Verification Required", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
-                Paragraph("Please verify the following before client meeting:", warn_s)
-            ])
-            for w in drug_warnings:
-                drug = w.get("drug", "")
-                normalized = w.get("normalized_to", "")
-                flag = w.get("flag", "")
-                note = f"{drug}"
-                if normalized and normalized.lower() != drug.lower():
-                    note += f" → interpreted as {normalized}"
+        import re as _re
+        from xml.sax.saxutils import escape as _esc
+        _SOA_ERA = ("soa date", "appointment date", "signature", "coverage type")
+        _MED_WORDS = ("medication", "medications", "medicine", "drug", "drugs", "dose",
+                      "dosage", "pill", "prescription", "tablet", "capsule", "insulin",
+                      "inhaler", "injection", "mg", "mcg", "rx")
+        _med_names = set()
+        for _d in (drug_detail or []):
+            for _n in (_d.get("original_name"), _d.get("drug_name")):
+                _w = (_n or "").strip().lower().split(" ")[0].strip(".,")
+                if len(_w) >= 4:
+                    _med_names.add(_w)
+
+        def _is_med(text):
+            low = text.lower()
+            if any(_re.search(r"\b" + _re.escape(k) + r"\b", low) for k in _MED_WORDS):
+                return True
+            return any(n in low for n in _med_names)
+
+        med_items, form_items, plan_items = [], [], []
+        for w in warnings:
+            drug = (w.get("drug") or "").strip()
+            normalized = (w.get("normalized_to") or "").strip()
+            flag = (w.get("flag") or "").strip()
+            if drug == "Plan Request":
                 if flag:
-                    note += f" — {flag}"
-                warn_rows.append([Paragraph("", warn_s), Paragraph(note, warn_s)])
-        if plan_warnings:
-            warn_rows.append([
-                Paragraph("⚠ Plan Request Notice", S("wh", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)),
-                Paragraph("The following agent-requested plans could not be added:", warn_s)
-            ])
-            for w in plan_warnings:
-                warn_rows.append([Paragraph("", warn_s), Paragraph(w.get("flag", ""), warn_s)])
+                    plan_items.append(flag)
+                continue
+            if not normalized and not flag:            # extraction flag (free text)
+                if not drug or any(k in drug.lower() for k in _SOA_ERA):
+                    continue
+                (med_items if _is_med(drug) else form_items).append(drug)
+                continue
+            if "not found in rxnav" in flag.lower():   # engine: drug not recognized
+                note = f"{drug}: couldn't identify \u2014 verify name"
+            else:
+                note = drug
+                if normalized and normalized.lower() != drug.lower():
+                    note += f" (read as {normalized})"
+                if flag:
+                    note += f" \u2014 {flag}"
+            med_items.append(note)
+
+        def _dedupe(items):
+            seen, out = set(), []
+            for it in items:
+                if it.lower() not in seen:
+                    seen.add(it.lower())
+                    out.append(it)
+            return out
+
+        warn_lbl = S("wl", fontSize=6, fontName="Helvetica-Bold", textColor=WARN_TEXT, leading=8)
+        warn_rows = []
+        for label, items in (("Medications to verify", _dedupe(med_items)),
+                             ("Form notes", _dedupe(form_items)),
+                             ("Plan requests", _dedupe(plan_items))):
+            if items:
+                warn_rows.append([Paragraph(label, warn_lbl),
+                                  Paragraph("  \u00b7  ".join(_esc(i) for i in items), warn_s)])
         if warn_rows:
-            wt = Table(warn_rows, colWidths=[50*mm, 230*mm])
+            wt = Table(warn_rows, colWidths=[38*mm, 242*mm])
             wt.setStyle(TableStyle([
                 ("BACKGROUND", (0,0), (-1,-1), WARN_BG),
                 ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#fed7aa")),
-                ("TOPPADDING", (0,0), (-1,-1), 1),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
+                ("VALIGN", (0,0), (-1,-1), "TOP"),
+                ("TOPPADDING", (0,0), (-1,-1), 1.5),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 1.5),
                 ("LEFTPADDING", (0,0), (-1,-1), 4),
-                ("SPAN", (0,0), (0,0)),
             ]))
             elements.append(wt)
             elements.append(Spacer(1, 0.15*mm))
