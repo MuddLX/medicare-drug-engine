@@ -130,10 +130,17 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
             official_plan_name(cand.get("contract_id"), cand.get("plan_id")),
             key.replace(carrier, "").strip() or key)
 
-        covered, not_covered = 0, []
+        # Three honest buckets per plan (never claim "not covered" for a drug we didn't check):
+        #   covered      - checked, on this plan's formulary
+        #   not_covered  - checked, explicitly NOT on this plan's formulary (named on the sheet)
+        #   unverified   - couldn't identify it (engine error), injectable (agency rule skips
+        #                  the coverage check), or no entry for this plan -> "confirm with agent"
+        covered, not_covered, unverified = 0, [], 0
         for d in drug_detail:
             pc = d["plans"].get(key, {})
-            if pc.get("covered") or pc.get("annual_total") is not None:
+            if d.get("error") or pc.get("injectable") or not pc:
+                unverified += 1
+            elif pc.get("covered") or pc.get("annual_total") is not None:
                 covered += 1
             else:
                 not_covered.append(d.get("original_name") or d.get("drug_name"))
@@ -145,7 +152,8 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
             "plan_premium": f"${s['premium_monthly']:,.0f}",
             "part_d_premium": "Included",
             "est_annual_drug_cost": f"${s['total_drug_cost']:,.0f}",
-            "rx": {"covered": covered, "total": total_drugs, "not_covered": not_covered},
+            "rx": {"covered": covered, "total": total_drugs, "not_covered": not_covered,
+                   "unverified": unverified},
             # ---- interim states ----
             "star_rating": None,                 # gated: 2027 CMS star ratings
             "providers": {"status": "verify"},   # no provider chart yet

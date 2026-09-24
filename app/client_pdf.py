@@ -191,13 +191,35 @@ def _plan_header(p, text_w, carrier, c_style, n_style, name_h):
     return t
 
 
+def _plural(n, word):
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
 def _rx_cell(p, total):
+    """Name a drug as 'not covered' ONLY when the engine checked and it isn't on the
+    formulary. Drugs we couldn't identify (or injectables the agency rule skips) are
+    counted as 'to confirm with your agent' - never shown by name, never 'not covered'."""
     rx = p["rx"]
-    if not rx.get("not_covered") and rx["covered"] == rx["total"]:
+    nc = rx.get("not_covered") or []
+    unv = rx.get("unverified", 0)
+    if not nc and not unv and rx["covered"] == rx["total"]:
         return _cell(f'All {rx["total"]} covered', kind="green")
-    names = ", ".join(rx["not_covered"])
-    return _cell(f'{rx["covered"]} of {rx["total"]} covered',
-                 sub=f'{names} not covered', kind="amber")
+    lines = []
+    if nc:
+        lines.append(f'{escape(", ".join(nc))} not covered')
+    if unv:
+        lines.append(f'{_plural(unv, "medication")} to confirm with your agent')
+    main = (f'{rx["covered"]} of {rx["total"]} covered' if not unv
+            else f'{rx["covered"]} of {rx["total"]} confirmed covered')
+    return _cell(main, sub="<br/>".join(lines), kind="amber")
+
+
+def _cost_cell(p):
+    """The drug-cost estimate can't include drugs we couldn't price - say so."""
+    unv = p.get("rx", {}).get("unverified", 0)
+    if unv:
+        return _cell(p["est_annual_drug_cost"], sub=f'does not include {_plural(unv, "medication")}')
+    return _cell(p["est_annual_drug_cost"])
 
 
 def _prov_cell(p):
@@ -289,7 +311,7 @@ def render_client_comparison(data) -> bytes:
             ("Drug (Part D) premium",  lambda p: _cell(p["part_d_premium"])),
             ("Part B give-back",       lambda p: _cell(p["part_b_giveback"], kind="green")
                                                  if p.get("part_b_giveback") else _cell("\u2014", kind="muted")),
-            (f'Est. yearly cost of your drugs', lambda p: _cell(p["est_annual_drug_cost"])),
+            (f'Est. yearly cost of your drugs', _cost_cell),
         ]),
         ("Medical coverage", [
             ("Medical deductible",     lambda p: _cell(p["deductible"])),
