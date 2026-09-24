@@ -17,6 +17,7 @@ import io
 import math
 import os
 import base64
+from xml.sax.saxutils import escape
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.colors import HexColor
@@ -71,6 +72,51 @@ _FINE    = ParagraphStyle("fine",    fontName="Helvetica",      fontSize=7.5, le
 _FINEREQ = ParagraphStyle("finereq", fontName="Helvetica-Bold", fontSize=7.5, leading=9.8,
                           textColor=HexColor("#5B6570"), alignment=TA_LEFT, spaceAfter=4)
 
+# ---- Carrier / plan-name display + fit-to-column ----
+# Client-facing brand names (display only; selection still keys on the engine's family).
+CARRIER_DISPLAY = {"UHC": "UnitedHealthcare"}
+HEADER_PAD = 4          # side padding for the plan-header row only (benefit rows keep 12)
+
+
+def _wrapped_lines(text, style, width):
+    """Line count exactly as ReportLab will draw it (same routine that renders the PDF)."""
+    p = Paragraph(escape(text), style)
+    p.wrap(width, 10000)
+    return len(p.blPara.lines)
+
+
+def _fit_style(base, text, width, max_lines, min_size):
+    """Shrink `base` in 0.5pt steps until `text` wraps to <= max_lines at `width`.
+    Returns (style, lines_used). Never goes below min_size. A single word too wide for
+    the column gets split mid-word by ReportLab, which shows up here as an extra line."""
+    gap = base.leading - base.fontSize
+
+    def style_at(sz):
+        if sz == base.fontSize:
+            return base
+        return ParagraphStyle(base.name + "_fit", parent=base, fontSize=sz, leading=sz + gap)
+
+    size = base.fontSize
+    while size > min_size and _wrapped_lines(text, style_at(size), width) > max_lines:
+        size -= 0.5
+    style = style_at(size)
+    return style, _wrapped_lines(text, style, width)
+
+
+def _name_layout(plans, text_w):
+    """Per-plan fitted styles + ONE shared name-area height so stars/premiums align
+    across every column. Carrier: 1 line. Plan name: 2 lines, 3 only if unavoidable."""
+    out, max_h = [], 0
+    for p in plans:
+        carrier = CARRIER_DISPLAY.get(p["carrier"], p["carrier"]).upper()
+        c_style, _ = _fit_style(_CARRIER, carrier, text_w, 1, 7)
+        n_style, n_lines = _fit_style(_PNAME, p["plan_name"], text_w, 2, 9)
+        if n_lines > 2:
+            n_style, n_lines = _fit_style(_PNAME, p["plan_name"], text_w, 3, 8.5)
+        out.append((carrier, c_style, n_style))
+        max_h = max(max_h, n_lines * n_style.leading)
+    return out, max(max_h, 2 * _PNAME.leading)
+
 
 def _star_points(cx, cy, r_out, r_in):
     pts = []
@@ -113,8 +159,8 @@ def _cell(main, sub=None, kind="normal"):
     return Paragraph(txt, _CELL)
 
 
-def _plan_header(p, col_w):
-    NAME_H = 32  # reserve two lines so stars / premium align across columns
+def _plan_header(p, text_w, carrier, c_style, n_style, name_h):
+    # name_h is shared across all columns (see _name_layout) so stars / premium align
     rating = p.get("star_rating")
     if rating is None:            # no CMS rating loaded yet, or plan too new to be rated
         star_cell = Spacer(1, 10.5)
@@ -123,15 +169,15 @@ def _plan_header(p, col_w):
         star_cell = _star_drawing(rating)
         rating_cell = Paragraph(f"{rating:g} / 5", _RATING)
     inner = [
-        [Paragraph(p["carrier"].upper(), _CARRIER)],
-        [Paragraph(p["plan_name"], _PNAME)],
+        [Paragraph(escape(carrier), c_style)],
+        [Paragraph(escape(p["plan_name"]), n_style)],
         [star_cell],
         [rating_cell],
         [Paragraph(p["plan_premium"], _PREM)],
         [Paragraph("per month", _PERMO)],
     ]
-    t = Table(inner, colWidths=[col_w],
-              rowHeights=[None, NAME_H, None, None, None, None])
+    t = Table(inner, colWidths=[text_w],
+              rowHeights=[_CARRIER.leading, name_h + 6, None, None, None, None])
     t.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 1), (0, 1), "TOP"),
@@ -221,9 +267,13 @@ def render_client_comparison(data) -> bytes:
         ("RIGHTPADDING", (0, 0), (-1, -1), 12),
     ]
 
-    # header row
-    rows.append([""] + [_plan_header(p, plan_w) for p in plans])
+    # header row (carrier + plan name fitted per column; one shared name height)
+    text_w = plan_w - 2 * HEADER_PAD
+    layout, name_h = _name_layout(plans, text_w)
+    rows.append([""] + [_plan_header(p, text_w, *layout[i], name_h) for i, p in enumerate(plans)])
     style += [
+        ("LEFTPADDING", (1, 0), (-1, 0), HEADER_PAD),
+        ("RIGHTPADDING", (1, 0), (-1, 0), HEADER_PAD),
         ("VALIGN", (0, 0), (-1, 0), "TOP"),
         ("LINEBELOW", (0, 0), (-1, 0), 1.5, BLUE),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 10),

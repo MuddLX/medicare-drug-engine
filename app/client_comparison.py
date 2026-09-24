@@ -9,6 +9,9 @@ Isolation: reads only the read-only cost output + the benefits DB. Never touches
 build_pdf or /process-soa. The client renderer receives no provider names or drug
 tiers - by construction.
 """
+import os
+import sqlite3
+
 try:
     from app.client_benefits import lookup_benefits, format_benefits
 except ImportError:                      # allows flat-dir imports for local testing
@@ -33,6 +36,64 @@ def carrier_family(plan_key):
         if any(n in k for n in needles):
             return family
     return plan_key
+
+
+# ---- Client-facing plan names (display only; the internal drug-run is untouched) ----
+# The engine's short labels are built for the internal report (e.g. every UHC plan is
+# just "UHC"). The client sheet shows CMS's official plan name instead, minus the
+# carrier prefix (the carrier already has its own line), keeping the plan type:
+#   "AARP Medicare Advantage from UHC MN-0001 (PPO)" -> "UHC MN-0001 (PPO)"
+_MAIN_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "medicare_mn.db")
+
+# Ordered: most specific prefix first. (prefix, replacement)
+_NAME_PREFIXES = [
+    ("AARP Medicare Advantage from ", ""),          # -> "UHC MN-0001 (PPO)"
+    ("AARP Medicare Advantage ", ""),               # -> "Patriot No Rx FG-MA01 (PPO)"
+    ("Allina Health Aetna Medicare ", ""),          # -> "Signature (PPO)"
+    ("Blue Cross Medicare Advantage ", ""),         # -> "Choice (PPO)"
+    ("HealthPartners ", ""),                        # -> "Journey Pace (PPO)"
+    ("HumanaChoice ", "Choice "),                   # -> "Choice H5216-275 (PPO)"
+    ("Humana ", ""),                                # -> "Gold Choice H8145-006 (PFFS)"
+    ("Medica ", ""),                                # -> "Advantage Solution H8889-005 (PPO)"
+    ("Gundersen MN Quartz Med Advantage ", ""),     # -> "Elite D (w/Rx) (HMO)"
+    ("Align ", ""),                                 # -> "ChoiceElite (PPO)"
+]
+
+
+def official_plan_name(contract_id, plan_id, db_path=None):
+    """CMS's official plan name from medicare_mn.db service_area, or None.
+    Never raises: any problem -> None, and the caller falls back to the old label."""
+    db_path = db_path or _MAIN_DB
+    if not contract_id or plan_id is None or not os.path.exists(db_path):
+        return None
+    pid = str(plan_id).strip()
+    variants = sorted({pid, pid.zfill(3), pid.lstrip("0") or "0"})   # stored padded or not
+    marks = ",".join("?" * len(variants))
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT plan_name FROM service_area WHERE contract_id=? AND plan_id IN (" + marks + ") "
+                "AND plan_name IS NOT NULL LIMIT 1",
+                (str(contract_id).strip(), *variants)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row else None
+
+
+def display_plan_name(official, fallback):
+    """Official name minus the carrier prefix; unknown carriers keep the full official
+    name; no official name -> fallback (the old behavior)."""
+    if not official:
+        return fallback
+    official = official.strip()
+    for prefix, repl in _NAME_PREFIXES:
+        if official.startswith(prefix):
+            rest = (repl + official[len(prefix):]).strip()
+            return rest or official
+    return official
 
 
 def plan_summaries_to_candidates(plan_summaries, county):
@@ -65,7 +126,9 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
         key = cand["plan_label"]
         s = plan_summaries[key]
         carrier = cand["carrier"]
-        plan_name = key.replace(carrier, "").strip() or key
+        plan_name = display_plan_name(
+            official_plan_name(cand.get("contract_id"), cand.get("plan_id")),
+            key.replace(carrier, "").strip() or key)
 
         covered, not_covered = 0, []
         for d in drug_detail:
