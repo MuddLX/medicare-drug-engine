@@ -9,6 +9,10 @@ This renderer only knows about the fields defined in the `data` contract below.
 It has NO access to provider names, drug tier labels, confidence scores, or any
 internal drug-run data. An internal report structurally cannot come out this door.
 
+ONE PAGE, ALWAYS: the sheet is rendered, its page count checked, and if it would
+spill onto a second page it is re-rendered with progressively tighter row spacing
+until it fits (see render_client_comparison).
+
 Font note: this first pass uses ReportLab's built-in Helvetica as a placeholder.
 Brand font (Inter) embedding is a defined follow-up polish step.
 """
@@ -16,7 +20,7 @@ Brand font (Inter) embedding is a defined follow-up polish step.
 import io
 import math
 import os
-import base64
+import logging
 from xml.sax.saxutils import escape
 
 from reportlab.lib.pagesizes import letter
@@ -28,7 +32,8 @@ from reportlab.platypus import (
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.graphics.shapes import Drawing, Polygon
-from reportlab.lib.utils import ImageReader
+
+log = logging.getLogger(__name__)
 
 # ----- Brand palette (from the locked mockup) -----
 BLUE   = HexColor("#1E5FC1")
@@ -76,6 +81,10 @@ _FINEREQ = ParagraphStyle("finereq", fontName="Helvetica-Bold", fontSize=7.5, le
 # Client-facing brand names (display only; selection still keys on the engine's family).
 CARRIER_DISPLAY = {"UHC": "UnitedHealthcare"}
 HEADER_PAD = 4          # side padding for the plan-header row only (benefit rows keep 12)
+
+# ---- One-page guarantee: row spacing tried in order until the sheet fits one page ----
+# (row top/bottom padding, section-band top/bottom padding)
+_DENSITY_LEVELS = [(3, 4), (2, 3), (1.2, 2), (0.5, 1)]
 
 
 def _wrapped_lines(text, style, width):
@@ -208,9 +217,9 @@ def _rx_cell(p, total):
     if nc:
         lines.append(f'{escape(", ".join(nc))} not covered')
     if unv:
-        lines.append(f'{_plural(unv, "medication")} to confirm with your agent')
+        lines.append(f'{unv} to confirm with your agent')
     main = (f'{rx["covered"]} of {rx["total"]} covered' if not unv
-            else f'{rx["covered"]} of {rx["total"]} confirmed covered')
+            else f'{rx["covered"]} of {rx["total"]} confirmed')
     return _cell(main, sub="<br/>".join(lines), kind="amber")
 
 
@@ -218,7 +227,7 @@ def _cost_cell(p):
     """The drug-cost estimate can't include drugs we couldn't price - say so."""
     unv = p.get("rx", {}).get("unverified", 0)
     if unv:
-        return _cell(p["est_annual_drug_cost"], sub=f'does not include {_plural(unv, "medication")}')
+        return _cell(p["est_annual_drug_cost"], sub=f'excludes {_plural(unv, "medication")}')
     return _cell(p["est_annual_drug_cost"])
 
 
@@ -232,6 +241,14 @@ def _prov_cell(p):
     names = ", ".join(pr["out"])
     return _cell(f'{pr["in"]} of {pr["total"]} in-network',
                  sub=f'{names} not in-network', kind="amber")
+
+
+def _meds_label(n):
+    return "Your medications" if not n else f'Your {_plural(n, "medication")}'
+
+
+def _docs_label(n):
+    return "Your doctors" if not n else f'Your {_plural(n, "doctor")} in-network'
 
 
 def _draw_header(canvas, doc, meta):
@@ -274,7 +291,8 @@ def _draw_header(canvas, doc, meta):
     canvas.drawRightString(rx, top - 96, f'{meta["plan_year"]} PLAN YEAR')
 
 
-def render_client_comparison(data) -> bytes:
+def _build(data, row_pad, band_pad):
+    """Render once at a given row spacing. Returns (pdf_bytes, page_count)."""
     meta = data["meta"]
     plans = data["plans"]
     ncol = 1 + len(plans)
@@ -311,7 +329,7 @@ def render_client_comparison(data) -> bytes:
             ("Drug (Part D) premium",  lambda p: _cell(p["part_d_premium"])),
             ("Part B give-back",       lambda p: _cell(p["part_b_giveback"], kind="green")
                                                  if p.get("part_b_giveback") else _cell("\u2014", kind="muted")),
-            (f'Est. yearly cost of your drugs', _cost_cell),
+            ("Est. yearly cost of your drugs", _cost_cell),
         ]),
         ("Medical coverage", [
             ("Medical deductible",     lambda p: _cell(p["deductible"])),
@@ -330,9 +348,9 @@ def render_client_comparison(data) -> bytes:
             ("Fitness (SilverSneakers)", lambda p: _cell(p["fitness"], kind="green")),
         ]),
         ("Your prescriptions & doctors", [
-            (f'Your {meta["num_drugs"]} medications',
-             lambda p: _rx_cell(p, meta["num_drugs"])),
-            (f'Your {meta["num_providers"]} doctors in-network',
+            (_meds_label(meta.get("num_drugs")),
+             lambda p: _rx_cell(p, meta.get("num_drugs"))),
+            (_docs_label(meta.get("num_providers")),
              _prov_cell),
         ]),
     ]
@@ -346,16 +364,16 @@ def render_client_comparison(data) -> bytes:
             ("BACKGROUND", (0, r), (-1, r), BAND),
             ("LINEABOVE", (0, r), (-1, r), 0.5, BANDLN),
             ("LINEBELOW", (0, r), (-1, r), 0.5, BANDLN),
-            ("TOPPADDING", (0, r), (-1, r), 4),
-            ("BOTTOMPADDING", (0, r), (-1, r), 4),
+            ("TOPPADDING", (0, r), (-1, r), band_pad),
+            ("BOTTOMPADDING", (0, r), (-1, r), band_pad),
         ]
         for label, fn in items:
             r = len(rows)
             row(label, [fn(p) for p in plans])
             style += [
                 ("LINEBELOW", (0, r), (-1, r), 0.5, LINE),
-                ("TOPPADDING", (0, r), (-1, r), 3),
-                ("BOTTOMPADDING", (0, r), (-1, r), 3),
+                ("TOPPADDING", (0, r), (-1, r), row_pad),
+                ("BOTTOMPADDING", (0, r), (-1, r), row_pad),
             ]
             if zebra % 2 == 1:
                 style.append(("BACKGROUND", (0, r), (-1, r), ZEBRA))
@@ -388,4 +406,17 @@ def render_client_comparison(data) -> bytes:
             "Inc. is a licensed independent insurance agency.", _FINE),
     ]
     doc.build(story)
-    return buf.getvalue()
+    return buf.getvalue(), doc.page
+
+
+def render_client_comparison(data) -> bytes:
+    """Render the one-page sheet. Tries each density level (roomiest first) and returns
+    the first that fits on one page. If even the tightest can't fit, returns it anyway
+    (never fails the request) and logs a warning so it can be investigated."""
+    pdf, pages = None, 0
+    for row_pad, band_pad in _DENSITY_LEVELS:
+        pdf, pages = _build(data, row_pad, band_pad)
+        if pages == 1:
+            return pdf
+    log.warning("client sheet still %d pages at tightest spacing", pages)
+    return pdf
