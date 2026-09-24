@@ -83,15 +83,23 @@ def _star_points(cx, cy, r_out, r_in):
 
 
 def _star_drawing(rating, n=5):
+    """Whole stars gold, plus a half star (gold left half over a gray star) for .5 ratings.
+    Uses floor, not round(): Python's round(4.5) == 4, which drew 4.5-star plans as 4."""
     size, gap = 10.5, 1.5
     d = Drawing(n * (size + gap), size)
-    full = int(round(rating))
+    full = int(math.floor(rating + 1e-9))
+    has_half = (rating - full) >= 0.5 - 1e-9
     for i in range(n):
         cx = i * (size + gap) + size / 2
         cy = size / 2
-        col = GOLD if i < full else STAREMPTY
-        d.add(Polygon(_star_points(cx, cy, size / 2, size / 4.4),
-                      fillColor=col, strokeColor=col, strokeWidth=0.3))
+        pts = _star_points(cx, cy, size / 2, size / 4.4)
+        if i < full:
+            d.add(Polygon(pts, fillColor=GOLD, strokeColor=GOLD, strokeWidth=0.3))
+        else:
+            d.add(Polygon(pts, fillColor=STAREMPTY, strokeColor=STAREMPTY, strokeWidth=0.3))
+            if i == full and has_half:
+                # points 0..5 trace top tip -> left side -> bottom centre = left half of the star
+                d.add(Polygon(pts[:12], fillColor=GOLD, strokeColor=GOLD, strokeWidth=0.3))
     return d
 
 

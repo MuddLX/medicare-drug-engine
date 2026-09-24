@@ -79,9 +79,9 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
             "carrier": carrier,
             "plan_name": plan_name,
             # ---- from the drug engine ----
-            "plan_premium": f"${s['premium_monthly']:.0f}",
+            "plan_premium": f"${s['premium_monthly']:,.0f}",
             "part_d_premium": "Included",
-            "est_annual_drug_cost": f"${s['total_drug_cost']:.0f}",
+            "est_annual_drug_cost": f"${s['total_drug_cost']:,.0f}",
             "rx": {"covered": covered, "total": total_drugs, "not_covered": not_covered},
             # ---- interim states ----
             "star_rating": None,                 # gated: 2027 CMS star ratings
