@@ -315,6 +315,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         # cost
         group(f"COST — {period.upper()}")
         drug_cost_label = "Est. yearly drug cost" if full_year else f"Est. drug cost ({period})"
+        # Drugs the cost can't include (injectables to verify, unidentified): say so on the row.
+        excluded = [(d.get("original_name") or d.get("drug_name") or "").strip() for d in (drug_detail or [])
+                    if d.get("error") or d.get("is_injectable")]
+        excluded = [e for e in excluded if e]
         total_label = "Est. yearly total" if full_year else f"Est. total ({period})"
         for title, fn, bold in (
             ("Monthly premium", lambda s: _money(s.get("premium_monthly")), False),
@@ -323,6 +327,9 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             (total_label, lambda s: _money(s.get("total_drug_plus_premium")), True),
         ):
             row = [Paragraph(escape(title), lab)]
+            if title in (drug_cost_label, total_label) and excluded:
+                row = [[Paragraph(escape(title), lab),
+                        Paragraph(escape("excludes " + ", ".join(excluded)), lab_sub)]]
             for l in cols:
                 s = plan_summaries[l]
                 extra = "drugs + premium only" if (bold and l in pd) else None
@@ -426,8 +433,6 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         row.append(C("Not checked", "no directory loaded"))
                 rows.append(row)
 
-        if pd:
-            ts.append(("LINEBEFORE", (1 + len(ma), 0), (1 + len(ma), len(rows) - 1), 2, PD_LINE))
         t = Table(rows, colWidths=[label_w] + [col_w] * len(cols), repeatRows=1)
         pad = max(1.5, fs * 0.35)
         t.setStyle(TableStyle([

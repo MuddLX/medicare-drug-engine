@@ -147,3 +147,12 @@ def test_part_d_columns_are_labelled():
 ])
 def test_known_injectables_safety_net(name, dose, expected):
     assert M.is_known_injectable(name, name, dose) is expected
+
+
+def test_cost_rows_say_what_they_exclude():
+    s = summaries(2, 0)
+    d = drugs(list(s), 2)
+    d.append({"drug_name": "Ozempic", "original_name": "Ozempic", "dosage": "0.5mg", "is_injectable": True,
+              "plans": {l: {"covered": False, "injectable": True} for l in s}})
+    txt = text_of(render(s, d))
+    assert "excludes Ozempic" in txt
