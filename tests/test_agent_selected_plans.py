@@ -279,3 +279,45 @@ def test_internal_report_says_not_identified(client, monkeypatch):
     r = client.post("/process-soa", json={**BASE, "selected_plans": sel})
     assert r.status_code == 200
     assert texts.count("Not identified") == 2          # one cell per selected plan for "Unknownium"
+
+
+# ------------------------------------------------------------------ cost period (2026-10-02)
+def _months_seen(client, monkeypatch, body):
+    seen = {}
+    real = M.compute_drug_costs
+
+    def spy(*a, **k):
+        out = real(*a, **k)
+        seen["months"] = out["months_remaining"]
+        seen["annual"] = {lbl: s.get("total_drug_cost") for lbl, s in out["plan_summaries"].items()}
+        return out
+    monkeypatch.setattr(M, "compute_drug_costs", spy)
+    return seen
+
+
+def test_internal_report_prices_full_future_plan_year(client, monkeypatch):
+    seen = _months_seen(client, monkeypatch, None)
+    sel = pick(plans_for(client)["plans"], "MA", 1)
+    r = client.post("/process-soa", json={**BASE, "soa_date": "10/02/2026", "plan_year": 2027,
+                                          "selected_plans": sel})
+    assert r.status_code == 200
+    assert len(seen["months"]) == 12 and seen["months"][0] == "January"
+
+
+def test_internal_report_current_year_keeps_remaining_months(client, monkeypatch):
+    seen = _months_seen(client, monkeypatch, None)
+    body = {k: v for k, v in BASE.items() if k != "plan_year"}
+    r = client.post("/process-soa", json={**body, "soa_date": "10/02/2026"})
+    assert r.status_code == 200
+    assert seen["months"] == ["October", "November", "December"]
+    r = client.post("/process-soa", json={**BASE, "soa_date": "10/02/2026", "plan_year": 2026})
+    assert seen["months"] == ["October", "November", "December"]
+
+
+def test_both_reports_agree_on_yearly_drug_cost(client, monkeypatch):
+    sel = pick(plans_for(client)["plans"], "MA", 2)
+    seen = _months_seen(client, monkeypatch, None)
+    client.post("/process-soa", json={**BASE, "soa_date": "10/02/2026", "selected_plans": sel})
+    internal = dict(seen["annual"])
+    client.post("/client-comparison", json={**BASE, "soa_date": "10/02/2026", "selected_plans": sel})
+    assert internal == seen["annual"]

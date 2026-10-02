@@ -3530,6 +3530,21 @@ def process_soa():
     dob = data.get("dob", "")
     zip_code = data.get("zip_code", "55441")
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
+    # Cost period (2026-10-02): for a FUTURE plan year (AEP - coverage starts Jan 1) price the
+    # full plan year, exactly like /client-comparison, so both reports show the same yearly cost.
+    # For the current year (mid-year enrollment) keep pricing from the SOA month to December.
+    cost_start_date = soa_date
+    if data.get("plan_year") not in (None, ""):
+        try:
+            _py = int(data.get("plan_year"))
+            try:
+                _soa_year = datetime.strptime(soa_date, "%m/%d/%Y").year
+            except Exception:
+                _soa_year = date.today().year
+            if _py > _soa_year:
+                cost_start_date = f"01/01/{_py}"
+        except Exception:
+            pass
     drug_names = data.get("drug_names", "")
     drug_dosages = data.get("drug_dosages", "")
     client_address = data.get("client_address", "")
@@ -3572,7 +3587,7 @@ def process_soa():
             return jsonify({"error": err}), 400
 
     try:
-        result = compute_drug_costs(drugs, zip_code, soa_date,
+        result = compute_drug_costs(drugs, zip_code, cost_start_date,
                                     client_address=client_address,
                                     client_city=client_city,
                                     client_state=client_state,
