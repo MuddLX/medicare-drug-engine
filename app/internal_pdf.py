@@ -141,15 +141,29 @@ def pharmacy_summary(label, drug_detail, months):
     cheapest = min(totals, key=lambda k: (round(totals[k]["annual"], 2), totals[k]["distance"]))
     c = totals[cheapest]
     monthly = [c["monthly"].get(mn, 0) for mn in months] if months else []
-    steady = monthly[-1] if monthly else (c["annual"] / 12)
+    steady = _typical_month(monthly) if monthly else (c["annual"] / 12)
     transitions, prev = [], None
     for mn, cost in zip(months or [], monthly):
         if prev is None or abs(cost - prev) > 0.005:
             transitions.append((mn[:3], cost))
             prev = cost
-    mail_annual = sum((d.get("plans", {}).get(label, {}).get("mail_order_costs", {}) or {}).get("annual_total", 0) or 0
-                      for d in drug_detail or [])
-    n = len(months) if months else 12
+    # months before the typical month starts (deductible phase), and when the yearly cap hits
+    first_typical = next((i for i, v in enumerate(monthly) if abs(v - steady) <= 0.005), len(monthly))
+    ramp = [(m, v) for (m, v) in transitions
+            if months and [x[:3] for x in months].index(m) < first_typical]
+    cap_from = None
+    if monthly and monthly[-1] <= 0.005 and c["annual"] > 0:
+        i = len(monthly)
+        while i > 0 and monthly[i - 1] <= 0.005:
+            i -= 1
+        if 0 < i < len(monthly):
+            cap_from = months[i][:3]
+    mail_month = {}
+    for d in drug_detail or []:
+        for m in ((d.get("plans", {}).get(label, {}).get("mail_order_costs", {}) or {}).get("monthly_costs") or []):
+            mail_month[m["month"]] = mail_month.get(m["month"], 0) + (m["cost"] or 0)
+    mail_series = [mail_month.get(mn, 0) for mn in months] if months else []
+    mail_annual = sum(mail_month.values())
     return {
         "name": _short_pharmacy(cheapest),
         "distance": ("~" if c["approx"] else "") + f"{c['distance']} mi",
@@ -157,9 +171,19 @@ def pharmacy_summary(label, drug_detail, months):
         "annual": c["annual"],
         "all_same": len({round(v["annual"]) for v in totals.values()}) <= 1,
         "transitions": transitions,
-        "mail_monthly": (mail_annual / n) if mail_annual else None,
+        "ramp": ramp,
+        "cap_from": cap_from,
+        "mail_monthly": _typical_month(mail_series) if mail_annual else None,
         "mail_saves": (c["annual"] - mail_annual) if mail_annual else 0,
     }
+
+
+def _typical_month(values):
+    """The monthly cost the client pays most months (deductible months and the $0 months after
+    the yearly cap aren't "typical"). Ties go to the later month."""
+    vals = [round(v, 2) for v in values]
+    nonzero = [v for v in vals if v > 0] or vals
+    return max(reversed(nonzero), key=nonzero.count)
 
 
 def _written_name(r):
@@ -425,12 +449,14 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     r_mail.append(C(f"{_money(sm['mail_monthly'])}/mo", saves))
                 else:
                     r_mail.append(C("—"))
-                tr = sm["transitions"]
-                if len(tr) <= 1:
-                    r_ramp.append(C("Same every month"))
+                ramp = sm.get("ramp") or []
+                cap_note = f"$0 from {sm['cap_from']} (yearly cap)" if sm.get("cap_from") else None
+                if not ramp:
+                    r_ramp.append(C("Same every month", cap_note))
                 else:
-                    head_tr = " · ".join(f"{m} {_money(c, cents=False)}" for m, c in tr[:-1][:3])
-                    r_ramp.append(C(head_tr, f"then {_money(tr[-1][1])}"))
+                    head_tr = " · ".join(f"{m} {_money(c, cents=False)}" for m, c in ramp[:3])
+                    then_txt = f"then {_money(sm['steady'])}" + (f" · {cap_note}" if cap_note else "")
+                    r_ramp.append(C(head_tr, then_txt))
             rows += [r_cheap, r_mail, r_ramp]
 
         # doctors

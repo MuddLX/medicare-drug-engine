@@ -1940,6 +1940,41 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
     return sorted_pharms[:max_results]
 
 
+def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, drug_name=""):
+    """Price terms for one drug at one pharmacy (see app/drug_year.py). Same rules as
+    get_drug_cost_at_pharmacy: preferred/non-preferred rates, brand vs generic dispensing fee,
+    insulin $35, MFP drugs at 25% of the negotiated price."""
+    plan_id_padded = plan_id.zfill(3)
+    is_preferred = pharmacy.get("preferred", True)
+    generic_fee = float(pharmacy.get("generic_fee", 0) or 0)
+    brand_fee = float(pharmacy.get("brand_fee", 0) or 0)
+    drug_name_base = drug_name.split()[0] if drug_name else ""
+    if is_insulin(drug_name) or is_insulin(drug_name_base):
+        return {"flat": 35.0}
+    cost_row = conn.execute("""
+        SELECT cost_type_pref, cost_amt_pref,
+               cost_type_nonpref, cost_amt_nonpref,
+               ded_applies
+        FROM beneficiary_cost
+        WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
+        ORDER BY coverage_level ASC LIMIT 1
+    """, (contract_id, plan_id_padded, tier)).fetchone()
+    if not cost_row:
+        return {"flat": 0.0}
+    if is_preferred:
+        cost_type, cost_amt = cost_row[0], cost_row[1]
+    else:
+        cost_type = cost_row[2] if cost_row[2] is not None else cost_row[0]
+        cost_amt = cost_row[3] if cost_row[3] is not None and float(cost_row[3] or 0) > 0 else cost_row[1]
+    disp_fee = (brand_fee if brand_fee > 0 else generic_fee) if (tier and tier >= 3) else generic_fee
+    mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
+    if mfp is not None:
+        unit_cost, cost_type, cost_amt = mfp, 2, 0.25
+        disp_fee = brand_fee if brand_fee > 0 else generic_fee
+    return {"ded_applies": cost_row[4] != "N", "price": unit_cost, "fee": disp_fee,
+            "cost_type": cost_type, "cost_amt": float(cost_amt or 0)}
+
+
 def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
                                unit_cost,
                                pharmacy, deductible_remaining, drug_name=""):
@@ -2203,7 +2238,8 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
             "monthly_costs": monthly_costs,
             "annual_total": round(35.00 * len(months_remaining), 2),
             "steady_state_copay": 35.00,
-            "insulin_cap": True
+            "insulin_cap": True,
+            "_terms": {"flat": 35.0},
         }
 
     # Override with CMS negotiated MFP if available (more accurate for 2026)
@@ -2247,6 +2283,8 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         "tier": tier, "covered": True, "ndc": ndc,
         "monthly_costs": monthly_costs, "annual_total": annual_total,
         "steady_state_copay": float(cost_amt) if cost_type == 1 else None,
+        "_terms": {"ded_applies": ded_applies != "N", "price": unit_cost, "fee": 0.0,
+                   "cost_type": cost_type, "cost_amt": cost_amt},
     }
 
 
@@ -2407,25 +2445,20 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 drug_is_insulin = is_insulin(drug_name) or is_insulin(drug_name_base)
                 
                 for pharmacy in nearby_pharmacies:
+                    # Only the price TERMS are recorded here. The monthly costs are worked out
+                    # for all drugs together (one shared deductible + the yearly out-of-pocket
+                    # cap) by drug_year.apply_shared_year() at the end of this function.
                     pharm_monthly = []
-                    ded_remaining = plan["deductible"]
-                    
+                    pharm_terms = None
                     if drug_is_insulin:
-                        # Insulin: flat $35/month, no deductible
-                        for month_num in months_remaining:
-                            month_name = datetime(2026, month_num, 1).strftime("%B")
-                            pharm_monthly.append({"month": month_name, "cost": 35.00})
+                        pharm_terms = {"flat": 35.0}
                     elif cost_row:
-                        for month_num in months_remaining:
-                            month_name = datetime(2026, month_num, 1).strftime("%B")
-                            cost, ded_used = get_drug_cost_at_pharmacy(
-                                conn, plan["contract_id"], plan["plan_id"],
-                                ndc, tier, unit_cost,
-                                pharmacy, ded_remaining, drug_name=drug_name
-                            )
-                            ded_remaining = max(0, ded_remaining - ded_used)
-                            pharm_monthly.append({"month": month_name, "cost": cost})
-                    
+                        pharm_terms = pharmacy_fill_terms(
+                            conn, plan["contract_id"], plan["plan_id"], tier, unit_cost,
+                            pharmacy, drug_name=drug_name)
+                    if pharm_terms is not None:
+                        pharm_monthly = [{"month": mn, "cost": 0.0} for mn in month_names]
+
                     if pharm_monthly:
                         pharmacy_costs.append({
                             "name": pharmacy["name"],
@@ -2435,7 +2468,8 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                             "dist_approximate": pharmacy.get("dist_approximate", False),
                             "preferred": pharmacy["preferred"],
                             "monthly_costs": pharm_monthly,
-                            "annual_total": round(sum(m["cost"] for m in pharm_monthly), 2)
+                            "annual_total": round(sum(m["cost"] for m in pharm_monthly), 2),
+                            "_terms": pharm_terms,
                         })
                 
                 plan_cost["pharmacy_costs"] = pharmacy_costs
@@ -2449,35 +2483,39 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 """, (plan["contract_id"], plan["plan_id"].zfill(3), plan_cost.get("tier", 0))).fetchone()
 
                 if mail_cost_row or drug_is_insulin or is_mfp_drug_flag:
-                    mail_monthly = []
-                    for month_num in months_remaining:
-                        month_name = datetime(2026, month_num, 1).strftime("%B")
-                        if drug_is_insulin:
-                            mail_cost = 35.00
-                        elif is_mfp_drug_flag:
-                            # MFP drugs: mail order 90-day = same monthly equivalent
-                            mail_cost = round(mfp_value * 0.25, 2)
-                        elif mail_cost_row:
-                            mt = mail_cost_row[0]
-                            ma = mail_cost_row[1]
-                            if mt == 0:
-                                mail_cost = 0.0
-                            elif mt == 1:
-                                mail_cost = float(ma) / 3  # 90-day divided by 3
-                            elif mt == 2:
-                                mail_cost = round((unit_cost or 0) * float(ma) / 3, 2)
-                            else:
-                                mail_cost = float(ma) / 3
+                    # Mail order goes through the same shared deductible + yearly cap
+                    # (it used to skip the deductible, which made fake "saves $X/yr" lines).
+                    # Costs are per month; a 90-day copay is divided by 3.
+                    mail_ded = (mail_cost_row[2] != "N") if mail_cost_row else True
+                    if drug_is_insulin:
+                        mail_terms = {"flat": 35.0}
+                    elif is_mfp_drug_flag:
+                        mail_terms = {"ded_applies": mail_ded, "price": mfp_value, "fee": 0.0,
+                                      "cost_type": 2, "cost_amt": 0.25}
+                    elif mail_cost_row:
+                        mt, ma = mail_cost_row[0], float(mail_cost_row[1] or 0)
+                        if mt == 0:
+                            mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
+                                          "cost_type": 0, "cost_amt": 0}
+                        elif mt == 2:
+                            mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
+                                          "cost_type": 2, "cost_amt": ma}
                         else:
-                            mail_cost = 0.0
-                        mail_monthly.append({"month": month_name, "cost": mail_cost})
+                            mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
+                                          "cost_type": 1, "cost_amt": ma / 3}
+                    else:
+                        mail_terms = {"flat": 0.0}
                     plan_cost["mail_order_costs"] = {
-                        "monthly_costs": mail_monthly,
-                        "annual_total": round(sum(m["cost"] for m in mail_monthly), 2)
+                        "monthly_costs": [{"month": mn, "cost": 0.0} for mn in month_names],
+                        "annual_total": 0.0,
+                        "_terms": mail_terms,
                     }
             
             drug_result["plans"][carrier] = plan_cost
         results.append(drug_result)
+
+    from app.drug_year import apply_shared_year
+    apply_shared_year(results, plan_details, month_names)
 
     plan_summaries = {}
     for carrier, plan in plan_details.items():
