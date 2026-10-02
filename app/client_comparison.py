@@ -57,7 +57,35 @@ _NAME_PREFIXES = [
     ("Medica ", ""),                                # -> "Advantage Solution H8889-005 (PPO)"
     ("Gundersen MN Quartz Med Advantage ", ""),     # -> "Elite D (w/Rx) (HMO)"
     ("Align ", ""),                                 # -> "ChoiceElite (PPO)"
+    # standalone Part D (PDP) names (2026-10-02)
+    ("Wellcare ", ""),                              # -> "Classic (PDP)"
+    ("HealthSpring ", ""),                          # -> "Assurance Rx (PDP)"
+    ("MedicareBlue Rx ", ""),                       # -> "Standard (PDP)"
 ]
+
+# Client-facing carrier by CMS contract number (2026-10-02). Contract-based on purpose: matching
+# words in an official plan name is unreliable ("Allina Health Aetna MEDICAre" contains "medica").
+CONTRACT_CARRIER = {
+    "H4882": "HealthPartners", "H6309": "HealthPartners",
+    "H5959": "Blue Cross",
+    "H6154": "Medica", "H8889": "Medica", "H2450": "Medica",
+    "H5216": "Humana", "H8145": "Humana", "S5884": "Humana",
+    "H3219": "Aetna", "S5601": "Aetna",
+    "H2001": "UnitedHealthcare", "S5921": "UnitedHealthcare",
+    "H3186": "Align",
+    "H9834": "Quartz",
+    "S4802": "Wellcare",
+    "S5617": "HealthSpring",
+    "S5743": "MedicareBlue Rx",
+}
+
+
+def carrier_display(contract_id, org_name=None):
+    """Carrier name a client/agent recognizes, by contract number; falls back to CMS org name."""
+    cid = (contract_id or "").strip().upper()
+    if cid in CONTRACT_CARRIER:
+        return CONTRACT_CARRIER[cid]
+    return (org_name or cid or "").strip()
 
 
 def official_plan_name(contract_id, plan_id, db_path=None):
@@ -92,8 +120,8 @@ def display_plan_name(official, fallback):
     for prefix, repl in _NAME_PREFIXES:
         if official.startswith(prefix):
             rest = (repl + official[len(prefix):]).strip()
-            return rest or official
-    return official
+            return (rest or official).replace(" from UHC (", " (")
+    return official.replace(" from UHC (", " (")   # "AARP Medicare Rx Saver from UHC (PDP)" -> "... Saver (PDP)"
 
 
 def plan_summaries_to_candidates(plan_summaries, county):
@@ -116,6 +144,40 @@ def plan_summaries_to_candidates(plan_summaries, county):
             "health_systems": [],
         })
     return candidates
+
+
+CLIENT_SHEET_MAX_MA = 3   # client sheet = first 3 Medicare Advantage picks ...
+CLIENT_SHEET_MAX_PD = 1   # ... + the first Part D pick, as the rightmost column
+
+
+def agent_selection(plan_summaries, labels_in_pick_order):
+    """Agent-chosen plans -> the same selection shape select_plans() returns, so the rest of the
+    pipeline is shared. No ranking: the first 3 MA/Cost picks in pick order, then the first PD
+    pick as the rightmost column."""
+    ma, pd = [], []
+    for label in labels_in_pick_order:
+        s = plan_summaries.get(label)
+        if not s:
+            continue
+        ptype = (s.get("plan_type") or "").upper()
+        cand = {
+            "carrier": carrier_display(s.get("contract_id")),
+            "plan_label": label,
+            "contract_id": s.get("contract_id"),
+            "plan_id": s.get("plan_id"),
+            "plan_name": s.get("plan_name"),
+            "plan_type": s.get("plan_type"),
+            "drug_plan_only": ptype == "PD",
+        }
+        if ptype == "PD":
+            if len(pd) < CLIENT_SHEET_MAX_PD:
+                pd.append((cand, None, None))
+        elif len(ma) < CLIENT_SHEET_MAX_MA:
+            ma.append((cand, None, None))
+    return {"selected": ma + pd}
+
+
+NOT_INCLUDED = "Not included"
 
 
 def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_meta, client, plan_year):
@@ -166,6 +228,14 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
         }
         # overlay real CMS benefits (keyed by plan ID); no-op if the plan has no row
         plan.update(format_benefits(lookup_benefits(cand.get("contract_id"), cand.get("plan_id"))))
+        if cand.get("drug_plan_only"):
+            # Standalone Part D: drug coverage only. Medical + extra-benefit rows say so plainly.
+            plan["drug_plan_only"] = True
+            for field in ("deductible", "oop_max", "pcp_visit", "specialist_visit",
+                          "emergency_room", "dental", "vision", "hearing", "otc", "fitness"):
+                plan[field] = NOT_INCLUDED
+            plan["hospital_per_day"] = {"amount": NOT_INCLUDED, "note": None}
+            plan["part_b_giveback"] = None
         plans.append(plan)
 
     meta = dict(agency_meta)

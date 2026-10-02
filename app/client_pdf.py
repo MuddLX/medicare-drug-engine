@@ -171,7 +171,12 @@ def _cell(main, sub=None, kind="normal"):
 def _plan_header(p, text_w, carrier, c_style, n_style, name_h):
     # name_h is shared across all columns (see _name_layout) so stars / premium align
     rating = p.get("star_rating")
-    if rating is None:            # no CMS rating loaded yet, or plan too new to be rated
+    if rating is None and p.get("drug_plan_only"):
+        # Standalone Part D ratings aren't loaded (the PBP/star data covers MA plans) - show a
+        # neutral dash rather than claim the plan is unrated.
+        star_cell = Spacer(1, 10.5)
+        rating_cell = Paragraph("\u2014", _RATING)
+    elif rating is None:          # no CMS rating loaded yet, or plan too new to be rated
         star_cell = Spacer(1, 10.5)
         rating_cell = Paragraph("Not yet rated", _RATING)
     else:
@@ -231,7 +236,24 @@ def _cost_cell(p):
     return _cell(p["est_annual_drug_cost"])
 
 
+def _benefit(field, kind="normal"):
+    """Cell builder for a benefit row. Standalone Part D columns show muted "Not included"."""
+    def build(p):
+        if p.get("drug_plan_only"):
+            return _cell("Not included", kind="muted")
+        return _cell(p[field], kind=kind)
+    return build
+
+
+def _hospital_cell(p):
+    if p.get("drug_plan_only"):
+        return _cell("Not included", kind="muted")
+    return _cell(p["hospital_per_day"]["amount"], sub=p["hospital_per_day"].get("note"))
+
+
 def _prov_cell(p):
+    if p.get("drug_plan_only"):
+        return _cell("\u2014", kind="muted")     # a drug plan has no doctor network
     pr = p["providers"]
     if pr.get("status") == "verify":     # no provider chart yet — honest interim
         return _cell("Verify with your agent", kind="muted")
@@ -332,20 +354,19 @@ def _build(data, row_pad, band_pad):
             ("Est. yearly cost of your drugs", _cost_cell),
         ]),
         ("Medical coverage", [
-            ("Medical deductible",     lambda p: _cell(p["deductible"])),
-            ("Yearly out-of-pocket max", lambda p: _cell(p["oop_max"])),
-            ("Primary doctor visit",   lambda p: _cell(p["pcp_visit"])),
-            ("Specialist visit",       lambda p: _cell(p["specialist_visit"])),
-            ("Hospital stay (per day)", lambda p: _cell(p["hospital_per_day"]["amount"],
-                                                        sub=p["hospital_per_day"].get("note"))),
-            ("Emergency room",         lambda p: _cell(p["emergency_room"])),
+            ("Medical deductible",     _benefit("deductible")),
+            ("Yearly out-of-pocket max", _benefit("oop_max")),
+            ("Primary doctor visit",   _benefit("pcp_visit")),
+            ("Specialist visit",       _benefit("specialist_visit")),
+            ("Hospital stay (per day)", _hospital_cell),
+            ("Emergency room",         _benefit("emergency_room")),
         ]),
         ("Extra benefits", [
-            ("Dental allowance",       lambda p: _cell(p["dental"])),
-            ("Vision allowance",       lambda p: _cell(p["vision"])),
-            ("Hearing aids",           lambda p: _cell(p["hearing"])),
-            ("Over-the-counter card",  lambda p: _cell(p["otc"])),
-            ("Fitness (SilverSneakers)", lambda p: _cell(p["fitness"], kind="green")),
+            ("Dental allowance",       _benefit("dental")),
+            ("Vision allowance",       _benefit("vision")),
+            ("Hearing aids",           _benefit("hearing")),
+            ("Over-the-counter card",  _benefit("otc")),
+            ("Fitness (SilverSneakers)", _benefit("fitness", kind="green")),
         ]),
         ("Your prescriptions & doctors", [
             (_meds_label(meta.get("num_drugs")),

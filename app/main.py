@@ -41,42 +41,121 @@ FALLBACK_PLANS = [
 EXCLUDE_PLAN_TYPES = {"HMO D-SNP", "PPO D-SNP", "HMO C-SNP", "PPO C-SNP",
                       "HMO I-SNP", "PPO I-SNP", "PACE", "MSA"}
 
-def get_plans_for_zip(conn, zip_code):
-    """
-    Dynamically load plans available for a client zip code.
-    Uses service_area + zip_county tables if available.
-    Falls back to hardcoded FALLBACK_PLANS.
-    """
-    # Check if service_area and zip_county tables exist
+# Friendly name lookup — short labels for known plans (module level since 2026-10-02 so the
+# agent-chosen-plans path can use the same labels as the automatic path).
+FRIENDLY_NAMES = {
+    ("H4882", "009"): "HealthPartners Journey Pace",
+    ("H4882", "003"): "HealthPartners Journey Steady",
+    ("H4882", "011"): "HealthPartners Journey Stride",
+    ("H4882", "014"): "HealthPartners Journey Smart",
+    ("H6309", "001"): "HealthPartners Birch",
+    ("H6309", "002"): "HealthPartners Cedar",
+    ("H5959", "009"): "Blue Cross Choice",
+    ("H5959", "010"): "Blue Cross Complete",
+    ("H5959", "011"): "Blue Cross Complete",
+    ("H5959", "012"): "Blue Cross Core",
+    ("H5959", "013"): "Blue Cross Core",
+    ("H5959", "014"): "Blue Cross Choice",
+    ("H5959", "015"): "Blue Cross Comfort",
+    ("H5959", "016"): "Blue Cross Comfort",
+    ("H6154", "001"): "Medica Advantage",
+    ("H8889", "001"): "Medica Advantage",
+    ("H8889", "002"): "Medica Advantage",
+    ("H8889", "003"): "Medica Advantage",
+    ("H8889", "004"): "Medica Advantage",
+    ("H8889", "005"): "Medica Advantage",
+    ("H8889", "008"): "Medica Advantage",
+    ("H8889", "009"): "Medica Advantage (No Rx)",
+    ("H8889", "010"): "Medica Value",
+    ("H8889", "011"): "Medica Preferred",
+    ("H8889", "012"): "Medica Select",
+    ("H8889", "013"): "Medica Preferred",
+    ("H8889", "014"): "Medica Value",
+    ("H8889", "015"): "Medica Select",
+    ("H8889", "017"): "Medica Value",
+    ("H8889", "018"): "Medica Select",
+    ("H2450", "002"): "Medica Cost Enhanced",
+    ("H2450", "007"): "Medica Cost Thrift",
+    ("H2450", "016"): "Medica Cost Basic",
+    ("H2450", "035"): "Medica Cost Core",
+    ("H2450", "037"): "Medica Cost Premier",
+    ("H2450", "039"): "Medica Cost Focus",
+    ("H2450", "049"): "Medica Cost Standard",
+    ("H5216", "275"): "Humana Choice",
+    ("H5216", "063"): "Humana Choice",
+    ("H5216", "092"): "Humana Choice",
+    ("H5216", "359"): "Humana Choice",
+    ("H3219", "001"): "Aetna Signature",
+    ("H3219", "002"): "Aetna Enhanced",
+    ("H3219", "003"): "Aetna Grand",
+    ("H3219", "004"): "Aetna Grand Extra",
+    ("H3219", "005"): "Aetna Eagle",
+    ("H3219", "008"): "Aetna Signature Fit",
+    ("H3219", "012"): "Aetna Signature",
+    ("H3219", "014"): "Aetna Enhanced",
+    ("H2001", "116"): "UHC",
+    ("H2001", "117"): "UHC",
+    ("H2001", "118"): "UHC FG",
+    ("H2001", "119"): "UHC FG",
+    ("H2001", "120"): "UHC FG",
+    ("H2001", "123"): "UHC",
+    ("H3186", "001"): "Align ChoiceElite",
+    ("H3186", "002"): "Align ChoicePlus",
+    ("H8145", "006"): "Humana Gold Choice",
+    ("H9834", "001"): "Gundersen Quartz Elite",
+    ("H9834", "003"): "Gundersen Quartz Value",
+    ("H9834", "006"): "Gundersen Quartz Core",
+    ("H9834", "007"): "Gundersen Quartz Basic",
+    ("S5884", "190"): "Humana Value Rx",
+    ("S5884", "171"): "Humana Premier Rx",
+    ("S5884", "204"): "Humana Value Rx ($0/601)",
+    ("S5884", "145"): "Humana Basic Rx",
+    ("S4802", "146"): "WellCare Value Script",
+    ("S4802", "158"): "WellCare Value Script b",
+    ("S4802", "089"): "WellCare Classic",
+    ("S5601", "050"): "SilverScript Choice",
+    ("S5743", "001"): "MedicareBlue Rx",
+    ("S5921", "370"): "AARP Rx Saver",
+    ("S5921", "406"): "AARP Rx Preferred",
+}
+
+# Where the plan data comes from. Shown to agents in the plan picker; must change in lockstep
+# with a data refresh (same caveat as the hard-coded report footer).
+DATA_VINTAGE = "CMS Q1 2026"
+
+
+def resolve_county(conn, zip_code):
+    """(county, exact) for a ZIP, or (None, False). exact=False means the ZIP itself wasn't in
+    zip_county and a neighbouring ZIP's county was used (the long-standing fallback)."""
     tables = {r[0] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'"
     ).fetchall()}
-
     if "service_area" not in tables or "zip_county" not in tables:
-        return FALLBACK_PLANS
-
-    # Get county for this zip
+        return None, False
+    zip_code = str(zip_code or "").strip()
     row = conn.execute(
         "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
     ).fetchone()
+    if row:
+        return row[0], True
+    if not zip_code.isdigit():
+        return None, False
+    # Try nearby zips by incrementing/decrementing
+    for delta in [1, -1, 2, -2, 3, -3]:
+        alt_zip = str(int(zip_code) + delta).zfill(5)
+        row = conn.execute(
+            "SELECT county_name FROM zip_county WHERE zip = ?", (alt_zip,)
+        ).fetchone()
+        if row:
+            return row[0], False
+    return None, False
 
-    if not row:
-        # Try nearby zips by incrementing/decrementing
-        for delta in [1, -1, 2, -2, 3, -3]:
-            alt_zip = str(int(zip_code) + delta).zfill(5)
-            row = conn.execute(
-                "SELECT county_name FROM zip_county WHERE zip = ?", (alt_zip,)
-            ).fetchone()
-            if row:
-                break
 
-    if not row:
-        return FALLBACK_PLANS
-
-    county = row[0]
-
-    # Get all MA/Cost plans available in this county
-    # Exclude SNP/specialty plans from standard reports
+def eligible_plan_rows(conn, county):
+    """(ma_rows, pd_rows) every plan a client in this county may be shown. The ONE eligibility
+    rule shared by the automatic report path, the plan picker and agent-chosen plans, so the
+    picker can never offer a plan the reports can't render. MA/Cost: no SNP, no PACE, must have
+    a formulary. PD: standalone PDPs with a formulary."""
     ma_rows = conn.execute("""
         SELECT sa.contract_id, sa.plan_id, sa.plan_name, sa.org_name,
                MIN(sa.premium_total) as premium_total, sa.deductible, sa.plan_type,
@@ -109,89 +188,91 @@ def get_plans_for_zip(conn, zip_code):
         GROUP BY sa.contract_id, sa.plan_id
         ORDER BY MIN(sa.premium_total) ASC
     """, (county,)).fetchall()
+    return ma_rows, pd_rows
 
+
+MAX_SELECTED_MA = 7     # internal report layout limit (Section 1 columns)
+MAX_SELECTED_PD = 3     # internal report Section 4 limit
+
+
+def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max_pd=MAX_SELECTED_PD):
+    """Agent-chosen plans (2026-10-02) -> (plans, county, error).
+
+    `selected` is the ordered list the app sends: [{"contract_id": "H4882", "plan_id": "009"}, ...].
+    Returns plan dicts shaped exactly like get_plans_for_zip's, IN PICK ORDER, with a UNIQUE
+    "carrier" label each (two plans can share a friendly label, e.g. H3219-001 and H3219-012 are
+    both "Aetna Signature"; compute_drug_costs keys everything by that label, so a duplicate would
+    silently overwrite a plan). Never drops a plan silently: any problem -> error string (HTTP 400).
+    """
+    if not isinstance(selected, list) or not selected:
+        return None, None, "selected_plans must be a non-empty list"
+    county, _exact = resolve_county(conn, zip_code)
+    if not county:
+        return None, None, f"Can't find a county for ZIP {zip_code}"
+    ma_rows, pd_rows = eligible_plan_rows(conn, county)
+    eligible = {}
+    for r in ma_rows:
+        eligible[(r[0], str(r[1]).zfill(3))] = ("Cost" if "Cost" in (r[6] or "") else "MA", r)
+    for r in pd_rows:
+        eligible[(r[0], str(r[1]).zfill(3))] = ("PD", r)
+
+    plans, seen, used_labels = [], set(), set()
+    n_ma = n_pd = 0
+    for item in selected:
+        if not isinstance(item, dict):
+            return None, county, "Each selected plan must be an object with contract_id and plan_id"
+        cid = str(item.get("contract_id") or "").strip().upper()
+        pid = str(item.get("plan_id") or "").strip().zfill(3)
+        if not cid or not pid.strip("0") and pid != "000":
+            return None, county, "Each selected plan needs a contract_id and plan_id"
+        key = (cid, pid)
+        if key in seen:
+            return None, county, f"Plan {cid}-{pid} was selected more than once"
+        seen.add(key)
+        if key not in eligible:
+            return None, county, f"Plan {cid}-{pid} is not available in {county} County"
+        ptype, row = eligible[key]
+        if ptype == "PD":
+            n_pd += 1
+        else:
+            n_ma += 1
+        plan_row = conn.execute(
+            "SELECT premium, deductible FROM plans WHERE contract_id=? AND plan_id=?", (cid, pid)
+        ).fetchone()
+        premium = float(plan_row[0]) if plan_row and plan_row[0] is not None else float(row[4] or 0)
+        deductible = float(plan_row[1]) if plan_row and plan_row[1] is not None else float(row[5] or 0)
+        label = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else cid)
+        if label in used_labels:
+            label = f"{label} ({cid}-{pid})"
+        used_labels.add(label)
+        plans.append({
+            "carrier": label, "contract_id": cid, "plan_id": pid, "type": ptype,
+            "landscape_premium": premium, "landscape_deductible": deductible,
+        })
+    if n_ma > max_ma:
+        return None, county, f"Too many Medicare Advantage plans selected ({n_ma}); the limit is {max_ma}"
+    if n_pd > max_pd:
+        return None, county, f"Too many Part D plans selected ({n_pd}); the limit is {max_pd}"
+    return plans, county, None
+
+
+def get_plans_for_zip(conn, zip_code):
+    """
+    Dynamically load plans available for a client zip code.
+    Uses service_area + zip_county tables if available.
+    Falls back to hardcoded FALLBACK_PLANS.
+    """
+    county, _exact = resolve_county(conn, zip_code)
+    if not county:
+        return FALLBACK_PLANS
+
+    ma_rows, pd_rows = eligible_plan_rows(conn, county)
     if not ma_rows and not pd_rows:
         return FALLBACK_PLANS
 
     plans = []
     seen = set()
 
-    # Friendly name lookup — use short carrier names for known plans
-    FRIENDLY_NAMES = {
-        ("H4882", "009"): "HealthPartners Journey Pace",
-        ("H4882", "003"): "HealthPartners Journey Steady",
-        ("H4882", "011"): "HealthPartners Journey Stride",
-        ("H4882", "014"): "HealthPartners Journey Smart",
-        ("H6309", "001"): "HealthPartners Birch",
-        ("H6309", "002"): "HealthPartners Cedar",
-        ("H5959", "009"): "Blue Cross Choice",
-        ("H5959", "010"): "Blue Cross Complete",
-        ("H5959", "011"): "Blue Cross Complete",
-        ("H5959", "012"): "Blue Cross Core",
-        ("H5959", "013"): "Blue Cross Core",
-        ("H5959", "014"): "Blue Cross Choice",
-        ("H5959", "015"): "Blue Cross Comfort",
-        ("H5959", "016"): "Blue Cross Comfort",
-        ("H6154", "001"): "Medica Advantage",
-        ("H8889", "001"): "Medica Advantage",
-        ("H8889", "002"): "Medica Advantage",
-        ("H8889", "003"): "Medica Advantage",
-        ("H8889", "004"): "Medica Advantage",
-        ("H8889", "005"): "Medica Advantage",
-        ("H8889", "008"): "Medica Advantage",
-        ("H8889", "009"): "Medica Advantage (No Rx)",
-        ("H8889", "010"): "Medica Value",
-        ("H8889", "011"): "Medica Preferred",
-        ("H8889", "012"): "Medica Select",
-        ("H8889", "013"): "Medica Preferred",
-        ("H8889", "014"): "Medica Value",
-        ("H8889", "015"): "Medica Select",
-        ("H8889", "017"): "Medica Value",
-        ("H8889", "018"): "Medica Select",
-        ("H2450", "002"): "Medica Cost Enhanced",
-        ("H2450", "007"): "Medica Cost Thrift",
-        ("H2450", "016"): "Medica Cost Basic",
-        ("H2450", "035"): "Medica Cost Core",
-        ("H2450", "037"): "Medica Cost Premier",
-        ("H2450", "039"): "Medica Cost Focus",
-        ("H2450", "049"): "Medica Cost Standard",
-        ("H5216", "275"): "Humana Choice",
-        ("H5216", "063"): "Humana Choice",
-        ("H5216", "092"): "Humana Choice",
-        ("H5216", "359"): "Humana Choice",
-        ("H3219", "001"): "Aetna Signature",
-        ("H3219", "002"): "Aetna Enhanced",
-        ("H3219", "003"): "Aetna Grand",
-        ("H3219", "004"): "Aetna Grand Extra",
-        ("H3219", "005"): "Aetna Eagle",
-        ("H3219", "008"): "Aetna Signature Fit",
-        ("H3219", "012"): "Aetna Signature",
-        ("H3219", "014"): "Aetna Enhanced",
-        ("H2001", "116"): "UHC",
-        ("H2001", "117"): "UHC",
-        ("H2001", "118"): "UHC FG",
-        ("H2001", "119"): "UHC FG",
-        ("H2001", "120"): "UHC FG",
-        ("H2001", "123"): "UHC",
-        ("H3186", "001"): "Align ChoiceElite",
-        ("H3186", "002"): "Align ChoicePlus",
-        ("H8145", "006"): "Humana Gold Choice",
-        ("H9834", "001"): "Gundersen Quartz Elite",
-        ("H9834", "003"): "Gundersen Quartz Value",
-        ("H9834", "006"): "Gundersen Quartz Core",
-        ("H9834", "007"): "Gundersen Quartz Basic",
-        ("S5884", "190"): "Humana Value Rx",
-        ("S5884", "171"): "Humana Premier Rx",
-        ("S5884", "204"): "Humana Value Rx ($0/601)",
-        ("S5884", "145"): "Humana Basic Rx",
-        ("S4802", "146"): "WellCare Value Script",
-        ("S4802", "158"): "WellCare Value Script b",
-        ("S4802", "089"): "WellCare Classic",
-        ("S5601", "050"): "SilverScript Choice",
-        ("S5743", "001"): "MedicareBlue Rx",
-        ("S5921", "370"): "AARP Rx Saver",
-        ("S5921", "406"): "AARP Rx Preferred",
-    }
 
     # Group by carrier family — show only the lowest-premium plan per carrier
     # e.g. HealthPartners shows Journey Pace ($0), not all 4 plans
@@ -2143,7 +2224,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     }
 
 
-def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_city=None, client_state=None, custom_plans_str=None):
+def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_city=None, client_state=None, custom_plans_str=None, plans_override=None):
     """
     drugs: list of {"name": str, "dosage": str}
     Normalizes drug names via Claude first, then looks up costs.
@@ -2155,11 +2236,16 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
 
     conn = get_db()
 
-    # Dynamically load plans available for this zip code
-    available_plans = get_plans_for_zip(conn, zip_code)
+    # Agent-chosen plans (2026-10-02): render exactly these, in pick order. Otherwise pick
+    # automatically for this zip code (the original behaviour).
+    custom_warnings = []
+    if plans_override:
+        available_plans = list(plans_override)
+        custom_plans_str = None          # margin-note requests don't apply when the agent picked
+    else:
+        available_plans = get_plans_for_zip(conn, zip_code)
 
     # Append any agent-requested custom plans (max 2, skip dupes)
-    custom_warnings = []
     if custom_plans_str and custom_plans_str.strip():
         existing_keys = {(p["contract_id"], p["plan_id"].zfill(3)) for p in available_plans}
         custom, custom_warnings = resolve_custom_plans(conn, custom_plans_str, existing_keys)
@@ -2596,7 +2682,9 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             elements.append(wt)
             elements.append(Spacer(1, 0.15*mm))
 
-    ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "MA"}
+    # Cost plans (e.g. Medica Prime Solution) are Medicare Advantage-style plans: show them in the
+    # MA sections. (Before 2026-10-02 a selected Cost plan was silently left out of every section.)
+    ma_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") in ("MA", "Cost")}
     pd_plans = {k: v for k, v in plan_summaries.items() if v.get("plan_type") == "PD"}
 
     def make_plan_table(plans, section_label):
@@ -2686,7 +2774,13 @@ def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail,
             row = [Paragraph(label, drug_lbl)]
             for c in carriers:
                 pd = drug.get("plans",{}).get(c,{})
-                if not pd.get("covered", False):
+                if drug.get("error"):
+                    # The engine couldn't identify this drug, so coverage was never checked -
+                    # don't claim "Not Covered" (matches the banner + client sheet, 2026-10-02).
+                    row.append(Paragraph("Not identified", S("nid", fontSize=6, textColor=AMBER_TEXT, alignment=TA_CENTER, leading=8)))
+                elif pd.get("injectable"):
+                    row.append(Paragraph("Verify coverage", S("inj", fontSize=6, textColor=AMBER_TEXT, alignment=TA_CENTER, leading=8)))
+                elif not pd.get("covered", False):
                     row.append(Paragraph("Not Covered", nc_style))
                 else:
                     tier = pd.get("tier")
@@ -3378,6 +3472,52 @@ def debug_costs():
     })
 
 
+def _parse_selected_plans(data):
+    """The optional ordered "selected_plans" list from a request body (None when absent/empty)."""
+    sel = data.get("selected_plans")
+    if isinstance(sel, str):
+        try:
+            sel = json.loads(sel)
+        except Exception:
+            return "invalid"
+    if sel in (None, [], ""):
+        return None
+    return sel
+
+
+@app.route("/plans-for-zip", methods=["GET"])
+def plans_for_zip_route():
+    """Every plan a client in this ZIP could choose (agent plan picker, 2026-10-02).
+    Same eligibility rule as the reports (eligible_plan_rows). Medicare Advantage first, then
+    standalone Part D; each sorted by carrier, then plan name. Contains no client data."""
+    from app.client_comparison import carrier_display, official_plan_name, display_plan_name
+
+    zip_code = (request.args.get("zip") or "").strip()
+    if len(zip_code) != 5 or not zip_code.isdigit():
+        return jsonify({"error": "Provide a 5-digit ZIP, e.g. /plans-for-zip?zip=55441"}), 400
+    conn = get_db()
+    try:
+        county, exact = resolve_county(conn, zip_code)
+        if not county:
+            return jsonify({"error": f"No county found for ZIP {zip_code}"}), 404
+        ma_rows, pd_rows = eligible_plan_rows(conn, county)
+    finally:
+        conn.close()
+
+    def entry(r, ptype):
+        cid, pid = r[0], str(r[1]).zfill(3)
+        carrier = carrier_display(cid, r[3])
+        name = display_plan_name(r[2] or official_plan_name(cid, pid), f"{cid}-{pid}")
+        return {"contract_id": cid, "plan_id": pid, "plan_type": ptype,
+                "carrier": carrier, "plan_name": name,
+                "display_name": f"{carrier} \u2014 {name}"}
+
+    ma = sorted((entry(r, "MA") for r in ma_rows), key=lambda p: (p["carrier"].lower(), p["plan_name"].lower()))
+    pd = sorted((entry(r, "PD") for r in pd_rows), key=lambda p: (p["carrier"].lower(), p["plan_name"].lower()))
+    return jsonify({"zip_code": zip_code, "county": county, "county_exact": bool(exact),
+                    "data_vintage": DATA_VINTAGE, "plans": ma + pd})
+
+
 @app.route("/process-soa", methods=["POST"])
 def process_soa():
     """
@@ -3416,12 +3556,28 @@ def process_soa():
     if not drugs:
         return jsonify({"error": "No drugs provided"}), 400
 
+    # Agent-chosen plans (2026-10-02): validate first so a bad pick is a clear 400, never a
+    # silently different report.
+    plans_override = None
+    selected = _parse_selected_plans(data)
+    if selected == "invalid":
+        return jsonify({"error": "selected_plans is not valid JSON"}), 400
+    if selected is not None:
+        _conn = get_db()
+        try:
+            plans_override, _county, err = resolve_selected_plans(_conn, zip_code, selected)
+        finally:
+            _conn.close()
+        if err:
+            return jsonify({"error": err}), 400
+
     try:
         result = compute_drug_costs(drugs, zip_code, soa_date,
                                     client_address=client_address,
                                     client_city=client_city,
                                     client_state=client_state,
-                                    custom_plans_str=custom_plans_str)
+                                    custom_plans_str=custom_plans_str,
+                                    plans_override=plans_override)
     except Exception as e:
         return jsonify({"error": f"Drug cost computation failed: {str(e)}"}), 500
 
@@ -3649,11 +3805,27 @@ def client_comparison_route():
     if not drugs:
         return jsonify({"error": "No drugs provided"}), 400
 
+    # Agent-chosen plans (2026-10-02). The app sends the agent's full ordered selection; the
+    # client sheet shows the first 3 Medicare Advantage picks + the first Part D pick (rightmost).
+    plans_override = None
+    selected = _parse_selected_plans(data)
+    if selected == "invalid":
+        return jsonify({"error": "selected_plans is not valid JSON"}), 400
+    if selected is not None:
+        _conn = get_db()
+        try:
+            plans_override, _county, err = resolve_selected_plans(_conn, zip_code, selected)
+        finally:
+            _conn.close()
+        if err:
+            return jsonify({"error": err}), 400
+
     try:
         result = compute_drug_costs(drugs, zip_code, f"01/01/{plan_year}",
                                     client_address=client_address,
                                     client_city=client_city,
-                                    client_state=client_state)
+                                    client_state=client_state,
+                                    plans_override=plans_override)
     except Exception as e:
         return jsonify({"error": f"Cost computation failed: {str(e)}"}), 500
 
@@ -3675,8 +3847,12 @@ def client_comparison_route():
     client = {"county": county, "systems": [], "num_providers": num_providers}
 
     try:
-        candidates = plan_summaries_to_candidates(plan_summaries, county)
-        selection = select_plans(candidates, config, client, NeutralNetworkFit())
+        if plans_override:
+            from app.client_comparison import agent_selection
+            selection = agent_selection(plan_summaries, [p["carrier"] for p in plans_override])
+        else:
+            candidates = plan_summaries_to_candidates(plan_summaries, county)
+            selection = select_plans(candidates, config, client, NeutralNetworkFit())
         if not selection["selected"]:
             return jsonify({"error": "No eligible plans for this client/area"}), 404
         payload = assemble_renderer_payload(selection, plan_summaries, drug_detail,
