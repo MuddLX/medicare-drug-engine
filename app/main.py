@@ -2183,7 +2183,53 @@ def lookup_rxcuis(drug_name, dosage=""):
             rxcuis = list(data.get("idGroup", {}).get("rxnormId", []))
         except Exception:
             pass
+    if not rxcuis:
+        rxcuis = lookup_rxcuis_release_form(drug_name, dosage)
     return rxcuis
+
+
+RELEASE_FORM_RE = None
+
+
+def lookup_rxcuis_release_form(drug_name, dosage=""):
+    """Fallback for drugs written with a release-form abbreviation (Metformin ER, Bupropion XL,
+    Nifedipine ER, Metoprolol succinate ER...). RxNav's exact search doesn't understand "ER", so
+    use its approximate search (RxNorm sources only), keep the top-ranked matches that are really
+    this drug, and add each match's generic + brand versions (formularies list either one).
+    Deliberately NOT used for plain misspellings ("Lisinpril"): those stay "verify the name"."""
+    import re
+    global RELEASE_FORM_RE
+    if RELEASE_FORM_RE is None:
+        RELEASE_FORM_RE = re.compile(r"\b(ER|XR|XL|SR|CR|DR|LA|EC|24\s?HR|12\s?HR)\b", re.I)
+    text = f"{drug_name} {dosage}"
+    if not drug_name or not RELEASE_FORM_RE.search(text):
+        return []
+    base = drug_name.split()[0].lower()
+    found = []
+    for term in ([f"{drug_name} {dosage}".strip(), drug_name] if dosage else [drug_name]):
+        try:
+            url = ("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term="
+                   + requests.utils.quote(term) + "&maxEntries=20&option=1")
+            cands = requests.get(url, timeout=8).json().get("approximateGroup", {}).get("candidate", []) or []
+        except Exception:
+            cands = []
+        for c in cands:
+            if str(c.get("rank")) == "1" and base in (c.get("name") or "").lower() and c["rxcui"] not in found:
+                found.append(c["rxcui"])
+        if found:
+            break
+    out = list(found)
+    for rx in found[:4]:
+        try:
+            url = f"https://rxnav.nlm.nih.gov/REST/rxcui/{rx}/related.json?tty=SCD+SBD"
+            groups = requests.get(url, timeout=8).json().get("relatedGroup", {}).get("conceptGroup", []) or []
+            for g in groups:
+                for cp in g.get("conceptProperties", []) or []:
+                    if cp.get("rxcui") and cp["rxcui"] not in out:
+                        out.append(cp["rxcui"])
+        except Exception:
+            pass
+    return out
 
 
 def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining, drug_name=''):
