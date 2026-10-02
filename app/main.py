@@ -2495,7 +2495,17 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     }
 
 
-def build_pdf(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None, provider_results=None):
+def build_pdf(*args, plan_year=None, county=None, **kwargs):
+    """Internal agent report. Since 2026-10-02 the one-table layout (app/internal_pdf.py).
+    Set the environment variable INTERNAL_REPORT_V1=1 to fall back to the previous layout
+    (build_pdf_v1) without a code change."""
+    if os.environ.get("INTERNAL_REPORT_V1") == "1":
+        return build_pdf_v1(*args, **kwargs)
+    from app.internal_pdf import render
+    return render(*args, plan_year=plan_year, county=county, **kwargs)
+
+
+def build_pdf_v1(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None, provider_results=None):
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
@@ -3771,6 +3781,18 @@ def process_soa():
             extraction_warnings.append({"drug": text, "normalized_to": "", "flag": ""})
     merged_warnings = list(result.get("warnings", [])) + extraction_warnings
 
+    # Header facts for the one-table report (2026-10-02)
+    report_plan_year = int(cost_start_date[-4:]) if cost_start_date != soa_date else None
+    report_county = None
+    try:
+        _c = get_db()
+        try:
+            report_county, _exact = resolve_county(_c, zip_code)
+        finally:
+            _c.close()
+    except Exception:
+        report_county = None
+
     try:
         pdf_bytes_out = build_pdf(
             client_name, dob, zip_code, soa_date,
@@ -3781,7 +3803,9 @@ def process_soa():
             warnings=merged_warnings,
             client_address=client_address,
             client_city=client_city,
-            provider_results=provider_results
+            provider_results=provider_results,
+            plan_year=report_plan_year,
+            county=report_county,
         )
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
