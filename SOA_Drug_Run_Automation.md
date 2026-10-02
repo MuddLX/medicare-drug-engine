@@ -12,6 +12,7 @@
 ### ⭐ October 2026 — Agent-chosen plans (supersedes system plan ranking)
 *Decided Oct 1, 2026 (Jordon + Jill). Engine side built + verified live Oct 2. App (Roundabout Phase 12) and n8n changes in progress. Where anything below this box describes the system picking plans, the high-confidence path generating reports automatically, or the resume workflow, this box wins.*
 *Status end of Oct 2: **all of it is built, switched over and tested end to end** (app Phases 12–21, n8n extraction-only + claim-on-pickup, engine picker detail + one-table internal report). Details in the roadmap under "Oct 2, 2026 (afternoon)".*
+*Status evening of Oct 2: hands-on testing with a deliberately messy fake sheet (Harold Lindgren) exposed how flagged fields reach the agent. Fixed on the engine and n8n side; app Phases 22–25 (layout + review polish) queued in Claude Code. Details in the roadmap under "Oct 2, 2026 (evening)".*
 
 **The decision.** The system no longer chooses which plans go on either report. The **agent** chooses.
 - After extraction, **every** sheet pauses for the agent, at high confidence too. The agent confirms or corrects the extraction, then picks plans.
@@ -176,7 +177,50 @@ Full design in the ⭐ October 2026 box at the top of Current Architecture. Jord
 
 **Verified with fake sheets today:** batch upload of 3; a Details-tab edit carries to both PDFs; Linda's amlodipine 20 mg flagged; Ozempic → "Verify coverage" and excluded from totals; both reports' yearly costs match. New fake test sheets on the agency's real form: **Ruth Anderson** (55125 Washington), **Gerald Okafor** (55337 Dakota, Ozempic pen), **Linda Marchetti** (55369 Hennepin, Synthroid brand, amlodipine 20 mg, no dentist).
 
+#### Oct 2, 2026 (evening) — Messy-sheet test, flagged-field pipeline fixed, review UX queued
+**Why:** Ruth / Gerald / Linda were typed and easy to read, so nothing ever reached "needs review". Claude made a deliberately messy fake sheet — **Harold Lindgren** (`Harold_Lindgren_CIS_TEST_NEEDS_REVIEW.pdf`, built by `make_messy.py`: handwriting font on the real form, tilted/shadowed/blurred phone-photo look, coffee ring). Planted problems: DOB `4/1?/1951`, 4-digit ZIP `5544`, cut-off phone + email, "Medica ?? / not sure", faded "Dr. Sch...dt", misspelled "Lisinpril", Metoprolol with no strength, "Atorvastatin 4O mg", **Januvia crossed out**, "Jardiance 10 or 25?", faded "Eliqu..s" with both Tablet and Capsule ticked, Furosemide "as needed".
+
+**What the test showed:**
+- ✅ Tab defaults confirmed in code: a sheet with nothing flagged opens on **Plans**; any flagged field → **Details**; a finished sheet → Details read-only. *(Gap noted: the app goes by `flagged_fields` only, not the overall confidence score.)*
+- ❌ The reader **guessed** values instead of leaving gaps: ZIP 5544 → 55434, Jardiance "10 or 25?" → 10mg.
+- ❌ Problems the reader noticed (misspelling, missing strength, crossed-out Januvia) went into free-text `flags`, **not** `low_confidence_fields`, so they were never orange. Januvia went onto both reports and was priced. Root cause: `Build Review JSON (19)` built `flagged_fields` only from `low_confidence_fields`, and the prompt defined that as "handwriting unclear" only.
+- ❌ Internal report said **"In network"** for the illegible "Dr. Sch...dt" (matched on clinic) — a dangerous false positive.
+- ❌ Details tab is one long flat list of every extraction leaf, including reader internals (Confidence, Low confidence field 1–5, Flag 1–6 as editable boxes); tall Flag boxes clipped their first line; no way to tell must-fix from optional; no way to remove a crossed-out drug.
+- ❌ Flagged (orange) fields auto-saved silently: no Save, Enter did nothing, no confirmation. Edit link was plain black text.
+
+**Engine (Railway) — commits `a944eeb`, `21dd8d1` (47 offline tests):**
+- `a944eeb` Internal report **section bands** (COST / MEDICATIONS / PHARMACY / DOCTORS) bolder: darker band `#DCE3EC`, full-size near-black title, dark rule above.
+- `21dd8d1`:
+  - Reader notes on the report are **readable**: field paths stripped (`drugs[1].dosage:` → gone, `zip_code` → "ZIP", `providers[0].last_name` → "Doctor's name"); the generic "couldn't identify" note is dropped when a more specific note (e.g. "may be a misspelling") covers the same drug.
+  - **Illegible doctor name** (contains `...`, `…` or `?`) is never plain "In network" → amber **"Possible match — verify"**.
+  - Drug with **no strength** gets an amber line under its name: "no strength on sheet — cost uses a common strength".
+  - Contract-plan number removed from inside official plan names (Medica "Advantage Solution H6154-001 (HMO-POS)" showed the number twice) — in `display_plan_name`, so both reports benefit.
+
+**n8n main workflow (to publish + test):**
+- `Extract with Claude (6)` prompt v3: **NEVER GUESS OR COMPLETE VALUES** (DOB, ZIP, phone and every dose exactly as written, `?` for an unreadable digit); new per-drug **`crossed_out`** (true for struck-through / stopped drugs, still listed); new **`field_notes: [{field, note}]`** — one entry per field an agent should look at, using exact paths, covering unclear handwriting, crossed-out drug, missing dose, ambiguous/unusual dose, possible misspelling, incomplete DOB/ZIP/phone; `flags` kept (plain sentences starting with the drug/field name — the internal report still uses them); `low_confidence_fields` = every path in field_notes.
+- `Build Review JSON (19)` v3: `flagged_fields` = field_notes paths ∪ low_confidence_fields ∪ paths found inside flags ∪ **deterministic checks** (drug with no name; name but no dose; dose containing `?` or "or"; `crossed_out` → flag `.name` and add a note if the reader didn't; ZIP not 5 digits; DOB not MM/DD/YYYY). Cleans `field_notes` and writes it back into the extraction for the app.
+- `Parse JSON (7)` unchanged (passes new fields through).
+- **Test pending:** re-run Harold → in the n8n execution, Parse JSON (7) output should show ZIP `5544`, Jardiance dose `10 or 25?`, Januvia `crossed_out: true`.
+
+**Roundabout (Claude Code) — queued, in order:**
+- **22** Pin "Your selection" above the plan list (compact rows, own scroll after ~4); medications grid columns hug content (no mid-card gap); client-card facts line styled like the section headings (bold small-caps labels, regular values).
+- **23** Edit / Save change links in **blue** (`accent_text`, lighter blue in dark mode); flagged fields get a blue **Save** link + Enter saves → green "✓ Saved" state; autosave stays as crash safety but doesn't confirm; **Submit locked until every flagged field is saved** (even if unchanged); confirmed state persisted in the draft (`_confirmed`, never sent as a correction).
+- **24** Plans tab room on small windows: remove the "On the reports" summary box + Edit details button (keep one amber line for e.g. "Metoprolol has no dosage — fix on Details"); "Client sheet" tags on selected rows instead of the paragraph; selected plans marked in the list (number + tint); selection capped at ~⅓ height, collapses to "5 selected ▾"; plan list always ≥ 3 rows; draggable scan/panel divider (remembered).
+- **25** Details tab redesign: hide reader internals (confidence, signature_present, low_confidence_fields, flags, field_notes; SOA/appointment/coverage/custom_plans in a collapsed "More from the sheet"); **cards** (Client info, one per drug "Drug N · name", one per doctor); **two levels decided by the app from the field path** — MUST FIX (orange, blocks Submit: ZIP, DOB, drug name, drug dosage, crossed-out drug) vs CHECK (amber outline, optional: phone, email, doctors, names); reader notes shown under their field (field_notes first, flags text-match fallback, unmatched → "Other notes from the reader"); "2 must fix · 3 to check" line; **Remove drug / Keep drug / Undo** (`_removed: ["drugs[3]"]` in the draft; value corrections applied first, removals in descending index). **Addendum:** `drugs[i].crossed_out === true` is the primary crossed-out signal; never shown as a field; field_notes hidden.
+
+**Decisions / rules from this session:**
+- **The app decides severity, not the reader.** Must-fix = anything that changes price or plan list. Predictable, testable, doesn't drift with model wording.
+- **Honest gap beats confident guess** for DOB, ZIP and doses — the agent fixes it by hand.
+- A crossed-out drug stays on the list but blocks Submit until the agent keeps or removes it.
+- Plan-picker and Details changes are layout-only; selection/ordering/saving logic untouched.
+
 #### Remaining before Saturday (in order)
+*Evening update (Oct 2):*
+- ✅ Phase 21 done (test-data reset + Help "contact Jordon"). Ruth / Gerald / Linda re-run through the new build — uploads, status changes and tab defaults all good.
+- ⬜ Push engine commits `a944eeb` + `21dd8d1` (`git push origin main`) → Railway redeploys.
+- ⬜ Publish n8n prompt v3 + Build Review JSON v3 → re-run Harold → check Parse JSON (7) output (ZIP 5544, "10 or 25?", Januvia crossed_out true).
+- ⏳ Review Claude Code reports for Phases 22, 23, 24, 25 (+ addendum), one at a time; hands-on check each with Harold + one clean sheet.
+- ⬜ Then the release build + Lacey items below.
 *Updated end of Oct 2 — the original list below it is done (✅ items 1–3; item 4 continues here):*
 - ⏳ **Phase 21** test-data reset + Help contact line (running).
 - ⬜ Re-run Ruth / Gerald / Linda for a clean demo set; check Gerald's report (Ozempic + new prompt, no Form-notes noise).
@@ -1200,6 +1244,7 @@ A drug showing green regardless of its tier number means the copay is $0 — the
 | August 29, 2026 | Restored the truncated Extract with Claude prompt in the live node; verified end-to-end on a real handwritten SOA (custom_plans + flags + providers) — see below |
 | September 19, 2026 | Engine health check (Goal A — all green) + agent-report visual refresh (Goal B pt.1): slate palette, best-plan highlight removed, two-up pharmacy grid, section spacing; plus repo hygiene — see below |
 | September 21, 2026 | Flags → PDF banner plumbing closed — **Goal B fully done**: n8n **Build Railway Body** now sends the `flags` array; the engine reads it and merges into the ⚠ Drug Verification banner. Proven engine-side (fake-flags POST) then end-to-end on a real flagged sheet — see below |
+| October 2, 2026 (evening) | Messy fake sheet (Harold Lindgren) test; engine `a944eeb` bolder report section bands + `21dd8d1` readable reader notes / illegible doctors never "In network" / no-strength callout / no contract number in plan names; n8n extraction prompt v3 (never guess, `crossed_out`, `field_notes`) + Build Review JSON v3 (flagged_fields from notes + deterministic checks); app Phases 22–25 specified (pinned selection, blue Edit + Save confirmation, Plans tab room, Details cards with must-fix vs check + remove drug) — see the evening block in the October roadmap update |
 | October 2, 2026 (afternoon) | App Phases 13–21 (new layout, freeze fix, colour rules, client cards, test-data reset); n8n claim-on-pickup + 15 s polling + Error Workflow + rewritten extraction prompt; engine 3 workers, picker detail, **one-table internal report** with Part D + doctors, injectables safety net, doctor "Possible match" honesty — see the afternoon block in the October roadmap update and the session detail below |
 | October 1–2, 2026 | **Architecture change: agent-chosen plans** (Jill meeting). Engine: `/plans-for-zip`, `selected_plans` on both reports, full-plan-year cost period for the internal report, Cost plans shown, "Not identified" in Section 2, Part D columns on the client sheet. Verified offline (22 tests) and live on Railway. App (Roundabout Phase 12) + n8n changes in progress — see the October 2026 update in the roadmap and the October 2, 2026 Session Detail |
 | September 23, 2026 | Client-facing sheet live + polished end-to-end on both paths (logo, half-stars, commas, official plan names, UnitedHealthcare, auto-fit, one-page guarantee, honest "to confirm" drugs); resume-path emit proven; internal warnings banner compacted into groups; Roundabout Phase 11 built; go-live order locked and folder restructure designed + deferred. See the Sept 23 block in the roadmap and the Phase 3 doc |
@@ -1532,4 +1577,12 @@ Summary lives in the roadmap block **"Oct 2, 2026 (afternoon) — Hardening, new
 - **Mockups first:** UI changes were agreed on the Design canvas "Roundabout — New Layout Mockup" (Upload, To Do, Completed Client Reports, Plans, and the internal report page) before any build prompt was written.
 - **Engine commits:** `b16ea57` picker detail · `a6e82dc` one-table internal report · `2e7923d` Part D teal + doctor honesty + injectables · `98805bc` drop Part D divider + "excludes" note. Each pushed by Jordon with `git push origin main`.
 - **Git on Jordon's machine:** commits made from the linked computer can leave `HEAD.lock` / `maintenance.lock` / `tmp_obj_*` behind (the linked shell can't delete without permission). Delete permission was granted for the engine folder and they were cleaned after each commit; otherwise Jordon's next push fails.
+
+### October 2, 2026 (evening) Session Detail
+Summary lives in the roadmap block **"Oct 2, 2026 (evening) — Messy-sheet test, flagged-field pipeline fixed, review UX queued"**. Working notes:
+- **Master doc** updated mid-afternoon (commit `5c0dc5b`) and again this evening. Vault master and repo copy kept byte-identical.
+- **Test sheets** live in Claude's workspace (`cis_test/`) and were sent to Jordon in chat: Ruth Anderson, Gerald Okafor, Linda Marchetti (typed, clean), **Harold Lindgren (messy, needs review)**. All fake data.
+- **How the flagged-field gap was found:** Jordon's Details screenshots showed the orange set (DOB, ZIP, phone) didn't include the misspelled Lisinopril, the dose-less Metoprolol or the crossed-out Januvia, while the internal report's warning box listed all of them. Compared the live `Build Review JSON (19)` code (from the exported workflow) with the reader output → `flagged_fields` came only from `low_confidence_fields`. First fix (match paths inside `flags`) proved unreliable on the next run because the reader wrote plain sentences without paths → moved to structured `field_notes` + `crossed_out` + app-side severity.
+- **Live n8n text** for nodes 6, 7 and 19 was pasted by Jordon before editing, so the v3 replacements were written against the exact live versions.
+- Engine change verification: 47 offline tests (4 new: warning tidy + dedupe, illegible doctor → Possible match, no-strength callout, contract number stripped); one-page fit still holds for the 10-plan worst case.
 
