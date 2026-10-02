@@ -190,7 +190,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
     FAINT = colors.HexColor("#64748B")
     LINE = colors.HexColor("#E2E8F0")
     FRAME = colors.HexColor("#CBD5E1")
-    GROUP_BG = colors.HexColor("#F1F5F9")
+    GROUP_BG = colors.HexColor("#DCE3EC")       # section bands (COST / MEDICATIONS / PHARMACY / DOCTORS)
+    GROUP_INK = colors.HexColor("#0F172A")
     HEAD_BG = colors.HexColor("#1E293B")
     PD_HEAD_BG = colors.HexColor("#0F5F5C")      # deep teal: Part D stands apart from MA (navy)
     PD_LINE = colors.HexColor("#0F766E")
@@ -268,7 +269,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         sub = S("s", max(fs - 1.5, 5), alignment=TA_CENTER, textColor=FAINT)
         lab = S("l", fs, fontName="Helvetica-Bold")
         lab_sub = S("ls", max(fs - 1.5, 5), textColor=FAINT)
-        grp = S("g", max(fs - 1.5, 5), fontName="Helvetica-Bold", textColor=MUTED)
+        grp = S("g", fs, fontName="Helvetica-Bold", textColor=GROUP_INK)   # full size, near-black: easy to find
         head = S("hd", fs, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.white)
         head_sub = S("hs", max(fs - 1.5, 5), alignment=TA_CENTER, textColor=colors.HexColor("#CBD5E1"))
         pd_tag = S("pt", max(fs - 2, 5), alignment=TA_CENTER, fontName="Helvetica-Bold",
@@ -307,7 +308,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             rows.append([Paragraph(escape(title), grp)] + [""] * len(cols))
             r = len(rows) - 1
             ts.extend([("BACKGROUND", (0, r), (-1, r), GROUP_BG), ("SPAN", (0, r), (-1, r)),
-                       ("LINEABOVE", (0, r), (-1, r), 0.6, FRAME)])
+                       ("LINEABOVE", (0, r), (-1, r), 1.4, INK), ("LINEBELOW", (0, r), (-1, r), 0.6, FRAME),
+                       ("TOPPADDING", (0, r), (-1, r), 5), ("BOTTOMPADDING", (0, r), (-1, r), 5)])
 
         def tint(r, c, bg, tx=None):
             ts.append(("BACKGROUND", (c, r), (c, r), bg))
