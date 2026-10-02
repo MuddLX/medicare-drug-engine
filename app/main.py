@@ -151,6 +151,18 @@ def resolve_county(conn, zip_code):
     return None, False
 
 
+def plan_premium_deductible(conn, cid, pid, row):
+    """(monthly premium, drug deductible) exactly as both reports show them: the plans table
+    first, the service-area row as fallback. Shared with the plan picker (2026-10-02) so the
+    picker can never show a different premium than the PDFs."""
+    plan_row = conn.execute(
+        "SELECT premium, deductible FROM plans WHERE contract_id=? AND plan_id=?", (cid, pid)
+    ).fetchone()
+    premium = float(plan_row[0]) if plan_row and plan_row[0] is not None else float(row[4] or 0)
+    deductible = float(plan_row[1]) if plan_row and plan_row[1] is not None else float(row[5] or 0)
+    return premium, deductible
+
+
 def eligible_plan_rows(conn, county):
     """(ma_rows, pd_rows) every plan a client in this county may be shown. The ONE eligibility
     rule shared by the automatic report path, the plan picker and agent-chosen plans, so the
@@ -236,11 +248,7 @@ def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max
             n_pd += 1
         else:
             n_ma += 1
-        plan_row = conn.execute(
-            "SELECT premium, deductible FROM plans WHERE contract_id=? AND plan_id=?", (cid, pid)
-        ).fetchone()
-        premium = float(plan_row[0]) if plan_row and plan_row[0] is not None else float(row[4] or 0)
-        deductible = float(plan_row[1]) if plan_row and plan_row[1] is not None else float(row[5] or 0)
+        premium, deductible = plan_premium_deductible(conn, cid, pid, row)
         label = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else cid)
         if label in used_labels:
             label = f"{label} ({cid}-{pid})"
@@ -3501,19 +3509,28 @@ def plans_for_zip_route():
         if not county:
             return jsonify({"error": f"No county found for ZIP {zip_code}"}), 404
         ma_rows, pd_rows = eligible_plan_rows(conn, county)
+
+        def entry(r, ptype):
+            cid, pid = r[0], str(r[1]).zfill(3)
+            carrier = carrier_display(cid, r[3])
+            official = (r[2] or official_plan_name(cid, pid) or "").strip()
+            name = display_plan_name(official, f"{cid}-{pid}")
+            premium, deductible = plan_premium_deductible(conn, cid, pid, r)
+            return {"contract_id": cid, "plan_id": pid, "plan_type": ptype,
+                    "carrier": carrier, "plan_name": name,
+                    "display_name": f"{carrier} \u2014 {name}",
+                    # Agent-facing detail for the picker (2026-10-02). Same source as the reports.
+                    "plan_number": f"{cid}-{pid}",
+                    "official_name": official or name,
+                    "premium_monthly": round(premium, 2),
+                    "drug_deductible": round(deductible, 2)}
+
+        def key(p):
+            return (p["carrier"].lower(), p["plan_name"].lower())
+        ma = sorted((entry(r, "MA") for r in ma_rows), key=key)
+        pd = sorted((entry(r, "PD") for r in pd_rows), key=key)
     finally:
         conn.close()
-
-    def entry(r, ptype):
-        cid, pid = r[0], str(r[1]).zfill(3)
-        carrier = carrier_display(cid, r[3])
-        name = display_plan_name(r[2] or official_plan_name(cid, pid), f"{cid}-{pid}")
-        return {"contract_id": cid, "plan_id": pid, "plan_type": ptype,
-                "carrier": carrier, "plan_name": name,
-                "display_name": f"{carrier} \u2014 {name}"}
-
-    ma = sorted((entry(r, "MA") for r in ma_rows), key=lambda p: (p["carrier"].lower(), p["plan_name"].lower()))
-    pd = sorted((entry(r, "PD") for r in pd_rows), key=lambda p: (p["carrier"].lower(), p["plan_name"].lower()))
     return jsonify({"zip_code": zip_code, "county": county, "county_exact": bool(exact),
                     "data_vintage": DATA_VINTAGE, "plans": ma + pd})
 

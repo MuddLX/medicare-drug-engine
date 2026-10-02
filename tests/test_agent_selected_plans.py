@@ -321,3 +321,32 @@ def test_both_reports_agree_on_yearly_drug_cost(client, monkeypatch):
     internal = dict(seen["annual"])
     client.post("/client-comparison", json={**BASE, "soa_date": "10/02/2026", "selected_plans": sel})
     assert internal == seen["annual"]
+
+
+# ------------------------------------------------------------------ picker detail (2026-10-02)
+def test_plans_for_zip_carries_agent_detail(client):
+    for p in plans_for(client)["plans"]:
+        assert p["plan_number"] == f'{p["contract_id"]}-{p["plan_id"]}'
+        assert p["official_name"]
+        assert isinstance(p["premium_monthly"], float) and p["premium_monthly"] >= 0
+        assert isinstance(p["drug_deductible"], float) and p["drug_deductible"] >= 0
+
+
+def test_picker_premium_matches_the_reports(client, monkeypatch):
+    """The picker must never show a different premium than the PDFs."""
+    plans = plans_for(client)["plans"]
+    sel = pick(plans, "MA", 3) + pick(plans, "PD", 1)
+    seen = {}
+    real = M.compute_drug_costs
+
+    def spy(*a, **k):
+        out = real(*a, **k)
+        seen["s"] = out["plan_summaries"]
+        return out
+    monkeypatch.setattr(M, "compute_drug_costs", spy)
+    assert client.post("/process-soa", json={**BASE, "selected_plans": sel}).status_code == 200
+    by_key = {(p["contract_id"], p["plan_id"]): p for p in plans}
+    for s in seen["s"].values():
+        p = by_key[(s["contract_id"], str(s["plan_id"]).zfill(3))]
+        assert round(s["premium_monthly"], 2) == p["premium_monthly"]
+        assert round(s["deductible"], 2) == p["drug_deductible"]
