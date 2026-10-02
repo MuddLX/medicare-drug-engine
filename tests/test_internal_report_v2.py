@@ -72,7 +72,7 @@ def test_typical_report_is_one_page_with_everything():
     pdf = render(s, drugs(list(s), 6), doctors(2))
     assert pages(pdf) == 1
     txt = text_of(pdf)
-    for needle in ("COST", "2027 PLAN YEAR", "MEDICATIONS", "PHARMACY", "DOCTORS", "Part D", "H3219-002",
+    for needle in ("COST", "2027 PLAN YEAR", "MEDICATIONS", "PHARMACY", "DOCTORS", "PART D", "H3219-002",
                    "In network", "Not found", "drug plan", "Mail order", "Hennepin County"):
         assert needle in txt, needle
 
@@ -112,3 +112,38 @@ def test_soa_era_flags_are_dropped_from_alerts():
                                {"drug": "Amlodipine 20mg unusually high dose"}], [])
     flat = [i for _, items in groups for i in items]
     assert flat == ["Amlodipine 20mg unusually high dose"]
+
+
+# ------------------------------------------------------------------ 2026-10-02 follow-ups
+def test_wrong_first_name_match_is_possible_match_not_in_network():
+    s = summaries(1, 0)
+    prov = [{"raw_text": "Dr. Sarah Johnson - HealthPartners Roseville", "first_name": "Sarah", "last_name": "Johnson",
+             "specialty": "Family Medicine", "matched_first": "Steven", "matched_last": "Johnson", "credentials": "DDS",
+             "aetna_status": "In Network", "aetna_detail": "Some Clinic · City"}]
+    txt = text_of(render(s, drugs(list(s), 1), prov))
+    assert "Dr. Sarah Johnson" in txt                       # row shows what the client wrote
+    assert "Possible match" in txt and "Steven Johnson" in txt
+    assert "In network" not in txt
+
+
+def test_clinic_only_entry_is_labelled_by_the_clinic():
+    s = summaries(1, 0)
+    prov = [{"raw_text": "Park Nicollet Clinic", "clinic_name": "Park Nicollet Clinic", "first_name": "", "last_name": "",
+             "matched_first": "Amanda", "matched_last": "Christ", "credentials": "MD",
+             "aetna_status": "In Network", "aetna_detail": "Park Nicollet Clinic Bloomington · Bloomington"}]
+    txt = text_of(render(s, drugs(list(s), 1), prov))
+    assert "Park Nicollet Clinic" in txt and "Amanda" not in txt.split("MEDICATIONS")[0]
+
+
+def test_part_d_columns_are_labelled():
+    s = summaries(2, 1)
+    assert "PART D" in text_of(render(s, drugs(list(s), 1)))
+
+
+@pytest.mark.parametrize("name,dose,expected", [
+    ("Ozempic", "0.5mg", True), ("Trulicity", "1.5mg", True), ("Mounjaro", "5mg", True),
+    ("Semaglutide", "0.5mg pen", True), ("Rybelsus", "7mg", False), ("Insulin glargine", "10 units", False),
+    ("Lantus pen", "", False), ("Eliquis", "5mg", False), ("Metformin", "500mg", False),
+])
+def test_known_injectables_safety_net(name, dose, expected):
+    assert M.is_known_injectable(name, name, dose) is expected

@@ -137,6 +137,29 @@ def pharmacy_summary(label, drug_detail, months):
     }
 
 
+def _written_name(r):
+    """The doctor/clinic as the CLIENT wrote it (row label)."""
+    first = (r.get("first_name") or "").strip()
+    last = (r.get("last_name") or "").strip()
+    if first or last:
+        name = f"{first} {last}".strip()
+        return name if name.lower().startswith("dr") else f"Dr. {name}"
+    clinic = (r.get("clinic_name") or "").strip()
+    return (clinic or (r.get("raw_text") or "Doctor")).strip()[:45]
+
+
+def _match_conflict(r):
+    """The directory match is a different person: the client wrote a first name and the
+    matched first name starts with a different letter (last-name-only false match)."""
+    wrote = (r.get("first_name") or "").strip().lower().strip(".")
+    got = (r.get("matched_first") or "").strip().lower().strip(".")
+    if not wrote or not got:
+        return False
+    if len(wrote) <= 2 or len(got) <= 2:          # an initial: compare first letters only
+        return wrote[0] != got[0]
+    return not (wrote.startswith(got[:3]) or got.startswith(wrote[:3]))   # Sarah vs Steven -> conflict
+
+
 def _doctor_name(r):
     first = (r.get("matched_first") or r.get("first_name") or "").strip()
     last = (r.get("matched_last") or r.get("last_name") or "").strip()
@@ -169,7 +192,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
     FRAME = colors.HexColor("#CBD5E1")
     GROUP_BG = colors.HexColor("#F1F5F9")
     HEAD_BG = colors.HexColor("#1E293B")
-    PD_HEAD_BG = colors.HexColor("#334155")
+    PD_HEAD_BG = colors.HexColor("#0F5F5C")      # deep teal: Part D stands apart from MA (navy)
+    PD_LINE = colors.HexColor("#0F766E")
     AMBER_BG, AMBER_TX = colors.HexColor("#FEF3C7"), colors.HexColor("#92400E")
     RED_BG, RED_TX = colors.HexColor("#FEE2E2"), colors.HexColor("#991B1B")
     GREEN_BG, GREEN_TX = colors.HexColor("#DCFCE7"), colors.HexColor("#166534")
@@ -200,7 +224,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             facts.append(f"{county} County")
         nd = len(drug_detail or [])
         facts.append(f"{nd} medication{'s' if nd != 1 else ''}")
-        docs = [_doctor_name(r) for r in (provider_results or [])]
+        docs = [_written_name(r) for r in (provider_results or [])]
         if docs:
             facts.append(", ".join(docs[:3]) + (f" +{len(docs) - 3}" if len(docs) > 3 else ""))
         right = [f"Generated {datetime.today().strftime('%m/%d/%Y')}"]
@@ -247,6 +271,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         grp = S("g", max(fs - 1.5, 5), fontName="Helvetica-Bold", textColor=MUTED)
         head = S("hd", fs, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.white)
         head_sub = S("hs", max(fs - 1.5, 5), alignment=TA_CENTER, textColor=colors.HexColor("#CBD5E1"))
+        pd_tag = S("pt", max(fs - 2, 5), alignment=TA_CENTER, fontName="Helvetica-Bold",
+                   textColor=colors.HexColor("#99F6E4"))
 
         def C(text, subtext=None, style=None):
             parts = [Paragraph(escape(text), style or cell)]
@@ -265,9 +291,12 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             cid, pid = s.get("contract_id", ""), str(s.get("plan_id", "")).zfill(3)
             carrier = carrier_display(cid)
             pname = display_plan_name(s.get("plan_name"), l)
-            top = ("Part D · " if l in pd else "") + carrier
-            hrow.append([Paragraph(escape(top), head), Paragraph(escape(pname), head),
-                         Paragraph(escape(f"{cid}-{pid}"), head_sub)])
+            parts = []
+            if l in pd:
+                parts.append(Paragraph("PART D · DRUG PLAN", pd_tag))
+            parts += [Paragraph(escape(carrier), head), Paragraph(escape(pname), head),
+                      Paragraph(escape(f"{cid}-{pid}"), head_sub)]
+            hrow.append(parts)
         rows.append(hrow)
         ts += [("BACKGROUND", (0, 0), (-1, 0), HEAD_BG)]
         if pd:
@@ -367,7 +396,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             group("DOCTORS — NETWORK STATUS (2026 DIRECTORIES; VERIFY WITH CARRIER)")
             for pr in provider_results:
                 spec = (pr.get("specialty") or "").strip()
-                lab_parts = [Paragraph(escape(_doctor_name(pr)), lab)]
+                lab_parts = [Paragraph(escape(_written_name(pr)), lab)]
                 if spec:
                     lab_parts.append(Paragraph(escape(spec[:40]), lab_sub))
                 row = [lab_parts]
@@ -378,7 +407,11 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         continue
                     key = CONTRACT_PROVIDER_KEY.get(plan_summaries[l].get("contract_id", ""))
                     status = pr.get(f"{key}_status") if key else None
-                    if status == "In Network":
+                    if status == "In Network" and _match_conflict(pr):
+                        used_keys.add(key)
+                        row.append(C("Possible match", f"{_doctor_name(pr)} — verify"))
+                        tint(r, ci, AMBER_BG)
+                    elif status == "In Network":
                         used_keys.add(key)
                         detail = (pr.get(f"{key}_detail") or "").strip()
                         if pr.get(f"{key}_accepting") == "N":
@@ -393,6 +426,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         row.append(C("Not checked", "no directory loaded"))
                 rows.append(row)
 
+        if pd:
+            ts.append(("LINEBEFORE", (1 + len(ma), 0), (1 + len(ma), len(rows) - 1), 2, PD_LINE))
         t = Table(rows, colWidths=[label_w] + [col_w] * len(cols), repeatRows=1)
         pad = max(1.5, fs * 0.35)
         t.setStyle(TableStyle([

@@ -1685,6 +1685,24 @@ def lookup_providers_aetna(providers_list, zip_code):
     conn.close()
     return results
 
+# Safety net (2026-10-02): injectables the agency always verifies by hand, even when the
+# Claude normalization step forgets to mark them. Insulin is deliberately NOT here: it has
+# its own $35/month cap pricing. Oral forms (e.g. Rybelsus = oral semaglutide) are not listed.
+KNOWN_INJECTABLE_BRANDS = (
+    "ozempic", "wegovy", "trulicity", "mounjaro", "zepbound", "victoza", "saxenda", "byetta",
+    "bydureon", "adlyxin", "soliqua", "xultophy", "humira", "enbrel", "prolia", "repatha",
+    "praluent", "forteo", "tymlos", "dupixent", "stelara", "cosentyx", "aimovig", "emgality", "ajovy",
+)
+_INJECTABLE_WORDS = (" pen", "injection", "injectable", "autoinjector", "syringe", "prefilled")
+
+
+def is_known_injectable(*texts):
+    low = " " + " ".join((t or "") for t in texts).lower()
+    if is_insulin(low):                 # all insulins (incl. brands like Lantus) keep $35-cap pricing
+        return False
+    return any(b in low for b in KNOWN_INJECTABLE_BRANDS) or any(w in low for w in _INJECTABLE_WORDS)
+
+
 def get_remaining_months(soa_date_str):
     try:
         soa = datetime.strptime(soa_date_str, "%m/%d/%Y").date()
@@ -2303,7 +2321,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
         dosage = item.get("dosage", "").strip()
         flag = item.get("flag", "")
         norm_confidence = item.get("confidence", 1.0)
-        is_injectable = item.get("is_injectable", False)
+        is_injectable = item.get("is_injectable", False) or is_known_injectable(original_name, drug_name, dosage)
 
         if not drug_name:
             continue
