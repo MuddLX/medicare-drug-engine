@@ -41,6 +41,14 @@ _MED_WORDS = ("medication", "medications", "medicine", "drug", "drugs", "dose", 
               "prescription", "tablet", "capsule", "insulin", "inhaler", "injection", "mg", "mcg", "rx")
 
 
+_FIELD_WORDS = {"zip_code": "ZIP", "phone_number": "Phone", "date_of_birth": "Date of birth",
+                "client_first_name": "First name", "client_last_name": "Last name", "address": "Address",
+                "city": "City", "custom_plans": "Plan requests"}
+
+# A name the reader could only partly read ("Sch...dt", "Eliqu?s") can't be trusted for a directory match.
+_ILLEGIBLE = re.compile(r"\.\.\.|…|\?")
+
+
 def _money(v, cents=True):
     if v is None:
         return "—"
@@ -90,6 +98,23 @@ def group_warnings(warnings, drug_detail):
             if flag:
                 note += f" — {flag}"
         med.append(note)
+
+    def tidy(text):
+        """'drugs[1].dosage: Metoprolol listed…' -> 'Metoprolol listed…' (the reader's field paths mean nothing to an agent)."""
+        t = re.sub(r"\bproviders\[\d+\]\.(last_name|first_name)\b", "Doctor's name", text)
+        t = re.sub(r"\b(drugs|providers)\[\d+\]\.\w+\s*:\s*", "", t)
+        t = re.sub(r"\b(drugs|providers)\[\d+\]\.\w+\b", "", t)
+        for key, word in _FIELD_WORDS.items():
+            t = re.sub(r"\b" + key + r"\b", word, t)
+        t = re.sub(r"\s{2,}", " ", t).strip(" :·-")
+        return t[:1].upper() + t[1:] if t else t
+
+    med, form, plan = [tidy(x) for x in med], [tidy(x) for x in form], [tidy(x) for x in plan]
+    unknown = [x for x in med if x.endswith(": couldn't identify — verify name")]
+    for note in unknown:
+        drug = note.split(":")[0].strip().lower()
+        if any(drug in other.lower() for other in med if other != note):
+            med.remove(note)               # a more specific note (e.g. "may be a misspelling") already covers it
 
     def dedupe(items):
         seen, out = set(), []
@@ -158,6 +183,12 @@ def _match_conflict(r):
     if len(wrote) <= 2 or len(got) <= 2:          # an initial: compare first letters only
         return wrote[0] != got[0]
     return not (wrote.startswith(got[:3]) or got.startswith(wrote[:3]))   # Sarah vs Steven -> conflict
+
+
+def _name_illegible(r):
+    """The client's doctor name was only partly readable, so any directory hit is a guess."""
+    text = " ".join((r.get(k) or "") for k in ("last_name", "first_name", "raw_text"))
+    return bool(_ILLEGIBLE.search(text))
 
 
 def _doctor_name(r):
@@ -269,6 +300,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         sub = S("s", max(fs - 1.5, 5), alignment=TA_CENTER, textColor=FAINT)
         lab = S("l", fs, fontName="Helvetica-Bold")
         lab_sub = S("ls", max(fs - 1.5, 5), textColor=FAINT)
+        lab_warn = S("lw", max(fs - 1.5, 5), textColor=AMBER_TX, fontName="Helvetica-Bold")
         grp = S("g", fs, fontName="Helvetica-Bold", textColor=GROUP_INK)   # full size, near-black: easy to find
         head = S("hd", fs, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.white)
         head_sub = S("hs", max(fs - 1.5, 5), alignment=TA_CENTER, textColor=colors.HexColor("#CBD5E1"))
@@ -348,6 +380,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                 lab_parts = [Paragraph(escape(f"{name} {dose}".strip() or original or "Medication"), lab)]
                 if original and name and original.split()[0].lower() != name.split()[0].lower():
                     lab_parts.append(Paragraph(escape(f"written: {original}"), lab_sub))
+                if not dose and not d.get("error"):
+                    lab_parts.append(Paragraph("no strength on sheet — cost uses a common strength", lab_warn))
                 row = [lab_parts]
                 r = len(rows)
                 for ci, l in enumerate(cols, start=1):
@@ -416,7 +450,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         continue
                     key = CONTRACT_PROVIDER_KEY.get(plan_summaries[l].get("contract_id", ""))
                     status = pr.get(f"{key}_status") if key else None
-                    if status == "In Network" and _match_conflict(pr):
+                    if status == "In Network" and (_match_conflict(pr) or _name_illegible(pr)):
                         used_keys.add(key)
                         row.append(C("Possible match", f"{_doctor_name(pr)} — verify"))
                         tint(r, ci, AMBER_BG)

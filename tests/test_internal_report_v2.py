@@ -156,3 +156,38 @@ def test_cost_rows_say_what_they_exclude():
               "plans": {l: {"covered": False, "injectable": True} for l in s}})
     txt = text_of(render(s, d))
     assert "excludes Ozempic" in txt
+
+
+# --- Oct 2 (Harold Lindgren test sheet) ---------------------------------------------------------
+
+def test_warning_field_paths_are_cleaned_and_unknown_note_deduped():
+    W = [{"drug": "Lisinpril", "flag": "Not found in RxNav"},
+         {"drug": "drugs[1].dosage: Metoprolol listed without a dosage."},
+         {"drug": "drugs[0].name: 'Lisinpril' may be misspelling of Lisinopril — confirm with client."},
+         {"drug": "zip_code: written as '5544' or '55434'"}]
+    D = [{"drug_name": "Lisinpril", "original_name": "Lisinpril"}, {"drug_name": "Metoprolol"}]
+    text = " | ".join(i for _, items in R.group_warnings(W, D) for i in items)
+    assert "drugs[" not in text and "zip_code" not in text
+    assert "ZIP: written" in text
+    assert "couldn't identify" not in text            # the misspelling note covers it
+
+
+def test_illegible_doctor_name_is_never_plain_in_network():
+    s = summaries(3, 0)
+    prov = doctors(1)
+    prov[0].update({"first_name": "", "last_name": "Sch...dt", "raw_text": "Dr. Sch...dt - Allina Coon Rapids"})
+    txt = text_of(render(s, drugs(list(s), 1), prov))
+    assert "Possible match" in txt and "In network" not in txt
+
+
+def test_drug_without_strength_is_called_out():
+    s = summaries(2, 0)
+    d = drugs(list(s), 1)
+    d[0]["dosage"] = ""
+    assert "no strength on sheet" in text_of(render(s, d))
+
+
+def test_contract_number_dropped_from_plan_name():
+    from app.client_comparison import display_plan_name
+    assert display_plan_name("Medica Advantage Solution H6154-001 (HMO-POS)", "x") == \
+        display_plan_name("Medica Advantage Solution (HMO-POS)", "x")

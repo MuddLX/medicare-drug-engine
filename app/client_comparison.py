@@ -10,6 +10,7 @@ build_pdf or /process-soa. The client renderer receives no provider names or dru
 tiers - by construction.
 """
 import os
+import re
 import sqlite3
 
 try:
@@ -113,10 +114,11 @@ def official_plan_name(contract_id, plan_id, db_path=None):
 
 def display_plan_name(official, fallback):
     """Official name minus the carrier prefix; unknown carriers keep the full official
-    name; no official name -> fallback (the old behavior)."""
+    name; no official name -> fallback (the old behavior). A contract-plan number inside
+    the name ("Advantage Solution H6154-001 (HMO-POS)") is dropped: it is shown separately."""
     if not official:
         return fallback
-    official = official.strip()
+    official = re.sub(r"\s*\b[HRS]\d{4}-\d{3}\b", "", official).strip()
     for prefix, repl in _NAME_PREFIXES:
         if official.startswith(prefix):
             rest = (repl + official[len(prefix):]).strip()
