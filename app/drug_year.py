@@ -52,28 +52,60 @@ def fill_cost(t, deductible_remaining):
 def simulate_year(terms_list, n_months, deductible, cap=None):
     """terms_list: one entry per drug (None = no cost for that drug here).
     Returns one list of monthly costs per drug (None stays None)."""
+    return simulate_year_detail(terms_list, n_months, deductible, cap)[0]
+
+
+def simulate_year_detail(terms_list, n_months, deductible, cap=None):
+    """Like simulate_year, plus WHEN things happen (Lacey, 2026-10-03):
+      info["ded_met"]:     month index the deductible is fully paid; "none" = the plan has no
+                           drug deductible; "n/a" = it doesn't apply to any of these drugs;
+                           None = not met within the months shown.
+      info["cap_reached"]: month index the yearly out-of-pocket cap is reached, or None."""
     cap = oop_cap() if cap is None else cap
     ded = float(deductible or 0)
+    start_ded = ded
     spent = 0.0
+    ded_met = "none" if start_ded <= 0 else None
+    any_subject = False
+    cap_reached = None
     out = [None if t is None else [] for t in terms_list]
-    for _ in range(n_months):
+    for m in range(n_months):
         for i, t in enumerate(terms_list):
             if t is None:
                 continue
+            if t.get("ded_applies") and t.get("price") and "flat" not in t:
+                any_subject = True
             cost, used = fill_cost(t, ded)
             ded = max(0.0, ded - used)
+            if used and ded <= 0.005 and ded_met is None:
+                ded_met = m
             cost = max(0.0, min(cost, cap - spent))
             spent += cost
+            if cap_reached is None and spent >= cap - 0.005:
+                cap_reached = m
             out[i].append(round(cost, 2))
-    return out
+    if ded_met is None and not any_subject:
+        ded_met = "n/a"
+    return out, {"ded_met": ded_met, "cap_reached": cap_reached, "deductible": start_ded,
+                 "cap": cap, "spent": round(spent, 2)}
+
+
+def _month_label(v, month_names):
+    if isinstance(v, int):
+        return month_names[v]
+    return {"none": "No deductible", "n/a": "Doesn't apply"}.get(v)   # None stays None
 
 
 def _redo(entries, deductible, month_names):
     entries = [e for e in entries if e and e.get("_terms", None) is not None]
-    sims = simulate_year([e["_terms"] for e in entries], len(month_names), deductible)
+    sims, info = simulate_year_detail([e["_terms"] for e in entries], len(month_names), deductible)
+    ded_met = _month_label(info["ded_met"], month_names)
+    cap_reached = _month_label(info["cap_reached"], month_names)
     for e, costs in zip(entries, sims):
         e["monthly_costs"] = [{"month": m, "cost": c} for m, c in zip(month_names, costs)]
         e["annual_total"] = round(sum(costs), 2)
+        e["ded_met"] = ded_met              # month name, "No deductible", "Doesn't apply" or None
+        e["cap_reached"] = cap_reached      # month name or None (not reached)
 
 
 def apply_shared_year(results, plan_details, month_names):

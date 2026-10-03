@@ -127,6 +127,9 @@ def group_warnings(warnings, drug_detail):
             (("Medications to verify", med), ("Form notes", form), ("Plan requests", plan)) if items]
 
 
+from app import drug_year as DY
+
+
 def pharmacy_summary(label, drug_detail, months):
     totals = {}
     for drug in drug_detail or []:
@@ -174,8 +177,20 @@ def pharmacy_summary(label, drug_detail, months):
         "ramp": ramp,
         "cap_from": cap_from,
         "mail_monthly": _typical_month(mail_series) if mail_annual else None,
+        "mail_annual": mail_annual if mail_annual else None,
         "mail_saves": (c["annual"] - mail_annual) if mail_annual else 0,
+        "ded_met": _cheapest_field(label, drug_detail, cheapest, "ded_met"),
+        "cap_reached": _cheapest_field(label, drug_detail, cheapest, "cap_reached"),
     }
+
+
+def _cheapest_field(label, drug_detail, pharmacy_name, key):
+    """ded_met / cap_reached as stamped by drug_year.apply_shared_year on that pharmacy."""
+    for d in drug_detail or []:
+        for pc in d.get("plans", {}).get(label, {}).get("pharmacy_costs", []) or []:
+            if pc.get("name") == pharmacy_name and key in pc:
+                return pc[key]
+    return None
 
 
 def _typical_month(values):
@@ -434,30 +449,34 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             where = f"{client_address}, {client_city}" if (client_address and client_city) else f"ZIP {zip_code}"
             group(f"PHARMACY — NEAREST IN-NETWORK TO {where.upper()}")
             summaries = {l: pharmacy_summary(l, drug_detail, months) for l in cols}
-            r_cheap = [Paragraph("Cheapest nearby", lab)]
-            r_mail = [Paragraph("Mail order", lab)]
-            r_ramp = [[Paragraph("First months", lab), Paragraph("deductible phase", lab_sub)]]
+            # Lacey (2026-10-03): yearly cost first, monthly is the least important number; and
+            # say WHEN the deductible is met and WHEN the yearly drug cap is reached.
+            r_cheap = [[Paragraph("Cheapest nearby", lab), Paragraph("per year", lab_sub)]]
+            r_mail = [[Paragraph("Mail order", lab), Paragraph("per year", lab_sub)]]
+            r_ded = [[Paragraph("Deductible met", lab), Paragraph("cheapest pharmacy", lab_sub)]]
+            r_cap = [[Paragraph("Drug cap reached", lab), Paragraph(f"{_money(DY.oop_cap(), cents=False)} yearly limit", lab_sub)]]
             for l in cols:
                 sm = summaries[l]
                 if not sm:
-                    r_cheap.append(C("No data")); r_mail.append(C("—")); r_ramp.append(C("—"))
+                    for r_ in (r_cheap, r_mail, r_ded, r_cap):
+                        r_.append(C("—"))
+                    r_cheap[-1] = C("No data")
                     continue
-                where_sub = "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}"
-                r_cheap.append(C(f"{_money(sm['steady'])}/mo", where_sub))
-                if sm["mail_monthly"] is not None:
-                    saves = f"saves {_money(sm['mail_saves'], cents=False)}/yr" if sm["mail_saves"] > 1 else None
-                    r_mail.append(C(f"{_money(sm['mail_monthly'])}/mo", saves))
+                where = "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}"
+                r_cheap.append(C(f"{_money(sm['annual'], cents=False)}/yr", f"{where} · {_money(sm['steady'])}/mo"))
+                if sm.get("mail_annual"):
+                    mail_sub = (f"saves {_money(sm['mail_saves'], cents=False)}/yr" if sm["mail_saves"] > 1
+                                else f"{_money(sm['mail_monthly'])}/mo")
+                    r_mail.append(C(f"{_money(sm['mail_annual'], cents=False)}/yr", mail_sub))
                 else:
                     r_mail.append(C("—"))
                 ramp = sm.get("ramp") or []
-                cap_note = f"$0 from {sm['cap_from']} (yearly cap)" if sm.get("cap_from") else None
-                if not ramp:
-                    r_ramp.append(C("Same every month", cap_note))
-                else:
-                    head_tr = " · ".join(f"{m} {_money(c, cents=False)}" for m, c in ramp[:3])
-                    then_txt = f"then {_money(sm['steady'])}" + (f" · {cap_note}" if cap_note else "")
-                    r_ramp.append(C(head_tr, then_txt))
-            rows += [r_cheap, r_mail, r_ramp]
+                ramp_txt = (" · ".join(f"{m} {_money(c, cents=False)}" for m, c in ramp[:3])
+                            + f" · then {_money(sm['steady'])}/mo") if ramp else None
+                r_ded.append(C(sm.get("ded_met") or "Not met this year", ramp_txt))
+                r_cap.append(C(sm.get("cap_reached") or "Not reached",
+                               "$0 for covered drugs after" if sm.get("cap_reached") else None))
+            rows += [r_cheap, r_mail, r_ded, r_cap]
 
         # doctors
         used_keys = set()
