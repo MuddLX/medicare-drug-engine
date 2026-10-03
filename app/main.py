@@ -3647,6 +3647,17 @@ def plans_for_zip_route():
                     "data_vintage": DATA_VINTAGE, "plans": ma + pd})
 
 
+def _require_zip(data):
+    """(zip, None) for a 5-digit ZIP (ZIP+4 accepted), else (None, a plain-English 400).
+    Added 2026-10-03: the report endpoints used to fall back to 55441 silently when the ZIP was
+    missing, which would price the wrong county. Pasted emails/screenshots make that likely."""
+    import re as _re
+    m = _re.fullmatch(r"(\d{5})(-\d{4})?", str(data.get("zip_code") or "").strip())
+    if m:
+        return m.group(1), None
+    return None, (jsonify({"error": "A 5-digit ZIP code is required to look up plans and pharmacies."}), 400)
+
+
 @app.route("/process-soa", methods=["POST"])
 def process_soa():
     """
@@ -3657,7 +3668,9 @@ def process_soa():
 
     client_name = data.get("client_name", "Client")
     dob = data.get("dob", "")
-    zip_code = data.get("zip_code", "55441")
+    zip_code, zip_error = _require_zip(data)
+    if zip_error:
+        return zip_error
     soa_date = data.get("soa_date", datetime.today().strftime("%m/%d/%Y"))
     # Cost period (2026-10-02): for a FUTURE plan year (AEP - coverage starts Jan 1) price the
     # full plan year, exactly like /client-comparison, so both reports show the same yearly cost.
@@ -3936,7 +3949,9 @@ def client_comparison_route():
 
     data = request.get_json(force=True, silent=True) or {}
     client_name = data.get("client_name", "Client")
-    zip_code = data.get("zip_code", "55441")
+    zip_code, zip_error = _require_zip(data)
+    if zip_error:
+        return zip_error
     drug_names = data.get("drug_names", "")
     drug_dosages = data.get("drug_dosages", "")
     client_address = data.get("client_address", "")
