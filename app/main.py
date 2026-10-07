@@ -2008,7 +2008,7 @@ def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, d
     disp_fee = (brand_fee if brand_fee > 0 else generic_fee) if (tier and tier >= 3) else generic_fee
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     if mfp is not None:
-        unit_cost, cost_type, cost_amt = mfp, 2, 0.25
+        unit_cost = mfp      # negotiated price; the plan's own tier cost-sharing still applies (2026-10-06)
         disp_fee = brand_fee if brand_fee > 0 else generic_fee
     return {"ded_applies": cost_row[4] != "N", "price": unit_cost, "fee": disp_fee,
             "cost_type": cost_type, "cost_amt": float(cost_amt or 0)}
@@ -2069,9 +2069,7 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     is_mfp_drug = mfp is not None
     if is_mfp_drug:
-        unit_cost = mfp
-        cost_type = 2
-        cost_amt = 0.25
+        unit_cost = mfp      # negotiated price; the plan's own tier cost-sharing still applies (2026-10-06)
         # Use brand dispensing fee for MFP drugs (they are all brand drugs)
         disp_fee = brand_fee if brand_fee > 0 else generic_fee
 
@@ -2327,14 +2325,11 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
             "_terms": {"flat": 35.0},
         }
 
-    # Override with CMS negotiated MFP if available (more accurate for 2026)
-    # MFP drugs use 25% coinsurance per 2026 standard benefit design
+    # Medicare-negotiated drugs: the negotiated price replaces the plan's price; the plan's own tier
+    # cost-sharing still applies (2026-10-06 - it used to be forced to 25% on every plan).
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     if mfp is not None:
         unit_cost = mfp
-        # Force 25% coinsurance for MFP drugs regardless of plan's filed cost structure
-        cost_type = 2
-        cost_amt = 0.25
 
     monthly_costs = []
     deductible_remaining = deductible
@@ -2570,26 +2565,24 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 # CMS days_supply codes: 1 = one month, 2 = three months (mail order is a 90-day fill).
                 # cost_type 0 / no row = this tier can't be filled by mail at this plan.
                 mail_offered = bool(mail_cost_row) and mail_cost_row[0] in (1, 2)
-                if not (mail_offered or drug_is_insulin or is_mfp_drug_flag):
+                if not (mail_offered or drug_is_insulin):
                     plan_cost["mail_order_costs"] = {"available": False, "monthly_costs": [],
                                                      "annual_total": None}
-                if mail_offered or drug_is_insulin or is_mfp_drug_flag:
+                if mail_offered or drug_is_insulin:
                     # Mail order goes through the same shared deductible + yearly cap
                     # (it used to skip the deductible, which made fake "saves $X/yr" lines).
                     # Costs are per month; a 90-day copay is divided by 3.
                     mail_ded = (mail_cost_row[2] != "N") if mail_cost_row else True
                     if drug_is_insulin:
                         mail_terms = {"flat": 35.0}
-                    elif is_mfp_drug_flag:
-                        mail_terms = {"ded_applies": mail_ded, "price": mfp_value, "fee": 0.0,
-                                      "cost_type": 2, "cost_amt": 0.25}
                     elif mail_offered:
                         mt, ma = mail_cost_row[0], float(mail_cost_row[1] or 0)
+                        mail_price = mfp_value if is_mfp_drug_flag else unit_cost
                         if mt == 2:
-                            mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
+                            mail_terms = {"ded_applies": mail_ded, "price": mail_price, "fee": 0.0,
                                           "cost_type": 2, "cost_amt": ma}
                         else:
-                            mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
+                            mail_terms = {"ded_applies": mail_ded, "price": mail_price, "fee": 0.0,
                                           "cost_type": 1, "cost_amt": ma / 3}
                     else:
                         mail_terms = {"flat": 0.0}

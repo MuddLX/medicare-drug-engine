@@ -14,3 +14,6 @@ mn_pharmacy_names.txt
 
 # Quarantined / dead files
 _archive/
+
+# CMS source downloads (2+ GB each)
+cms_files/
