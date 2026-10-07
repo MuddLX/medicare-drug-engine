@@ -41,12 +41,33 @@ def test_every_covered_drug_has_mail_cost(monkeypatch):
         assert d["plans"]["HealthPartners Journey Pace"]["mail_order_costs"]["annual_total"] is not None
 
 
-def test_no_mail_benefit_means_not_available_not_free(monkeypatch):
+def test_no_mail_benefit_means_not_available_not_free(monkeypatch, tmp_path):
+    """A tier with no 90-day (mail) price must show "not available", never $0.
+    (2026-10-07: this used H2001-118, but that plan DOES offer mail - in CMS's standard-mail column,
+    which the engine wasn't reading. Every plan in the current file offers mail, so the case is built
+    on a copy of the database with one tier's 90-day rows removed.)"""
+    import shutil, sqlite3
+    rx = _rxcuis("H4882", "009", 2, 1)
+    db = tmp_path / "nomail.db"
+    shutil.copy(M.DB_PATH, db)
+    conn = sqlite3.connect(db)
+    conn.execute("DELETE FROM beneficiary_cost WHERE contract_id='H4882' AND plan_id='009' AND tier=2 AND days_supply=2")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(M, "DB_PATH", str(db))
+    out = _run(monkeypatch, HP, rx, ["testgenerica"])
+    mail = out["drug_detail"][0]["plans"]["HealthPartners Journey Pace"].get("mail_order_costs") or {}
+    assert mail.get("available") is False
+    assert not mail.get("monthly_costs")
+
+
+def test_plan_with_only_standard_mail_is_priced(monkeypatch):
+    """H2001-118: preferred mail 'not applicable', standard mail priced -> mail order IS available."""
     rx = _rxcuis("H2001", "118", 2, 1)
     out = _run(monkeypatch, STD, rx, ["testgenerica"])
     mail = out["drug_detail"][0]["plans"]["UHC AARP ($0/615)"].get("mail_order_costs") or {}
-    assert mail.get("available") is False
-    assert not mail.get("monthly_costs")
+    assert mail.get("available") is not False
+    assert mail.get("annual_total") is not None
 
 
 def test_summary_shows_no_mail_total_when_a_drug_cannot_be_mailed():

@@ -430,9 +430,15 @@ def step_cms(conn, zip_path, year="2027"):
         key = (_get(idx, p, "CONTRACT_ID"), _get(idx, p, "PLAN_ID").zfill(3))
         if key in ours:
             f = lambda c, cast=float: cast(_num(_get(idx, p, c)))
+            # Mail order: the engine keeps one mail column. A plan without preferred mail pharmacies
+            # has COST_TYPE_MAIL_PREF 0 ("not applicable") and its real mail price in the standard
+            # mail column - keep that one, or the report says "no mail order" when there is one.
+            mail_t, mail_a = f("COST_TYPE_MAIL_PREF", int), f("COST_AMT_MAIL_PREF")
+            if mail_t not in (1, 2) and f("COST_TYPE_MAIL_NONPREF", int) in (1, 2):
+                mail_t, mail_a = f("COST_TYPE_MAIL_NONPREF", int), f("COST_AMT_MAIL_NONPREF")
             bc.append((key[0], key[1], _get(idx, p, "SEGMENT_ID"), _get(idx, p, "COVERAGE_LEVEL"), f("TIER", int),
                        f("DAYS_SUPPLY", int), f("COST_TYPE_PREF", int), f("COST_AMT_PREF"), f("COST_TYPE_NONPREF", int),
-                       f("COST_AMT_NONPREF"), f("COST_TYPE_MAIL_PREF", int), f("COST_AMT_MAIL_PREF"),
+                       f("COST_AMT_NONPREF"), mail_t, mail_a,
                        _get(idx, p, "DED_APPLIES_YN") or "Y"))
     if bc:
         conn.execute("DELETE FROM beneficiary_cost")

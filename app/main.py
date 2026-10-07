@@ -1004,6 +1004,23 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
     return sorted_pharms[:max_results]
 
 
+def retail_cost_share(pref_type, pref_amt, std_type, std_amt, preferred=True):
+    """(cost_type, cost_amt) for a one-month retail fill (2026-10-07).
+
+    CMS gives every tier two retail columns: preferred pharmacies and standard pharmacies. A plan
+    that has no preferred pharmacies gets cost_type 0 ("not applicable") in the preferred column,
+    NOT a $0 copay - a real $0 copay is cost_type 1 with amount 0. Reading the unused column used
+    to price brand drugs at $0 after the deductible on 49 of 65 plans (Margaret Ellison test).
+    So: use the column for this pharmacy type; if the plan doesn't use it, use the other one."""
+    first, second = ((pref_type, pref_amt), (std_type, std_amt))
+    if not preferred:
+        first, second = second, first
+    for ct, amt in (first, second):
+        if ct in (1, 2):
+            return ct, float(amt or 0)
+    return 0, 0.0
+
+
 def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, drug_name=""):
     """Price terms for one drug at one pharmacy (see app/drug_year.py). Same rules as
     get_drug_cost_at_pharmacy: preferred/non-preferred rates, brand vs generic dispensing fee,
@@ -1021,15 +1038,11 @@ def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, d
                ded_applies
         FROM beneficiary_cost
         WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
-        ORDER BY coverage_level ASC LIMIT 1
+        ORDER BY (coverage_level <> '1'), coverage_level LIMIT 1
     """, (contract_id, plan_id_padded, tier)).fetchone()
     if not cost_row:
         return {"flat": 0.0}
-    if is_preferred:
-        cost_type, cost_amt = cost_row[0], cost_row[1]
-    else:
-        cost_type = cost_row[2] if cost_row[2] is not None else cost_row[0]
-        cost_amt = cost_row[3] if cost_row[3] is not None and float(cost_row[3] or 0) > 0 else cost_row[1]
+    cost_type, cost_amt = retail_cost_share(cost_row[0], cost_row[1], cost_row[2], cost_row[3], is_preferred)
     disp_fee = (brand_fee if brand_fee > 0 else generic_fee) if (tier and tier >= 3) else generic_fee
     mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
     if mfp is not None:
@@ -1063,7 +1076,7 @@ def get_drug_cost_at_pharmacy(conn, contract_id, plan_id, ndc, tier,
                ded_applies
         FROM beneficiary_cost
         WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
-        ORDER BY coverage_level ASC LIMIT 1
+        ORDER BY (coverage_level <> '1'), coverage_level LIMIT 1
     """, (contract_id, plan_id_padded, tier)).fetchone()
 
     if not cost_row:
@@ -1313,17 +1326,17 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     ndc = tier_row["ndc"]
 
     cost_row = conn.execute("""
-        SELECT cost_type_pref, cost_amt_pref, ded_applies
+        SELECT cost_type_pref, cost_amt_pref, cost_type_nonpref, cost_amt_nonpref, ded_applies
         FROM beneficiary_cost
         WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
-        ORDER BY coverage_level ASC LIMIT 1
+        ORDER BY (coverage_level <> '1'), coverage_level LIMIT 1
     """, (contract_id, plan_id_padded, tier)).fetchone()
 
     if not cost_row:
         return {"tier": tier, "covered": True, "monthly_costs": [], "annual_total": None}
 
-    cost_type = cost_row["cost_type_pref"]
-    cost_amt = cost_row["cost_amt_pref"]
+    cost_type, cost_amt = retail_cost_share(cost_row["cost_type_pref"], cost_row["cost_amt_pref"],
+                                            cost_row["cost_type_nonpref"], cost_row["cost_amt_nonpref"])
     ded_applies = cost_row["ded_applies"]
 
     pricing_row = conn.execute("""
@@ -1534,7 +1547,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                            cost_type_mail_pref, cost_amt_mail_pref
                     FROM beneficiary_cost
                     WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 1
-                    ORDER BY coverage_level ASC LIMIT 1
+                    ORDER BY (coverage_level <> '1'), coverage_level LIMIT 1
                 """, (plan["contract_id"], plan["plan_id"].zfill(3), tier)).fetchone()
                 
                 ndc = plan_cost.get("ndc")
@@ -1589,7 +1602,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     SELECT cost_type_mail_pref, cost_amt_mail_pref, ded_applies
                     FROM beneficiary_cost
                     WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 2
-                    ORDER BY coverage_level ASC LIMIT 1
+                    ORDER BY (coverage_level <> '1'), coverage_level LIMIT 1
                 """, (plan["contract_id"], plan["plan_id"].zfill(3), plan_cost.get("tier", 0))).fetchone()
 
                 # CMS days_supply codes: 1 = one month, 2 = three months (mail order is a 90-day fill).
