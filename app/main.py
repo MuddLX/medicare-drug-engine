@@ -1021,7 +1021,7 @@ def retail_cost_share(pref_type, pref_amt, std_type, std_amt, preferred=True):
     return 0, 0.0
 
 
-def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, drug_name=""):
+def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, drug_name="", use_mfp=True):
     """Price terms for one drug at one pharmacy (see app/drug_year.py). Same rules as
     get_drug_cost_at_pharmacy: preferred/non-preferred rates, brand vs generic dispensing fee,
     insulin $35, MFP drugs at 25% of the negotiated price."""
@@ -1044,7 +1044,7 @@ def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, d
         return {"flat": 0.0}
     cost_type, cost_amt = retail_cost_share(cost_row[0], cost_row[1], cost_row[2], cost_row[3], is_preferred)
     disp_fee = (brand_fee if brand_fee > 0 else generic_fee) if (tier and tier >= 3) else generic_fee
-    mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
+    mfp = (get_mfp(drug_name_base) or get_mfp(drug_name)) if use_mfp else None
     if mfp is not None:
         unit_cost = mfp      # negotiated price; the plan's own tier cost-sharing still applies (2026-10-06)
         disp_fee = brand_fee if brand_fee > 0 else generic_fee
@@ -1337,7 +1337,30 @@ def lookup_rxcuis_release_form(drug_name, dosage=""):
     return out
 
 
-def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining, drug_name=''):
+def generic_equivalents(rxcuis):
+    """The generic (SCD) versions of brand products (2026-10-07, Dorothy Halvorsen test).
+
+    A brand that has gone generic (Januvia -> sitagliptin) is usually listed on a plan's drug list
+    ONLY as the generic. Looking up "Januvia" gives the brand's RxCUIs, which then match nothing,
+    and the plan was reported "Not covered" when it covers the generic (Aetna even at Tier 1).
+    The pharmacy fills the generic automatically, so the agent needs that tier."""
+    out = []
+    for rx in list(rxcuis)[:6]:
+        try:
+            url = f"https://rxnav.nlm.nih.gov/REST/rxcui/{rx}/related.json?tty=SCD"
+            groups = requests.get(url, timeout=8).json().get("relatedGroup", {}).get("conceptGroup", []) or []
+            for g in groups:
+                for cp in g.get("conceptProperties", []) or []:
+                    r = cp.get("rxcui")
+                    if r and r not in out and r not in rxcuis:
+                        out.append(r)
+        except Exception:
+            pass
+    return out
+
+
+def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining, drug_name='',
+                           use_mfp=True):
     plan_id_padded = plan_id.zfill(3)
     tier_row = None
     for rxcui in rxcuis:
@@ -1395,7 +1418,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
 
     # Medicare-negotiated drugs: the negotiated price replaces the plan's price; the plan's own tier
     # cost-sharing still applies (2026-10-06 - it used to be forced to 25% on every plan).
-    mfp = get_mfp(drug_name_base) or get_mfp(drug_name)
+    mfp = (get_mfp(drug_name_base) or get_mfp(drug_name)) if use_mfp else None   # not for the generic
     if mfp is not None:
         unit_cost = mfp
 
@@ -1539,6 +1562,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             continue
 
         rxcuis = lookup_rxcuis(drug_name, dosage)
+        generic_rx = None          # generic equivalents, looked up only if a plan lacks the brand
 
         if not rxcuis:
             drug_result["error"] = "Drug not found in formulary"
@@ -1566,6 +1590,18 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 conn, plan["formulary_id"], plan["contract_id"],
                 plan["plan_id"], rxcuis, plan["deductible"], months_remaining,
                 drug_name=drug_name)
+            if not plan_cost.get("covered"):
+                # Brand not on the list: is its generic? (Januvia -> sitagliptin.) Priced as the
+                # generic - the brand's Medicare-negotiated price does not apply to it.
+                if generic_rx is None:
+                    generic_rx = generic_equivalents(rxcuis)
+                if generic_rx:
+                    alt = get_drug_cost_for_plan(
+                        conn, plan["formulary_id"], plan["contract_id"], plan["plan_id"], generic_rx,
+                        plan["deductible"], months_remaining, drug_name=drug_name, use_mfp=False)
+                    if alt.get("covered"):
+                        alt["as_generic"] = True
+                        plan_cost = alt
             
             # Add pharmacy-specific costs if we found nearby pharmacies
             nearby_pharmacies = pharmacy_map.get(carrier, [])
@@ -1608,7 +1644,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     elif cost_row:
                         pharm_terms = pharmacy_fill_terms(
                             conn, plan["contract_id"], plan["plan_id"], tier, unit_cost,
-                            pharmacy, drug_name=drug_name)
+                            pharmacy, drug_name=drug_name, use_mfp=not plan_cost.get("as_generic"))
                     if pharm_terms is not None:
                         pharm_monthly = [{"month": mn, "cost": 0.0} for mn in month_names]
 
@@ -1650,7 +1686,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                         mail_terms = {"flat": 35.0}
                     elif mail_offered:
                         mt, ma = mail_cost_row[0], float(mail_cost_row[1] or 0)
-                        mail_price = mfp_value if is_mfp_drug_flag else unit_cost
+                        mail_price = mfp_value if (is_mfp_drug_flag and not plan_cost.get("as_generic")) else unit_cost
                         if mt == 2:
                             mail_terms = {"ded_applies": mail_ded, "price": mail_price, "fee": 0.0,
                                           "cost_type": 2, "cost_amt": ma}

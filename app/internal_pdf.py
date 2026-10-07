@@ -454,7 +454,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     else:
                         tier = pcost.get("tier")
                         if tier:
-                            row.append(C(f"Tier {tier}", TIER_NOTE.get(tier)))
+                            note = TIER_NOTE.get(tier)
+                            if pcost.get("as_generic"):      # brand not listed; its generic is
+                                note = "as generic" + (f" · {note}" if note else "")
+                            row.append(C(f"Tier {tier}", note))
                             if tier in (4, 5):
                                 tint(r, ci, AMBER_BG)
                         else:
