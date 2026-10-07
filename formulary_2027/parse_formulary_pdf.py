@@ -194,6 +194,7 @@ if __name__ == "__main__":
     pdf, out = sys.argv[1], sys.argv[2]
     rows = parse(pdf)
     for r in rows:   # footer text that slipped into a wrapped name
+        r["name"] = re.sub(r"\s+20\d\d$", "", r["name"])   # stray footer year (Blue Cross / MedicareBlue)
         r["name"] = re.sub(r"\s*(\d+\s+)?Updated \d{2}/\d{2}/\d{4}.*$|\s{3,}\d+\s+\d{4}\s+\S+\s+\d+\s+v\d+\s+effective.*$", "", r["name"]).strip()
     json.dump(rows, open(out, "w", encoding="utf-8"), indent=1)
     from collections import Counter
