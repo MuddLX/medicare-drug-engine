@@ -10,7 +10,7 @@ ROW = re.compile(r"^(?P<lead>\s*)(?P<name>\S.*?\S)(?P<gap>\s{2,})(?:(?P<bg>[BG])
 HEADER = re.compile(r"Drug\s+Name.*(Drug\s+Tier|Requirements|Coverage rules|Drug\b)", re.I)
 NOISE = re.compile(r"(Last Updated|Formulary ID|Submission ID|symbols and abbreviations|this table mean|"
                    r"^this table\.?$|going to page|^\d{1,3}$|^Page \d|Version \d|Updated on|^[IVX]+-\d+$|"
-                   r"\.{5,}|CAPITALIZED = BRAND|Lowercase italic|italic = Generic|^Lower$|^case$|^\d{2}/\d{2}/\d{4}\s+\d+$|Covered Drugs by Category|^Limits$|^[A-Z]\d$|^Brand$|^or$|^Generic tier|^Last updated|^\d+\s+Last updated)", re.I)
+                   r"\.{5,}|CAPITALIZED = BRAND|Lowercase italic|italic = Generic|^Lower$|^case$|^\d{2}/\d{2}/\d{4}\s+\d+$|Covered Drugs by Category|^Limits$|^[A-Z]\d$|^Brand$|^or$|^Generic tier|^Last updated|^\d+\s+Last updated|^(\d+\s+)?Updated \d{2}/\d{2}/\d{4}|effective \d{2}/\d{2}/\d{4})", re.I)
 FORM_WORDS = re.compile(r"\b(ORAL|TABLETS?|TAB|CAPSULES?|CAP|INJ(ECTION)?|INTRAVENOUS|SUBCUTANEOUS|INTRAMUSCULAR|KIT|"
                         r"SOLN|SOLUTION|RECON|SUSP(ENSION)?|PEN|INJECTOR|PACK|CREAM|OINTMENT|GEL|PATCH|SPRAY|INHAL\w*|"
                         r"POWDER|SYRINGE|VIAL|EXTENDED|RELEASE|DELAYED|CHEWABLE|DISINTEGRATING|FOR|ER|DR|HR|"
@@ -184,6 +184,8 @@ def parse(pdf):
 if __name__ == "__main__":
     pdf, out = sys.argv[1], sys.argv[2]
     rows = parse(pdf)
+    for r in rows:   # footer text that slipped into a wrapped name
+        r["name"] = re.sub(r"\s*(\d+\s+)?Updated \d{2}/\d{2}/\d{4}.*$|\s{3,}\d+\s+\d{4}\s+\S+\s+\d+\s+v\d+\s+effective.*$", "", r["name"]).strip()
     json.dump(rows, open(out, "w", encoding="utf-8"), indent=1)
     from collections import Counter
     print(f"{len(rows)} drug rows | tiers {dict(sorted(Counter(r['tier'] for r in rows).items()))} | pages {rows[0]['page'] if rows else '-'}-{rows[-1]['page'] if rows else '-'}")
