@@ -1,0 +1,127 @@
+# Column 7 (optional) = the ingredient name the AI clean-up step gives (retired brands are read through it).
+# Second list, written AFTER the resolver was tuned on drug_cases.psv - an honest check (2026-10-07).
+Eliquis|2.5 mg|apixaban|2.5|eliquis|
+Xarelto|15mg|rivaroxaban|15|xarelto|
+warfarin|2 mg|warfarin|2||
+Coumadin|5|warfarin|5|coumadin|
+aspirin EC|81 mg|aspirin|81||
+atorvastatin|80 mg|atorvastatin|80||
+Lipitor|10 mg|atorvastatin|10|lipitor|
+lovastatin|20 mg|lovastatin|20||
+Zocor|20 mg|simvastatin|20|zocor|
+Crestor|5 mg|rosuvastatin|5|crestor|
+Vytorin|10/40 mg|ezetimibe + simvastatin|10;40|vytorin|
+Lovaza|1 g|omega-3 acid ethyl esters|1000|lovaza|
+metoprolol ER|100 mg|metoprolol|100||
+Lopressor|50 mg|metoprolol|50|lopressor|
+Tenormin|25 mg|atenolol|25|tenormin|
+verapamil ER|240 mg|verapamil|240||
+amlodipine|10 mg|amlodipine|10||
+Procardia XL|60 mg|nifedipine|60|procardia|
+lisinopril|40 mg|lisinopril|40||
+Zestril|20 mg|lisinopril|20|zestril|
+ramipril|10 mg|ramipril|10||
+Altace|5 mg|ramipril|5|altace|
+irbesartan|150 mg|irbesartan|150||
+olmesartan|20 mg|olmesartan|20||
+Benicar|40 mg|olmesartan|40|benicar|
+telmisartan|40 mg|telmisartan|40||
+Aldactone|25 mg|spironolactone|25|aldactone|
+Imdur|60 mg|isosorbide mononitrate|60|||isosorbide mononitrate ER
+Ranexa|500 mg|ranolazine|500|ranexa|
+Entresto|24/26 mg|sacubitril + valsartan|24;26|entresto|
+Farxiga|5 mg|dapagliflozin|5|farxiga|
+Jardiance|25 mg|empagliflozin|25|jardiance|
+Invokana|100 mg|canagliflozin|100|invokana|
+Glucotrol XL|10 mg|glipizide|10|glucotrol|
+Amaryl|4 mg|glimepiride|4|||glimepiride
+Actos|15 mg|pioglitazone|15|actos|
+Januvia|50 mg|sitagliptin|50|januvia|
+Janumet XR|50/1000 mg|sitagliptin + metformin|50;1000|janumet|
+Trulicity|0.75 mg|dulaglutide||trulicity|
+Admelog SoloStar||insulin lispro||admelog|
+Fiasp FlexTouch||*||fiasp|
+metformin|1000 mg|metformin|1000||
+levothyroxine|100 mcg|levothyroxine|0.1||
+Levoxyl|50 mcg|levothyroxine|0.05|levoxyl|
+Unithroid|88 mcg|levothyroxine|0.088|unithroid|
+Armour Thyroid|60 mg|thyroid|60|armour|
+liothyronine|5 mcg|liothyronine|0.005||
+Fosamax|70 mg|alendronic acid|70|fosamax|
+Evista|60 mg|raloxifene|60|evista|
+omeprazole|40 mg|omeprazole|40||
+Nexium|40 mg|esomeprazole|40|nexium|
+ondansetron ODT|4 mg|ondansetron|4||
+Zofran|8 mg|ondansetron|8|||ondansetron
+Linzess|72 mcg|linaclotide|0.072|linzess|
+Amitiza|24 mcg|lubiprostone|0.024|amitiza|
+Proscar|5 mg|finasteride|5|proscar|
+Avodart|0.5 mg|dutasteride|0.5|avodart|
+Detrol LA|4 mg|tolterodine|4|detrol|
+Vesicare|5 mg|solifenacin|5|vesicare|
+fluoxetine|20 mg|fluoxetine|20||
+Prozac|20 mg|fluoxetine|20|prozac|
+paroxetine|20 mg|paroxetine|20||
+Cymbalta|30 mg|duloxetine|30|cymbalta|
+Effexor XR|75 mg|venlafaxine|75|effexor|
+Wellbutrin SR|150 mg|bupropion|150|wellbutrin|
+Remeron|15 mg|mirtazapine|15|remeron|
+Abilify|5 mg|aripiprazole|5|abilify|
+Seroquel|50 mg|quetiapine|50|seroquel|
+risperidone|1 mg|risperidone|1||
+lithium carbonate|300 mg|lithium carbonate|300||
+Keppra|500 mg|levetiracetam|500|keppra|
+Topamax|50 mg|topiramate|50|topamax|
+carbamazepine|200 mg|carbamazepine|200||
+Lyrica|75 mg|pregabalin|75|lyrica|
+Namenda XR|28 mg|memantine|28|namenda|
+Sinemet|25/100 mg|carbidopa + levodopa|25;100|sinemet|
+Mirapex|0.25 mg|pramipexole|0.25||
+methylprednisolone|4 mg|methylprednisolone|4||
+colchicine|0.6 mg|colchicine|0.6||
+febuxostat|40 mg|febuxostat|40||
+Mobic|15 mg|meloxicam|15|mobic|
+oxycodone|5 mg|oxycodone|5||
+Percocet|5/325 mg|oxycodone + acetaminophen|5;325|percocet|
+hydrocodone-acetaminophen|10/325 mg|hydrocodone + acetaminophen|10;325||
+tizanidine|4 mg|tizanidine|4||
+Xanax|0.25 mg|alprazolam|0.25|xanax|
+Ativan|0.5 mg|lorazepam|0.5|ativan|
+zolpidem|5 mg|zolpidem|5||
+Ambien|10 mg|zolpidem|10|ambien|
+hydroxyzine pamoate|25 mg|hydroxyzine|25||
+meclizine|25 mg|meclizine|25||
+albuterol nebulizer|2.5 mg/3 mL|albuterol|0.833||
+DuoNeb|0.5/3 mg per 3 mL|ipratropium + albuterol||||ipratropium albuterol inhalation solution
+Dulera|200/5 mcg|mometasone + formoterol|0.2;0.005|dulera|
+Breztri Aerosphere||budesonide + glycopyrrolate + formoterol||breztri|
+Arnuity Ellipta|100 mcg|fluticasone|0.1|arnuity|
+Qvar RediHaler|80 mcg|beclomethasone|0.08|qvar|
+fluticasone nasal spray|50 mcg|fluticasone|0.05||
+Lumigan|0.01%|bimatoprost|0.1|lumigan|
+brimonidine eye drops|0.2%|brimonidine|2||
+dorzolamide-timolol eye drops||dorzolamide + timolol|||
+prednisolone acetate eye drops|1%|prednisolone|10||
+ciprofloxacin|500 mg|ciprofloxacin|500||
+amoxicillin|500 mg|amoxicillin|500||
+Augmentin|875/125 mg|amoxicillin + clavulanate|875;125|augmentin|
+doxycycline hyclate|100 mg|doxycycline|100||
+Bactrim DS|800/160 mg|sulfamethoxazole + trimethoprim|800;160|bactrim|
+Valtrex|500 mg|valacyclovir|500|valtrex|
+fluconazole|150 mg|fluconazole|150||
+Plaquenil|200 mg|hydroxychloroquine|200|plaquenil|
+tamoxifen|20 mg|tamoxifen|20||
+anastrozole|1 mg|anastrozole|1||
+letrozole|2.5 mg|letrozole|2.5||
+Zytiga|250 mg|abiraterone|250|zytiga|
+sumatriptan|50 mg|sumatriptan|50||
+Nurtec ODT|75 mg|rimegepant|75|nurtec|
+Ubrelvy|100 mg|ubrogepant|100|ubrelvy|
+Lantis|100 units/mL|insulin glargine|100|lantus|spell
+Plavics|75 mg|clopidogrel|75|plavix|spell
+Metropolol|25 mg|metoprolol|25||spell
+Seroquil|50 mg|quetiapine|50|seroquel|spell
+pain pill||NONE|||
+sleeping pill||NONE|||
+thyroid pill||NONE|||
+cholesterol medicine||NONE|||

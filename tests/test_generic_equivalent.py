@@ -15,8 +15,12 @@ PLANS = [{"contract_id": "H3219", "plan_id": "002", "carrier": "Aetna Enhanced",
          {"contract_id": "H5959", "plan_id": "021", "carrier": "Blue Cross Premier", "type": "MA"}]
 
 
-@pytest.fixture
-def run(monkeypatch):
+@pytest.fixture(params=["rxnav_backup", "local_resolver"])
+def run(monkeypatch, request):
+    """Both paths: the local resolver (2026-10-07, the normal path) and RxNav as the backup used when
+    the local resolver can't read a name (simulated by switching the local resolver off)."""
+    if request.param == "rxnav_backup":
+        monkeypatch.setattr(M.drug_resolver, "resolve", lambda *a, **k: M.drug_resolver.Resolution())
     monkeypatch.setattr(DM, "DB_PATH", SRC)
     monkeypatch.setattr(M, "DB_PATH", SRC)
     monkeypatch.setattr(M, "geocode_address_live", lambda *a, **k: (None, None, None))
@@ -33,6 +37,7 @@ def run(monkeypatch):
     def go():
         return M.compute_drug_costs([{"name": "Januvia", "dosage": "100 mg"}], "55025", "01/01/2027",
                                     plans_override=PLANS), calls
+    go.path = request.param
     return go
 
 
@@ -42,7 +47,10 @@ def test_brand_not_listed_but_generic_is_shows_generic_tier(run):
     assert cells["Aetna Enhanced"]["covered"] and cells["Aetna Enhanced"]["tier"] == 1
     assert cells["Aetna Enhanced"]["as_generic"] is True
     assert cells["Blue Cross Premier"]["covered"] and cells["Blue Cross Premier"]["tier"] == 3
-    assert len(calls) == 1, "generic equivalents are looked up once per drug, not once per plan"
+    if run.path == "rxnav_backup":
+        assert len(calls) == 1, "generic equivalents are looked up once per drug, not once per plan"
+    else:
+        assert calls == [], "the local resolver knows Januvia's generic twins - no internet lookup needed"
 
 
 def test_generic_is_not_priced_at_the_brands_negotiated_price(run):
@@ -56,3 +64,19 @@ def test_generic_is_not_priced_at_the_brands_negotiated_price(run):
 def test_summary_counts_the_drug_as_covered(run):
     out, _ = run()
     assert all(s["all_drugs_covered"] for s in out["plan_summaries"].values())
+
+
+def test_drug_without_a_price_is_flagged_never_free(monkeypatch):
+    """2026-10-07: generic sitagliptin has no price on file yet (estimates come from 2026 prices). At 25%
+    coinsurance its cost is unknown - the report must say so, not show $0 as if it were free."""
+    monkeypatch.setattr(DM, "DB_PATH", SRC)
+    monkeypatch.setattr(M, "DB_PATH", SRC)
+    monkeypatch.setattr(M, "geocode_address_live", lambda *a, **k: (None, None, None))
+    monkeypatch.setattr(M, "normalize_drugs", lambda d: [
+        {"original": x["name"], "normalized": x["name"], "dosage": "100 mg", "confidence": 1.0} for x in d])
+    plans = [{"contract_id": "H4882", "plan_id": "015", "carrier": "HP Journey Smart", "type": "MA"}]
+    out = M.compute_drug_costs([{"name": "Januvia", "dosage": "100 mg"}], "55025", "01/01/2027", plans_override=plans)
+    cell = out["drug_detail"][0]["plans"]["HP Journey Smart"]
+    if not cell.get("price_unknown"):
+        pytest.skip("this drug has a price in the current database")
+    assert any("no price on file" in w["flag"] and "HP Journey Smart" in w["flag"] for w in out["warnings"])

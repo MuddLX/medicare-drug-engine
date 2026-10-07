@@ -1,0 +1,232 @@
+# Drug-name test list (2026-10-07). One line per case:  name | dosage | expected ingredients | strengths | brand | flag
+#   expected ingredients: RxNorm ingredient names joined by " + " ; NONE = must NOT be identified (ask a person)
+#   strengths: numbers in RxNorm units (mg, mg/actuation, units/mL) joined by ";" - every product returned must have them
+#   brand: lower-case RxNorm brand the products must carry ("" = any)   flag: spell = must be flagged as a spelling match
+# --- plain generics
+lisinopril|10 mg|lisinopril|10||
+atorvastatin|20 mg|atorvastatin|20||
+metformin|500 mg|metformin|500||
+amlodipine|5 mg|amlodipine|5||
+levothyroxine|75 mcg|levothyroxine|0.075||
+omeprazole|20 mg|omeprazole|20||
+losartan|50 mg|losartan|50||
+simvastatin|40 mg|simvastatin|40||
+rosuvastatin|10 mg|rosuvastatin|10||
+metoprolol tartrate|25 mg|metoprolol|25||
+metoprolol succinate ER|50 mg|metoprolol|50||
+furosemide|40 mg|furosemide|40||
+hydrochlorothiazide|25 mg|hydrochlorothiazide|25||
+gabapentin|300 mg|gabapentin|300||
+sertraline|50 mg|sertraline|50||
+escitalopram|10 mg|escitalopram|10||
+pantoprazole|40 mg|pantoprazole|40||
+tamsulosin|0.4 mg|tamsulosin|0.4||
+carvedilol|12.5 mg|carvedilol|12.5||
+warfarin|5 mg|warfarin|5||
+clopidogrel|75 mg|clopidogrel|75||
+montelukast|10 mg|montelukast|10||
+donepezil|10 mg|donepezil|10||
+pravastatin|40 mg|pravastatin|40||
+meloxicam|15 mg|meloxicam|15||
+prednisone|10 mg|prednisone|10||
+allopurinol|100 mg|allopurinol|100||
+glipizide|5 mg|glipizide|5||
+spironolactone|25 mg|spironolactone|25||
+trazodone|50 mg|trazodone|50||
+duloxetine|60 mg|duloxetine|60||
+finasteride|5 mg|finasteride|5||
+alendronate|70 mg|alendronic acid|70||
+citalopram|20 mg|citalopram|20||
+bupropion XL|150 mg|bupropion|150||
+venlafaxine ER|75 mg|venlafaxine|75||
+diltiazem ER|120 mg|diltiazem|120||
+nifedipine ER|30 mg|nifedipine|30||
+potassium chloride ER|20 mEq|potassium chloride|20||
+famotidine|20 mg|famotidine|20||
+tramadol|50 mg|tramadol|50||
+hydroxyzine|25 mg|hydroxyzine|25||
+hydralazine|25 mg|hydralazine|25||
+clonidine|0.1 mg|clonidine|0.1||
+clonazepam|0.5 mg|clonazepam|0.5||
+lorazepam|1 mg|lorazepam|1||
+quetiapine|25 mg|quetiapine|25||
+oxybutynin ER|10 mg|oxybutynin|10||
+glimepiride|2 mg|glimepiride|2||
+pioglitazone|30 mg|pioglitazone|30||
+ezetimibe|10 mg|ezetimibe|10||
+fenofibrate|145 mg|fenofibrate|145||
+isosorbide mononitrate ER|30 mg|isosorbide mononitrate|30||
+latanoprost eye drops|0.005%|latanoprost|0.05||
+timolol eye drops|0.5%|timolol|5||
+nitroglycerin SL|0.4 mg|nitroglycerin|0.4||
+cyclobenzaprine|10 mg|cyclobenzaprine|10||
+baclofen|10 mg|baclofen|10||
+methotrexate|2.5 mg|methotrexate|2.5||
+hydroxychloroquine|200 mg|hydroxychloroquine|200||
+amiodarone|200 mg|amiodarone|200||
+digoxin|0.125 mg|digoxin|0.125||
+memantine|10 mg|memantine|10||
+ropinirole|1 mg|ropinirole|1||
+carbidopa levodopa|25/100 mg|carbidopa + levodopa|25;100||
+mirtazapine|15 mg|mirtazapine|15||
+buspirone|10 mg|buspirone|10||
+levetiracetam|500 mg|levetiracetam|500||
+lamotrigine|100 mg|lamotrigine|100||
+topiramate|25 mg|topiramate|25||
+valsartan|80 mg|valsartan|80||
+benazepril|20 mg|benazepril|20||
+enalapril|10 mg|enalapril|10||
+atenolol|50 mg|atenolol|50||
+propranolol|20 mg|propranolol|20||
+doxazosin|2 mg|doxazosin|2||
+terazosin|2 mg|terazosin|2||
+bumetanide|1 mg|bumetanide|1||
+torsemide|20 mg|torsemide|20||
+chlorthalidone|25 mg|chlorthalidone|25||
+sitagliptin|100 mg|sitagliptin|100||
+# --- brands (incl. brands that went generic)
+Eliquis|5 mg|apixaban|5|eliquis|
+Xarelto|20 mg|rivaroxaban|20|xarelto|
+Jardiance|10 mg|empagliflozin|10|jardiance|
+Farxiga|10 mg|dapagliflozin|10|farxiga|
+Entresto|49/51 mg|sacubitril + valsartan|49;51|entresto|
+Januvia|100 mg|sitagliptin|100|januvia|
+Tradjenta|5 mg|linagliptin|5|tradjenta|
+Rybelsus|7 mg|semaglutide|7|rybelsus|
+Ozempic|0.5 mg|semaglutide||ozempic|
+Trulicity|1.5 mg|dulaglutide||trulicity|
+Mounjaro|5 mg|tirzepatide||mounjaro|
+Synthroid|75 mcg|levothyroxine|0.075|synthroid|
+Lipitor|40 mg|atorvastatin|40|lipitor|
+Crestor|10 mg|rosuvastatin|10|crestor|
+Plavix|75 mg|clopidogrel|75|plavix|
+Norvasc|5 mg|amlodipine|5|norvasc|
+Zoloft|50 mg|sertraline|50|zoloft|
+Lexapro|10 mg|escitalopram|10|lexapro|
+Neurontin|300 mg|gabapentin|300|neurontin|
+Lasix|40 mg|furosemide|40|lasix|
+Coreg|12.5 mg|carvedilol|12.5|coreg|
+Singulair|10 mg|montelukast|10|singulair|
+Flomax|0.4 mg|tamsulosin|0.4|flomax|
+Protonix|40 mg|pantoprazole|40|protonix|
+Prilosec|20 mg|omeprazole|20||
+# (Prilosec is only made as granules now: 20 mg is read as omeprazole 20 mg, with a note)
+Toprol XL|50 mg|metoprolol|50|toprol|
+Wellbutrin XL|150 mg|bupropion|150|wellbutrin|
+Diovan|80 mg|valsartan|80|diovan|
+Cozaar|50 mg|losartan|50|cozaar|
+Aricept|10 mg|donepezil|10|aricept|
+Namenda|10 mg|memantine|10|namenda|
+Xtandi|40 mg|enzalutamide|40|xtandi|
+Ibrance|125 mg|palbociclib|125|ibrance|
+Imbruvica|420 mg|ibrutinib|420|imbruvica|
+Otezla|30 mg|apremilast|30|otezla|
+Linzess|145 mcg|linaclotide|0.145|linzess|
+Vraylar|1.5 mg|cariprazine|1.5|vraylar|
+Austedo|12 mg|deutetrabenazine|12|austedo|
+Xifaxan|550 mg|rifaximin|550|xifaxan|
+Pradaxa|150 mg|dabigatran etexilate|150|pradaxa|
+Brilinta|90 mg|ticagrelor|90|brilinta|
+Myrbetriq|25 mg|mirabegron|25|myrbetriq|
+Restasis|0.05%|cyclosporine|0.5|restasis|
+Janumet|50/1000 mg|sitagliptin + metformin|50;1000|janumet|
+Xigduo XR|10/1000 mg|dapagliflozin + metformin|10;1000|xigduo|
+Synjardy|12.5/1000 mg|empagliflozin + metformin|12.5;1000|synjardy|
+Bystolic|5 mg|nebivolol|5|bystolic|
+Zetia|10 mg|ezetimibe|10|zetia|
+Celebrex|200 mg|celecoxib|200|celebrex|
+Celexa|20 mg|citalopram|20|celexa|
+Klonopin|0.5 mg|clonazepam|0.5|klonopin|
+Lamictal|25 mg|lamotrigine|25|lamictal|
+Zyprexa|5 mg|olanzapine|5|zyprexa|
+Jantoven|5 mg|warfarin|5|jantoven|
+Depakote ER|500 mg|divalproex|500|depakote|
+# --- insulin pens and inhalers (device names)
+Lantus SoloStar|20 units|insulin glargine||lantus|
+Lantus|100 units/mL|insulin glargine|100|lantus|
+Basaglar KwikPen||insulin glargine||basaglar|
+Toujeo Max SoloStar||insulin glargine||toujeo|
+Tresiba FlexTouch|100 units/mL|insulin degludec|100|tresiba|
+Humalog KwikPen||insulin lispro||humalog|
+Novolog FlexPen||insulin aspart, human||novolog|
+Ozempic pen|1 mg|semaglutide||ozempic|
+Trulicity pen|1.5 mg|dulaglutide||trulicity|
+Victoza|1.8 mg|liraglutide||victoza|
+Ventolin HFA|90 mcg|albuterol|0.09|ventolin|
+ProAir HFA|90 mcg|albuterol|0.09|proair|
+albuterol inhaler|90 mcg|albuterol|0.09||
+Symbicort|160/4.5 mcg|budesonide + formoterol|0.16;0.0045|symbicort|
+Breo Ellipta|100/25 mcg|fluticasone + vilanterol|0.1;0.025|breo|
+Anoro Ellipta|62.5/25 mcg|umeclidinium + vilanterol|0.0625;0.025|anoro|
+Incruse Ellipta|62.5 mcg|umeclidinium|0.0625|incruse|
+Trelegy Ellipta|100/62.5/25 mcg|fluticasone + umeclidinium + vilanterol|0.1;0.0625;0.025|trelegy|
+Spiriva Respimat|2.5 mcg|tiotropium|0.0025|spiriva|
+Spiriva HandiHaler|18 mcg|tiotropium|0.018|spiriva|
+Advair Diskus|250/50 mcg|fluticasone + salmeterol|0.25;0.05|advair|
+Flovent HFA|110 mcg|fluticasone|0.11|flovent|
+Combivent Respimat||ipratropium + albuterol||combivent|
+Stiolto Respimat||tiotropium + olodaterol||stiolto|
+Wixela Inhub|250/50 mcg|fluticasone + salmeterol|0.25;0.05|wixela|
+# --- abbreviations, combinations, release forms
+HCTZ|25 mg|hydrochlorothiazide|25||
+KCl|20 mEq|potassium chloride|20||
+ASA|81 mg|aspirin|81||
+NTG|0.4 mg|nitroglycerin|0.4||
+MTX|2.5 mg|methotrexate|2.5||
+APAP|500 mg|acetaminophen|500||
+losartan HCTZ|50/12.5 mg|losartan + hydrochlorothiazide|50;12.5||
+lisinopril-HCTZ|20/12.5 mg|lisinopril + hydrochlorothiazide|20;12.5||
+triamterene/HCTZ|37.5/25 mg|triamterene + hydrochlorothiazide|37.5;25||
+amlodipine/benazepril|5/20 mg|amlodipine + benazepril|5;20||
+hydrocodone/APAP|5/325 mg|hydrocodone + acetaminophen|5;325||
+metformin ER|500 mg|metformin|500||
+Metformin XR|750 mg|metformin|750||
+glipizide XL|5 mg|glipizide|5||
+diltiazem CD|180 mg|diltiazem|180||
+B12|1000 mcg|vitamin B12|||
+Vitamin D3|1000 units|cholecalciferol|||
+# --- the way it's written on a sheet
+LIPITOR 40MG||atorvastatin|40|lipitor|
+metformin 500mg bid||metformin|500||
+Eliquis 5mg 1 tab twice a day||apixaban|5|eliquis|
+atorvastatin (Lipitor) 40 mg||atorvastatin|40||
+Levothyroxine 0.088mg||levothyroxine|0.088||
+Synthroid .075 mg||levothyroxine|0.075|synthroid|
+Lisinopril 10||lisinopril|10||
+amlodipine 2.5mg daily||amlodipine|2.5||
+Metoprolol Succ ER 25mg||metoprolol|25||
+Potassium Cl 10 meq||potassium chloride|10||
+furosemide 20 mg 1/2 tab||furosemide|20||
+omeprazole DR 20mg||omeprazole|20||
+# --- misspellings: identify AND flag for the agent to confirm
+Lisinipril|10 mg|lisinopril|10||spell
+Atorvastin|20 mg|atorvastatin|20||spell
+Metphormin|500 mg|metformin|500||spell
+Eliquiss|5 mg|apixaban|5|eliquis|spell
+Zarelto|20 mg|rivaroxaban|20|xarelto|spell
+Amlodapine|5 mg|amlodipine|5||spell
+Gabapenten|300 mg|gabapentin|300||spell
+Levothyroxin|50 mcg|levothyroxine|0.05||spell
+Omeprazol|20 mg|omeprazole|20||spell
+Furosimide|40 mg|furosemide|40||spell
+Losarten|50 mg|losartan|50||spell
+Hydroclorothiazide|25 mg|hydrochlorothiazide|25||spell
+Jardience|10 mg|empagliflozin|10|jardiance|spell
+Farxigia|10 mg|dapagliflozin|10|farxiga|spell
+Simvastin|20 mg|simvastatin|20||spell
+Pantaprazole|40 mg|pantoprazole|40||spell
+Montelucast|10 mg|montelukast|10||spell
+Carvedilal|6.25 mg|carvedilol|6.25||spell
+# --- must NOT be identified (a person has to look)
+blood pressure pill||NONE|||
+water pill||NONE|||
+Notarealdrug|10 mg|NONE|||
+vitamins||NONE|||
+eye drops||NONE|||
+inhaler||NONE|||
+insulin||NONE|||
+CPAP machine||NONE|||
+unknown||NONE|||
+same as last year||NONE|||
+heart medication||NONE|||
+Xyzzol|20 mg|NONE|||

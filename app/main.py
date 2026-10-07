@@ -11,6 +11,7 @@ from flask import Flask, request, jsonify, Response
 import sqlite3
 import os
 import json
+import re
 import base64
 import requests
 from datetime import datetime, date
@@ -18,6 +19,7 @@ from datetime import datetime, date
 app = Flask(__name__)
 
 from app import data_meta
+from app import drug_resolver   # local RxNorm drug-name reader (2026-10-07)
 DB_PATH           = data_meta.DB_PATH
 # Doctor/clinic networks: 2027 sources only (app/providers_2027.py, providers_2027.db). The 2026
 # carrier directory databases were retired 2026-10-06.
@@ -735,6 +737,9 @@ def is_insulin(drug_name):
     name_lower = drug_name.lower()
     return any(kw in name_lower for kw in INSULIN_KEYWORDS)
 
+drug_resolver.warm()            # build the local RxNorm index in the background (about a second)
+
+
 def get_mfp(drug_name):
     """Return CMS negotiated MFP for a drug, or None if not in program. The plan-year database's
     negotiated_prices table when it has one (2027: 25 drugs), else the 2026 list above."""
@@ -1161,11 +1166,25 @@ def get_mail_order_cost(conn, contract_id, plan_id, tier, cost_type_mail, cost_a
 
 
 
+NORMALIZE_MODEL = os.environ.get("NORMALIZE_MODEL", "claude-sonnet-5-5")
+
+
+def _json_array(text):
+    """The JSON array in a model reply, tolerating ```json fences or a sentence around it."""
+    text = (text or "").strip()
+    m = re.search(r"\[.*\]", text, re.S)
+    return json.loads(m.group(0) if m else text)
+
+
 def normalize_drugs(drugs):
     """
-    Uses Claude API to normalize drug names before RxNav lookup.
-    Handles misspellings, generic/brand confusion, nicknames like 'water pill'.
-    Returns list of {"original": str, "normalized": str, "dosage": str, "confidence": float, "flag": str}
+    Cleans up drug names with Claude before they are looked up (misspellings, nicknames, brand vs generic).
+    Returns one dict per drug:
+      original, normalized, dosage, confidence, flag   (as before)
+      ingredient   generic ingredient name(s), e.g. "ondansetron" for Zofran - how retired brands are read
+      brand        brand name if one was written, else ""
+    2026-10-07: current model (env NORMALIZE_MODEL), structured fields, temperature 0. If Claude is
+    unreachable, the names go through unchanged and the local resolver still reads them.
     """
     if not drugs:
         return []
@@ -1178,35 +1197,24 @@ def normalize_drugs(drugs):
     if not drug_list:
         return []
 
-    prompt = f"""You are a Medicare drug formulary expert. I have a list of medications from a handwritten Medicare SOA form. Some may be misspelled, use nicknames, generic names, or brand names.
+    prompt = f"""You are a Medicare Part D pharmacist. Below are medications as written by a client or agent on an intake sheet or in an email. They may be misspelled, abbreviated, nicknamed, brand or generic, and may include the device (pen, inhaler) or directions.
 
-For each drug, return the most commonly used name in Medicare Part D formularies.
-
-Drug list:
+Medications:
 {drug_list}
 
-CRITICAL: Return only a valid JSON array. No explanation, no markdown, no code blocks. Start with [ and end with ].
+For EACH line, in the same order, return:
+- "original": the line exactly as written (name part only, without the dosage)
+- "normalized": the drug name as it appears on Medicare drug lists. Keep a brand name if a brand was written. Fix spelling. Keep release type (ER, XL, DR). Leave out device and delivery words that are not part of the brand name (Trelegy Ellipta -> Trelegy, Lantus SoloStar -> Lantus, Humalog KwikPen -> Humalog, Ventolin HFA -> Ventolin).
+- "ingredient": the generic ingredient name(s), e.g. "ondansetron" for Zofran, "sitagliptin and metformin" for Janumet, "insulin glargine" for Lantus. Required even for retired brands.
+- "brand": the brand name if a brand was written, else "".
+- "dosage": the strength as written (e.g. "10 mg", "100/62.5/25 mcg"); "" if none. Not the directions.
+- "confidence": 0 to 1 - how sure you are which drug this is.
+- "flag": a short note when unsure or when the line is not one specific drug (e.g. "water pill" - name the likely drug in "normalized" only if the line makes it clear), else "".
 
-Return this exact format:
-[
-  {{
-    "original": "exact name as written",
-    "normalized": "correct formulary name",
-    "dosage": "dosage if provided or empty string",
-    "confidence": 0.95,
-    "flag": "any concern or empty string"
-  }}
-]
+Never invent a drug. If a line is not identifiable, keep "normalized" as written, set confidence below 0.5 and explain in "flag".
 
-Rules:
-- Fix misspellings (Xarelts -> Xarelto)
-- Map nicknames (water pill -> Furosemide, blood thinner -> use context or flag)
-- Map generics to their most common formulary name
-- Keep dosage separate from name
-- Leave out device and delivery names that are not part of the drug's brand name
-  (Trelegy Ellipta -> Trelegy, Lantus SoloStar -> Lantus, Humalog KwikPen -> Humalog, Ventolin HFA -> Ventolin)
-- If completely unrecognizable, set confidence below 0.5 and explain in flag
-- Never guess wildly — if unsure set confidence low and flag it"""
+Reply with ONLY the JSON array, no other text:
+[{{"original": "", "normalized": "", "ingredient": "", "brand": "", "dosage": "", "confidence": 0.95, "flag": ""}}]"""
 
     try:
         response = requests.post(
@@ -1217,19 +1225,32 @@ Rules:
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 1000,
+                "model": NORMALIZE_MODEL,
+                "max_tokens": 4000,
+                "temperature": 0,
                 "messages": [{"role": "user", "content": prompt}]
             },
-            timeout=15,
+            timeout=30,
         )
         response.raise_for_status()
         data = response.json()
-        text = data["content"][0]["text"].strip()
-        return json.loads(text)
-    except Exception:
-        # If normalization fails, return originals unchanged
-        return [{"original": d.get("name", ""), "normalized": d.get("name", ""),
+        items = _json_array(data["content"][0]["text"])
+        if not isinstance(items, list) or len(items) != len([d for d in drugs if d.get("name", "").strip()]):
+            raise ValueError("normalization returned a different number of drugs")
+        for it, d in zip(items, [d for d in drugs if d.get("name", "").strip()]):
+            it.setdefault("original", d.get("name", ""))
+            it.setdefault("normalized", d.get("name", ""))
+            it.setdefault("dosage", d.get("dosage", ""))
+            if not (it.get("dosage") or "").strip():
+                it["dosage"] = d.get("dosage", "")       # never lose a strength that was written
+            it.setdefault("confidence", 1.0)
+            it.setdefault("flag", "")
+            it.setdefault("ingredient", "")
+            it.setdefault("brand", "")
+        return items
+    except Exception as exc:
+        print(f"normalize_drugs: Claude unavailable or unreadable reply ({type(exc).__name__}); using names as written")
+        return [{"original": d.get("name", ""), "normalized": d.get("name", ""), "ingredient": "", "brand": "",
                  "dosage": d.get("dosage", ""), "confidence": 1.0, "flag": ""} for d in drugs]
 
 
@@ -1362,14 +1383,22 @@ def generic_equivalents(rxcuis):
 def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, deductible, months_remaining, drug_name='',
                            use_mfp=True):
     plan_id_padded = plan_id.zfill(3)
+    # The plan's best tier for any of these drug IDs; on that tier, a package (NDC) the plan has a price
+    # for, cheapest first (2026-10-07: generic sitagliptin's newer drug ID had no price, and the first
+    # row found was used - a Tier 3 drug at 25% then cost $0).
     tier_row = None
-    for rxcui in rxcuis:
-        row = conn.execute("""
-            SELECT tier, ndc FROM formulary
-            WHERE formulary_id = ? AND rxcui = ?
-            ORDER BY tier ASC LIMIT 1
-        """, (formulary_id, rxcui)).fetchone()
-        if row and (tier_row is None or row["tier"] < tier_row["tier"]):
+    ids = list(dict.fromkeys(rxcuis))
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        row = conn.execute(f"""
+            SELECT f.tier AS tier, f.ndc AS ndc,
+                   (SELECT p.unit_cost FROM pricing p WHERE p.contract_id = ? AND p.plan_id = ? AND p.ndc = f.ndc
+                      AND p.days_supply = 30 LIMIT 1) AS price
+            FROM formulary f
+            WHERE f.formulary_id = ? AND f.rxcui IN ({",".join("?" * len(chunk))})
+            ORDER BY f.tier ASC, (price IS NULL) ASC, price ASC LIMIT 1
+        """, (contract_id, plan_id_padded, formulary_id, *chunk)).fetchone()
+        if row and (tier_row is None or (row["tier"], row["price"] is None) < (tier_row["tier"], tier_row["price"] is None)):
             tier_row = row
 
     if not tier_row:
@@ -1450,8 +1479,11 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         monthly_costs.append({"month": month_name, "cost": monthly_cost})
 
     annual_total = round(sum(m["cost"] for m in monthly_costs), 2)
+    # No price anywhere for this drug on this plan: when the client's cost depends on the price
+    # (deductible or coinsurance), the cost is UNKNOWN - never shown as $0 without saying so.
+    price_unknown = not unit_cost and (cost_type == 2 or ded_applies != "N")
     return {
-        "tier": tier, "covered": True, "ndc": ndc,
+        "tier": tier, "covered": True, "ndc": ndc, "price_unknown": price_unknown,
         "monthly_costs": monthly_costs, "annual_total": annual_total,
         "steady_state_copay": float(cost_amt) if cost_type == 1 else None,
         "_terms": {"ded_applies": ded_applies != "N", "price": unit_cost, "fee": 0.0,
@@ -1561,8 +1593,21 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             results.append(drug_result)
             continue
 
-        rxcuis = lookup_rxcuis(drug_name, dosage)
-        generic_rx = None          # generic equivalents, looked up only if a plan lacks the brand
+        # Local RxNorm resolver first (2026-10-07: app/drug_resolver.py, scored by tests/data/drug_cases*.psv);
+        # RxNav on the internet only as a backup for names it can't read.
+        resolved = drug_resolver.resolve(drug_name, dosage,
+                                         alternates=[original_name, item.get("ingredient", ""), item.get("brand", "")])
+        if resolved:
+            rxcuis = resolved.rxcuis
+            generic_rx = resolved.generic        # a brand's generic twins ([] for a generic name)
+            drug_result["read_as"] = resolved.matched
+            if resolved.flag:
+                drug_result["resolver_flag"] = resolved.flag
+                warnings.append({"drug": original_name or drug_name, "normalized_to": resolved.matched,
+                                 "flag": resolved.flag})
+        else:
+            rxcuis = lookup_rxcuis(drug_name, dosage)
+            generic_rx = None      # generic equivalents, looked up (RxNav) only if a plan lacks the brand
 
         if not rxcuis:
             drug_result["error"] = "Drug not found in formulary"
@@ -1602,6 +1647,9 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     if alt.get("covered"):
                         alt["as_generic"] = True
                         plan_cost = alt
+            if plan_cost.get("price_unknown"):
+                warnings.append({"drug": original_name or drug_name, "normalized_to": "",
+                                 "flag": f"no price on file for {carrier} - its cost is left out, verify"})
             
             # Add pharmacy-specific costs if we found nearby pharmacies
             nearby_pharmacies = pharmacy_map.get(carrier, [])
