@@ -125,8 +125,8 @@ def validate_db():
         plan_count = conn.execute("SELECT COUNT(*) FROM plans").fetchone()[0]
         zip_county = conn.execute("SELECT county_name FROM zip_county WHERE zip='55309'").fetchone()
         conn.close()
-        if plan_count < 50:
-            print(f"ERROR: medicare_mn.db has only {plan_count} plans. Expected 65. DB may be corrupt.")
+        if plan_count < 30:             # 2026: 65 plans; 2027: 46
+            print(f"ERROR: medicare_mn.db has only {plan_count} plans. Expected 40+. DB may be corrupt.")
             sys.exit(1)
         if not zip_county:
             print("WARNING: zip 55309 not found in zip_county. County lookups may fail.")
