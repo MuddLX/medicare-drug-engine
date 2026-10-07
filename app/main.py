@@ -2524,11 +2524,17 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 mail_cost_row = conn.execute("""
                     SELECT cost_type_mail_pref, cost_amt_mail_pref, ded_applies
                     FROM beneficiary_cost
-                    WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 3
+                    WHERE contract_id = ? AND plan_id = ? AND tier = ? AND days_supply = 2
                     ORDER BY coverage_level ASC LIMIT 1
                 """, (plan["contract_id"], plan["plan_id"].zfill(3), plan_cost.get("tier", 0))).fetchone()
 
-                if mail_cost_row or drug_is_insulin or is_mfp_drug_flag:
+                # CMS days_supply codes: 1 = one month, 2 = three months (mail order is a 90-day fill).
+                # cost_type 0 / no row = this tier can't be filled by mail at this plan.
+                mail_offered = bool(mail_cost_row) and mail_cost_row[0] in (1, 2)
+                if not (mail_offered or drug_is_insulin or is_mfp_drug_flag):
+                    plan_cost["mail_order_costs"] = {"available": False, "monthly_costs": [],
+                                                     "annual_total": None}
+                if mail_offered or drug_is_insulin or is_mfp_drug_flag:
                     # Mail order goes through the same shared deductible + yearly cap
                     # (it used to skip the deductible, which made fake "saves $X/yr" lines).
                     # Costs are per month; a 90-day copay is divided by 3.
@@ -2538,12 +2544,9 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     elif is_mfp_drug_flag:
                         mail_terms = {"ded_applies": mail_ded, "price": mfp_value, "fee": 0.0,
                                       "cost_type": 2, "cost_amt": 0.25}
-                    elif mail_cost_row:
+                    elif mail_offered:
                         mt, ma = mail_cost_row[0], float(mail_cost_row[1] or 0)
-                        if mt == 0:
-                            mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
-                                          "cost_type": 0, "cost_amt": 0}
-                        elif mt == 2:
+                        if mt == 2:
                             mail_terms = {"ded_applies": mail_ded, "price": unit_cost, "fee": 0.0,
                                           "cost_type": 2, "cost_amt": ma}
                         else:

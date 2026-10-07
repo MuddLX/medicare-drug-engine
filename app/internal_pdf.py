@@ -162,11 +162,16 @@ def pharmacy_summary(label, drug_detail, months):
         if 0 < i < len(monthly):
             cap_from = months[i][:3]
     mail_month = {}
+    mail_partial = False      # a covered drug can't be mailed: a mail total would leave it out
     for d in drug_detail or []:
-        for m in ((d.get("plans", {}).get(label, {}).get("mail_order_costs", {}) or {}).get("monthly_costs") or []):
+        cell = d.get("plans", {}).get(label, {}) or {}
+        mo = cell.get("mail_order_costs") or {}
+        if cell.get("pharmacy_costs") and (mo.get("available") is False or not mo.get("monthly_costs")):
+            mail_partial = True
+        for m in mo.get("monthly_costs") or []:
             mail_month[m["month"]] = mail_month.get(m["month"], 0) + (m["cost"] or 0)
     mail_series = [mail_month.get(mn, 0) for mn in months] if months else []
-    mail_annual = sum(mail_month.values())
+    mail_annual = None if (mail_partial or not mail_month) else sum(mail_month.values())   # $0 by mail is a real answer
     return {
         "name": _short_pharmacy(cheapest),
         "distance": ("~" if c["approx"] else "") + f"{c['distance']} mi",
@@ -176,9 +181,11 @@ def pharmacy_summary(label, drug_detail, months):
         "transitions": transitions,
         "ramp": ramp,
         "cap_from": cap_from,
-        "mail_monthly": _typical_month(mail_series) if mail_annual else None,
-        "mail_annual": mail_annual if mail_annual else None,
-        "mail_saves": (c["annual"] - mail_annual) if mail_annual else 0,
+        "mail_monthly": _typical_month(mail_series) if mail_annual is not None else None,
+        "mail_annual": mail_annual,
+        "mail_saves": (c["annual"] - mail_annual) if mail_annual is not None else 0,
+        "mail_partial": mail_partial,
+        "mail_none": mail_partial and not mail_month,     # no drug here can be mailed at this plan
         "ded_met": _cheapest_field(label, drug_detail, cheapest, "ded_met"),
         "cap_reached": _cheapest_field(label, drug_detail, cheapest, "cap_reached"),
     }
@@ -464,10 +471,12 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     continue
                 where = "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}"
                 r_cheap.append(C(f"{_money(sm['annual'], cents=False)}/yr", f"{where} · {_money(sm['steady'])}/mo"))
-                if sm.get("mail_annual"):
+                if sm.get("mail_annual") is not None:
                     mail_sub = (f"saves {_money(sm['mail_saves'], cents=False)}/yr" if sm["mail_saves"] > 1
                                 else f"{_money(sm['mail_monthly'])}/mo")
                     r_mail.append(C(f"{_money(sm['mail_annual'], cents=False)}/yr", mail_sub))
+                elif sm.get("mail_partial"):
+                    r_mail.append(C("—", "no mail order" if sm.get("mail_none") else "not all drugs by mail"))
                 else:
                     r_mail.append(C("—"))
                 ramp = sm.get("ramp") or []
