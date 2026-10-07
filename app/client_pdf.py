@@ -231,7 +231,7 @@ def _rx_cell(p, total):
 def _cost_cell(p):
     """The drug-cost estimate can't include drugs we couldn't price - say so."""
     unv = p.get("rx", {}).get("unverified", 0)
-    if unv:
+    if unv and p["est_annual_drug_cost"].startswith("$"):
         return _cell(p["est_annual_drug_cost"], sub=f'excludes {_plural(unv, "medication")}')
     return _cell(p["est_annual_drug_cost"])
 

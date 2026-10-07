@@ -150,31 +150,90 @@ def calendar_month(month_num):
     return calendar.month_name[int(month_num)]
 
 
-def resolve_county(conn, zip_code):
-    """(county, exact) for a ZIP, or (None, False). exact=False means the ZIP itself wasn't in
-    zip_county and a neighbouring ZIP's county was used (the long-standing fallback)."""
-    tables = {r[0] for r in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-    ).fetchall()}
+def _table_cols(conn, table):
+    return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _place_key(name):
+    """'St. Paul', 'Saint Paul city', 'st paul' -> 'st paul' (Census place names vs what people write)."""
+    import re as _re
+    n = (name or "").lower().replace(".", " ").replace(",", " ")
+    n = _re.sub(r"\bsaint\b", "st", n)
+    n = _re.sub(r"\b(city|township|cdp|village)\b", " ", n)
+    return " ".join(n.split())
+
+
+def county_from_address(address, city, state, zip_code):
+    """County name for a street address from the Census Bureau geocoder, or None. Sends street,
+    city, state and ZIP only (no name). Switch off with env COUNTY_ADDRESS_LOOKUP=off."""
+    try:
+        r = requests.get("https://geocoding.geo.census.gov/geocoder/geographies/address", timeout=6, params={
+            "street": address, "city": city or "", "state": state or "MN", "zip": zip_code,
+            "benchmark": "Public_AR_Current", "vintage": "Current_Current", "format": "json"})
+        matches = r.json()["result"]["addressMatches"]
+        if matches:
+            return matches[0]["geographies"]["Counties"][0]["BASENAME"]
+    except Exception:
+        pass
+    return None
+
+
+def county_choice(conn, zip_code, address=None, city=None, state=None):
+    """Which county a client is in (2026-10-06). Returns
+        {"county", "exact", "method", "counties": [{"county", "share"}], "note"}
+    method: "only" (ZIP in one county), "address" (Census lookup of the street address), "city"
+    (the city lies in just one of the ZIP's counties), "largest" (the county with most of the ZIP's
+    land - an assumption the note tells the agent about), "nearby" (ZIP unknown: a neighbouring ZIP)."""
+    out = {"county": None, "exact": False, "method": None, "counties": [], "note": ""}
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if "service_area" not in tables or "zip_county" not in tables:
-        return None, False
+        return out
     zip_code = str(zip_code or "").strip()
-    row = conn.execute(
-        "SELECT county_name FROM zip_county WHERE zip = ?", (zip_code,)
-    ).fetchone()
-    if row:
-        return row[0], True
-    if not zip_code.isdigit():
-        return None, False
-    # Try nearby zips by incrementing/decrementing
-    for delta in [1, -1, 2, -2, 3, -3]:
-        alt_zip = str(int(zip_code) + delta).zfill(5)
-        row = conn.execute(
-            "SELECT county_name FROM zip_county WHERE zip = ?", (alt_zip,)
-        ).fetchone()
-        if row:
-            return row[0], False
-    return None, False
+    has_share = "land_share" in _table_cols(conn, "zip_county")
+    q = ("SELECT county_name, land_share FROM zip_county WHERE zip = ? ORDER BY land_share DESC" if has_share
+         else "SELECT county_name, 1.0 FROM zip_county WHERE zip = ?")
+    rows = conn.execute(q, (zip_code,)).fetchall()
+    if not rows:
+        if not zip_code.isdigit():
+            return out
+        for delta in [1, -1, 2, -2, 3, -3]:
+            alt = conn.execute(q, (str(int(zip_code) + delta).zfill(5),)).fetchone()
+            if alt:
+                out.update(county=alt[0], method="nearby", counties=[{"county": alt[0], "share": 1.0}])
+                return out
+        return out
+    counties = [{"county": r[0], "share": round(float(r[1] or 0), 3)} for r in rows]
+    names = [c["county"] for c in counties]
+    out.update(exact=True, counties=counties)
+    if len(names) == 1:
+        out.update(county=names[0], method="only")
+        return out
+    chosen = method = None
+    if address and os.environ.get("COUNTY_ADDRESS_LOOKUP", "on").lower() not in ("off", "0", "false", "no"):
+        c = county_from_address(address, city, state, zip_code)
+        if c in names:
+            chosen, method = c, "address"
+    if not chosen and city and "place_county" in tables:
+        hits = {r[0] for r in conn.execute("SELECT county_name FROM place_county WHERE place = ?",
+                                           (_place_key(city),))} & set(names)
+        if len(hits) == 1:
+            chosen, method = hits.pop(), "city"
+    if not chosen:
+        chosen, method = names[0], "largest"
+    how = {"address": "from the street address", "city": f"from the city, {city}",
+           "largest": "the county covering most of the ZIP - check with the client"}[method]
+    others = [n for n in names if n != chosen]
+    out.update(county=chosen, method=method,
+               note=f"ZIP {zip_code} is also in {' and '.join(others)} "
+                    f"{'County' if len(others) == 1 else 'counties'}. Plans shown for {chosen} County ({how}).")
+    return out
+
+
+def resolve_county(conn, zip_code, address=None, city=None, state=None):
+    """(county, exact) for a ZIP, or (None, False). exact=False means the ZIP itself wasn't in
+    zip_county and a neighbouring ZIP's county was used. See county_choice for the full answer."""
+    c = county_choice(conn, zip_code, address, city, state)
+    return c["county"], c["exact"]
 
 
 def plan_premium_deductible(conn, cid, pid, row):
@@ -193,7 +252,11 @@ def eligible_plan_rows(conn, county):
     """(ma_rows, pd_rows) every plan a client in this county may be shown. The ONE eligibility
     rule shared by the automatic report path, the plan picker and agent-chosen plans, so the
     picker can never offer a plan the reports can't render. MA/Cost: no SNP, no PACE, must have
-    a formulary. PD: standalone PDPs with a formulary."""
+    a formulary. PD: standalone PDPs with a formulary. A plan-year database may also mark plans whose
+    carrier has not published its drug list yet (plans.drug_list_status) - those stay eligible and
+    the reports say "drug list not out yet" instead of pricing them (2026-10-06)."""
+    pending = ("OR p.drug_list_status = 'not published yet'"
+               if "drug_list_status" in _table_cols(conn, "plans") else "")
     ma_rows = conn.execute("""
         SELECT sa.contract_id, sa.plan_id, sa.plan_name, sa.org_name,
                MIN(sa.premium_total) as premium_total, sa.deductible, sa.plan_type,
@@ -207,10 +270,10 @@ def eligible_plan_rows(conn, county):
         AND sa.plan_type NOT LIKE '%D-SNP%'
         AND sa.plan_type NOT LIKE '%C-SNP%'
         AND sa.plan_type NOT LIKE '%I-SNP%'
-        AND p.formulary_id IS NOT NULL
+        AND (p.formulary_id IS NOT NULL {pending})
         GROUP BY sa.contract_id, sa.plan_id
         ORDER BY MIN(sa.premium_total) ASC, sa.plan_name ASC
-    """, (county,)).fetchall()
+    """.format(pending=pending), (county,)).fetchall()
 
     # Get Part D plans available statewide
     pd_rows = conn.execute("""
@@ -222,10 +285,10 @@ def eligible_plan_rows(conn, county):
                           AND p.plan_id = sa.plan_id
         WHERE sa.county_name IN (?, 'All Counties')
         AND sa.plan_type = 'PDP'
-        AND p.formulary_id IS NOT NULL
+        AND (p.formulary_id IS NOT NULL {pending})
         GROUP BY sa.contract_id, sa.plan_id
         ORDER BY MIN(sa.premium_total) ASC
-    """, (county,)).fetchall()
+    """.format(pending=pending), (county,)).fetchall()
     return ma_rows, pd_rows
 
 
@@ -233,7 +296,8 @@ MAX_SELECTED_MA = 7     # internal report layout limit (Section 1 columns)
 MAX_SELECTED_PD = 3     # internal report Section 4 limit
 
 
-def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max_pd=MAX_SELECTED_PD):
+def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max_pd=MAX_SELECTED_PD,
+                           address=None, city=None, state=None):
     """Agent-chosen plans (2026-10-02) -> (plans, county, error).
 
     `selected` is the ordered list the app sends: [{"contract_id": "H4882", "plan_id": "009"}, ...].
@@ -244,15 +308,21 @@ def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max
     """
     if not isinstance(selected, list) or not selected:
         return None, None, "selected_plans must be a non-empty list"
-    county, _exact = resolve_county(conn, zip_code)
+    choice = county_choice(conn, zip_code, address, city, state)
+    county = choice["county"]
     if not county:
         return None, None, f"Can't find a county for ZIP {zip_code}"
-    ma_rows, pd_rows = eligible_plan_rows(conn, county)
-    eligible = {}
-    for r in ma_rows:
-        eligible[(r[0], str(r[1]).zfill(3))] = ("Cost" if "Cost" in (r[6] or "") else "MA", r)
-    for r in pd_rows:
-        eligible[(r[0], str(r[1]).zfill(3))] = ("PD", r)
+    # A ZIP that crosses county lines: plans from ANY of its counties may be picked (the agent may
+    # know the client's county better than the ZIP does).
+    eligible, plan_counties = {}, {}
+    for cty in [c["county"] for c in choice["counties"]] or [county]:
+        ma_rows, pd_rows = eligible_plan_rows(conn, cty)
+        for r in ma_rows:
+            eligible.setdefault((r[0], str(r[1]).zfill(3)), ("Cost" if "Cost" in (r[6] or "") else "MA", r))
+            plan_counties.setdefault((r[0], str(r[1]).zfill(3)), []).append(cty)
+        for r in pd_rows:
+            eligible.setdefault((r[0], str(r[1]).zfill(3)), ("PD", r))
+            plan_counties.setdefault((r[0], str(r[1]).zfill(3)), []).append(cty)
 
     plans, seen, used_labels = [], set(), set()
     n_ma = n_pd = 0
@@ -282,7 +352,15 @@ def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max
         plans.append({
             "carrier": label, "contract_id": cid, "plan_id": pid, "type": ptype,
             "landscape_premium": premium, "landscape_deductible": deductible,
+            "counties": plan_counties.get(key, []),
         })
+    # The report's county: the assumed one, unless every picked MA plan is only sold in another
+    # county of this ZIP - then the agent has told us where the client lives.
+    ma_keys = [(p["contract_id"], p["plan_id"]) for p in plans if p["type"] != "PD"]
+    if ma_keys and not any(county in plan_counties.get(k, []) for k in ma_keys):
+        common = set.intersection(*[set(plan_counties.get(k, [])) for k in ma_keys])
+        if len(common) == 1:
+            county = common.pop()
     if n_ma > max_ma:
         return None, county, f"Too many Medicare Advantage plans selected ({n_ma}); the limit is {max_ma}"
     if n_pd > max_pd:
@@ -290,17 +368,21 @@ def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max
     return plans, county, None
 
 
-def get_plans_for_zip(conn, zip_code):
+def get_plans_for_zip(conn, zip_code, address=None, city=None, state=None):
     """
     Dynamically load plans available for a client zip code.
     Uses service_area + zip_county tables if available.
     Falls back to hardcoded FALLBACK_PLANS.
     """
-    county, _exact = resolve_county(conn, zip_code)
+    county, _exact = resolve_county(conn, zip_code, address, city, state)
     if not county:
         return FALLBACK_PLANS
 
     ma_rows, pd_rows = eligible_plan_rows(conn, county)
+    # automatic picks only from plans we can price (a plan whose drug list isn't out yet is shown
+    # in the picker for the agent to choose deliberately, never picked for them)
+    ma_rows = [r for r in ma_rows if r[7]]
+    pd_rows = [r for r in pd_rows if r[7]]
     if not ma_rows and not pd_rows:
         return FALLBACK_PLANS
 
@@ -2387,7 +2469,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
         available_plans = list(plans_override)
         custom_plans_str = None          # margin-note requests don't apply when the agent picked
     else:
-        available_plans = get_plans_for_zip(conn, zip_code)
+        available_plans = get_plans_for_zip(conn, zip_code, client_address, client_city, client_state)
 
     # Append any agent-requested custom plans (max 2, skip dupes)
     if custom_plans_str and custom_plans_str.strip():
@@ -2489,6 +2571,11 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
         is_mfp_drug_flag = mfp_value > 0
 
         for carrier, plan in plan_details.items():
+            if not plan.get("formulary_id"):
+                # Carrier hasn't published this year's drug list (2026-10-06): say so, never "not covered".
+                drug_result["plans"][carrier] = {"tier": None, "covered": None, "drug_list_missing": True,
+                                                 "monthly_costs": [], "annual_total": None}
+                continue
             plan_cost = get_drug_cost_for_plan(
                 conn, plan["formulary_id"], plan["contract_id"],
                 plan["plan_id"], rxcuis, plan["deductible"], months_remaining,
@@ -2609,14 +2696,16 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             else:
                 all_covered = False
         premium_annual = round(plan["premium_monthly"] * len(months_remaining), 2)
+        missing_list = not plan.get("formulary_id")
         plan_summaries[carrier] = {
             "contract_id": plan["contract_id"], "plan_id": plan["plan_id"],
             "plan_name": plan["plan_name"], "plan_type": plan["plan_type"],
             "premium_monthly": plan["premium_monthly"], "premium_remaining_year": premium_annual,
             "deductible": plan["deductible"],
-            "total_drug_cost": round(total_drug_cost, 2),
-            "total_drug_plus_premium": round(total_drug_cost + premium_annual, 2),
+            "total_drug_cost": None if missing_list else round(total_drug_cost, 2),
+            "total_drug_plus_premium": None if missing_list else round(total_drug_cost + premium_annual, 2),
             "all_drugs_covered": all_covered,
+            "drug_list_missing": missing_list,
         }
 
     for msg in custom_warnings:
@@ -2632,14 +2721,14 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     }
 
 
-def build_pdf(*args, plan_year=None, county=None, **kwargs):
+def build_pdf(*args, plan_year=None, county=None, county_note=None, **kwargs):
     """Internal agent report. Since 2026-10-02 the one-table layout (app/internal_pdf.py).
     Set the environment variable INTERNAL_REPORT_V1=1 to fall back to the previous layout
     (build_pdf_v1) without a code change."""
     if os.environ.get("INTERNAL_REPORT_V1") == "1":
         return build_pdf_v1(*args, **kwargs)
     from app.internal_pdf import render
-    return render(*args, plan_year=plan_year, county=county, **kwargs)
+    return render(*args, plan_year=plan_year, county=county, county_note=county_note, **kwargs)
 
 
 def build_pdf_v1(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining, confidence=None, warnings=None, drug_detail_full=None, client_address=None, client_city=None, provider_results=None):
@@ -3652,10 +3741,19 @@ def plans_for_zip_route():
         return jsonify({"error": "Provide a 5-digit ZIP, e.g. /plans-for-zip?zip=55441"}), 400
     conn = get_db()
     try:
-        county, exact = resolve_county(conn, zip_code)
+        choice = county_choice(conn, zip_code, request.args.get("address"), request.args.get("city"),
+                               request.args.get("state"))
+        county = choice["county"]
         if not county:
             return jsonify({"error": f"No county found for ZIP {zip_code}"}), 404
-        ma_rows, pd_rows = eligible_plan_rows(conn, county)
+        all_counties = [c["county"] for c in choice["counties"]] or [county]
+        rows, where = {}, {}
+        for cty in all_counties:
+            ma_rows, pd_rows = eligible_plan_rows(conn, cty)
+            for r, ptype in [(r, "MA") for r in ma_rows] + [(r, "PD") for r in pd_rows]:
+                k = (r[0], str(r[1]).zfill(3))
+                rows.setdefault(k, (r, ptype))
+                where.setdefault(k, []).append(cty)
 
         def entry(r, ptype):
             cid, pid = r[0], str(r[1]).zfill(3)
@@ -3663,6 +3761,7 @@ def plans_for_zip_route():
             official = (r[2] or official_plan_name(cid, pid) or "").strip()
             name = display_plan_name(official, f"{cid}-{pid}")
             premium, deductible = plan_premium_deductible(conn, cid, pid, r)
+            cs = where[(cid, pid)]
             return {"contract_id": cid, "plan_id": pid, "plan_type": ptype,
                     "carrier": carrier, "plan_name": name,
                     "display_name": f"{carrier} \u2014 {name}",
@@ -3670,15 +3769,25 @@ def plans_for_zip_route():
                     "plan_number": f"{cid}-{pid}",
                     "official_name": official or name,
                     "premium_monthly": round(premium, 2),
-                    "drug_deductible": round(deductible, 2)}
+                    "drug_deductible": round(deductible, 2),
+                    # ZIPs that cross county lines (2026-10-06): where this plan is sold, and whether
+                    # that includes the county we assumed for the client.
+                    "counties": cs if len(all_counties) > 1 and ptype != "PD" else [],
+                    "in_county": county in cs,
+                    # Carrier hasn't published this year's drug list yet (2027 database)
+                    "drug_list_loaded": bool(r[7]),
+                    "drug_list_note": "" if r[7] else "Drug list not published yet - drug costs can't be shown"}
 
         def key(p):
-            return (p["carrier"].lower(), p["plan_name"].lower())
-        ma = sorted((entry(r, "MA") for r in ma_rows), key=key)
-        pd = sorted((entry(r, "PD") for r in pd_rows), key=key)
+            return (not p["in_county"], p["carrier"].lower(), p["plan_name"].lower())
+        entries = [entry(r, t) for r, t in rows.values()]
+        ma = sorted((e for e in entries if e["plan_type"] == "MA"), key=key)
+        pd = sorted((e for e in entries if e["plan_type"] == "PD"), key=key)
     finally:
         conn.close()
-    return jsonify({"zip_code": zip_code, "county": county, "county_exact": bool(exact),
+    return jsonify({"zip_code": zip_code, "county": county, "county_exact": bool(choice["exact"]),
+                    "county_method": choice["method"], "counties": choice["counties"],
+                    "county_note": choice["note"],
                     "data_vintage": data_vintage(), "plans": ma + pd})
 
 
@@ -3757,7 +3866,8 @@ def process_soa():
     if selected is not None:
         _conn = get_db()
         try:
-            plans_override, _county, err = resolve_selected_plans(_conn, zip_code, selected)
+            plans_override, _county, err = resolve_selected_plans(_conn, zip_code, selected, address=client_address,
+                                                                  city=client_city, state=client_state)
         finally:
             _conn.close()
         if err:
@@ -3933,15 +4043,27 @@ def process_soa():
 
     # Header facts for the one-table report (2026-10-02)
     report_plan_year = int(cost_start_date[-4:]) if cost_start_date != soa_date else None
-    report_county = None
+    report_county, county_note = None, ""
     try:
         _c = get_db()
         try:
-            report_county, _exact = resolve_county(_c, zip_code)
+            _choice = county_choice(_c, zip_code, client_address, client_city, client_state)
+            report_county, county_note = _choice["county"], _choice["note"]
+            if plans_override is not None and _county and _county != report_county:
+                # the agent picked plans sold only in another county of this ZIP
+                county_note = f"ZIP {zip_code} crosses county lines; the plans picked are in {_county} County."
+                report_county = _county
+            if plans_override is not None and len(_choice["counties"]) > 1:
+                outside = [p["carrier"] for p in plans_override
+                           if p.get("type") != "PD" and report_county not in (p.get("counties") or [report_county])]
+                if outside:
+                    county_note = (f"ZIP {zip_code} crosses county lines. {', '.join(outside)} "
+                                   f"{'is' if len(outside) == 1 else 'are'} not sold in {report_county} County "
+                                   f"- check which county the client lives in.")
         finally:
             _c.close()
     except Exception:
-        report_county = None
+        report_county, county_note = None, ""
 
     try:
         pdf_bytes_out = build_pdf(
@@ -3956,16 +4078,18 @@ def process_soa():
             provider_results=provider_results,
             plan_year=report_plan_year,
             county=report_county,
+            county_note=county_note,
         )
     except Exception as e:
         return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
 
     filename = f"{client_name.replace(' ', '_')}_Drug_Comparison.pdf"
-    return Response(
-        pdf_bytes_out,
-        mimetype="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    if report_county:
+        headers["X-County"] = report_county
+    if county_note:
+        headers["X-County-Note"] = county_note.encode("ascii", "replace").decode()
+    return Response(pdf_bytes_out, mimetype="application/pdf", headers=headers)
 
 
 @app.route("/client-comparison", methods=["POST"])
@@ -4022,7 +4146,8 @@ def client_comparison_route():
     if selected is not None:
         _conn = get_db()
         try:
-            plans_override, _county, err = resolve_selected_plans(_conn, zip_code, selected)
+            plans_override, _county, err = resolve_selected_plans(_conn, zip_code, selected, address=client_address,
+                                                                  city=client_city, state=client_state)
         finally:
             _conn.close()
         if err:

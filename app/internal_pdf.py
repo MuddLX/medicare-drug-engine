@@ -253,7 +253,7 @@ def _doctor_name(r):
 
 def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, months_remaining,
            confidence=None, warnings=None, drug_detail_full=None, client_address=None,
-           client_city=None, provider_results=None, plan_year=None, county=None):
+           client_city=None, provider_results=None, plan_year=None, county=None, county_note=None):
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     from reportlab.lib.pagesizes import landscape, letter
@@ -329,6 +329,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                                ("LINEBELOW", (0, 0), (-1, 0), 1.5, INK)]))
         out = [t, Spacer(1, 2.5 * mm)]
         groups = group_warnings(warnings, drug_detail)
+        if county_note:                       # ZIP crosses county lines (2026-10-06)
+            groups = [("County", [county_note])] + list(groups or [])
         if groups:
             rows = [[Paragraph(f"<b>{escape(lbl)}</b>", S("al", 8.5, textColor=WARN_TX)),
                      Paragraph(escape("  ·  ".join(items)), S("av", 8.5, textColor=WARN_TX))]
@@ -416,6 +418,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             for l in cols:
                 s = plan_summaries[l]
                 extra = "drugs + premium only" if (bold and l in pd) else None
+                if s.get("drug_list_missing") and title in (drug_cost_label, total_label):
+                    extra = "drug list not out yet"
                 row.append(C(fn(s), extra, cell_b if bold else cell))
             rows.append(row)
 
@@ -437,6 +441,9 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     pcost = d.get("plans", {}).get(l, {})
                     if d.get("error"):
                         row.append(C("Not identified", "verify the name"))
+                        tint(r, ci, AMBER_BG)
+                    elif pcost.get("drug_list_missing"):
+                        row.append(C("Drug list not out", "carrier hasn't published it"))
                         tint(r, ci, AMBER_BG)
                     elif pcost.get("injectable") or d.get("is_injectable"):
                         row.append(C("Verify coverage", "injectable"))

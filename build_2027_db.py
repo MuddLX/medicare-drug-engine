@@ -647,9 +647,32 @@ def step_reference(conn):
                                    for t in ("pharmacy_names", "zip_coords")))
 
 
+def step_place_county(conn):
+    """City -> county(ies), for ZIPs that cross county lines (Census 2020 place-by-county file in this folder).
+    A city that itself spans two counties keeps both rows; the engine only uses a city when it names
+    exactly one of the ZIP's counties."""
+    import sys as _s
+    sys.path.insert(0, HERE)
+    from app.main import _place_key
+    path = os.path.join(HERE, "national_place_by_county2020.txt")
+    if not os.path.exists(path):
+        sys.exit(f"Missing {path}")
+    rows = set()
+    with open(path, encoding="latin-1") as f:
+        for r in csv.DictReader(f, delimiter="|"):
+            if r["STATE"] == "MN":
+                rows.add((_place_key(r["PLACENAME"]), r["COUNTYNAME"].replace(" County", "").strip()))
+    conn.execute("DROP TABLE IF EXISTS place_county")
+    conn.execute("CREATE TABLE place_county (place TEXT, county_name TEXT, PRIMARY KEY (place, county_name))")
+    conn.executemany("INSERT INTO place_county VALUES (?,?)", sorted(rows))
+    conn.commit()
+    multi = conn.execute("SELECT COUNT(*) FROM (SELECT place FROM place_county GROUP BY place HAVING COUNT(*) > 1)").fetchone()[0]
+    print(f"place_county: {len(rows)} city-county rows, {len({p for p, _ in rows})} cities ({multi} span 2+ counties)")
+
+
 STEPS = {"zip_county": step_zip_county, "service_area": step_service_area, "plans": step_plans, "costs": step_costs,
          "meta": step_meta, "cms": step_cms, "carrier_formularies": step_carrier_formularies,
-         "estimates": step_estimates, "reference": step_reference,
+         "estimates": step_estimates, "reference": step_reference, "place_county": step_place_county,
          "estimate_prices": lambda conn, z: step_estimates(conn, z, with_networks=False)}
 
 if __name__ == "__main__":

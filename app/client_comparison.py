@@ -142,7 +142,7 @@ def plan_summaries_to_candidates(plan_summaries, county):
             "counties": [county],
             "monthly_premium": s.get("premium_monthly", 0),
             "part_d_premium_separate": 0,
-            "est_annual_drug_cost": s.get("total_drug_cost", 0),   # full-year via Jan-1 window
+            "est_annual_drug_cost": s.get("total_drug_cost") or 0,  # full-year via Jan-1 window
             "part_b_giveback_monthly": 0,
             "health_systems": [],
         })
@@ -203,7 +203,7 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
         covered, not_covered, unverified = 0, [], 0
         for d in drug_detail:
             pc = d["plans"].get(key, {})
-            if d.get("error") or pc.get("injectable") or not pc:
+            if d.get("error") or pc.get("injectable") or pc.get("drug_list_missing") or not pc:
                 unverified += 1
             elif pc.get("covered") or pc.get("annual_total") is not None:
                 covered += 1
@@ -216,7 +216,8 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
             # ---- from the drug engine ----
             "plan_premium": f"${s['premium_monthly']:,.0f}",
             "part_d_premium": "Included",
-            "est_annual_drug_cost": f"${s['total_drug_cost']:,.0f}",
+            "est_annual_drug_cost": (f"${s['total_drug_cost']:,.0f}" if s.get("total_drug_cost") is not None
+                                     else "Drug list not published yet"),
             "rx": {"covered": covered, "total": total_drugs, "not_covered": not_covered,
                    "unverified": unverified},
             # ---- interim states ----
