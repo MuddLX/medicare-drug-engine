@@ -1234,7 +1234,11 @@ Reply with ONLY the JSON array, no other text:
         )
         response.raise_for_status()
         data = response.json()
-        items = _json_array(data["content"][0]["text"])
+        # The reply's TEXT block - newer models can put other blocks (e.g. thinking) first (2026-10-07).
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        if data.get("stop_reason") == "max_tokens":
+            raise ValueError("normalization reply was cut off (max_tokens)")
+        items = _json_array(text)
         if not isinstance(items, list) or len(items) != len([d for d in drugs if d.get("name", "").strip()]):
             raise ValueError("normalization returned a different number of drugs")
         for it, d in zip(items, [d for d in drugs if d.get("name", "").strip()]):
