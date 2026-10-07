@@ -99,7 +99,8 @@ def main(first, last):
             rows.append(row(None, None, None, None))
 
     def row(lastn, firstn, cred, acc):
-        return (SOURCE, "Medica", "Medica Advantage PPO", s["section"], s["state"], s["county"], s["city"],
+        return (SOURCE, "Medica", "Medica Advantage PPO", s["section"], s["state"], s["county"],
+                s.get("clinic_city") or s["city"],
                 s["clinic"], s["address"].strip(), s["zip"], s["phone"], s["phs"].strip(), s["codes"].strip(),
                 s["specialty"] or s.get("sec_spec", ""), lastn, firstn, cred, acc, page_no)
 
@@ -116,7 +117,7 @@ def main(first, last):
             return
         if next_text and (next_text[:1].isdigit() or next_text.startswith(("PO Box", "P.O.", "One ", "Two "))):
             emit_clinic_only()
-            s.update(clinic=text, address="", zip="", phone="", phs="", codes="",
+            s.update(clinic=text, clinic_city="", address="", zip="", phone="", phs="", codes="",
                      specialty="", mode="address", _had_provider=False)
         else:
             s["specialty"] = re.sub(r"\s*\(CONTINUED\)", "", text, flags=re.I).title()
@@ -187,8 +188,12 @@ def main(first, last):
                     s["phone"] = text[:14]
                 elif m:
                     s["zip"] = m.group("zip") or ""
+                    s["clinic_city"] = m.group("city").strip()      # the clinic's own city (address line)
+                    s["pending_zip"] = not m.group("zip")
                 elif re.fullmatch(r"\d{5}(-\d{4})?", text):
                     s["zip"] = text[:5]
+                elif s.get("pending_zip") is False and False:
+                    pass
                 elif not s["phone"]:
                     s["address"] += " " + text
                 continue
