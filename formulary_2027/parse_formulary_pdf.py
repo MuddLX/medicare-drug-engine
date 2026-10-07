@@ -7,6 +7,7 @@ Read-only on the PDFs. Usage: python formulary_2027/parse_formulary_pdf.py "<pdf
 import json, re, subprocess, sys
 
 ROW = re.compile(r"^(?P<lead>\s*)(?P<name>\S.*?\S)(?P<gap>\s{2,})(?:(?P<bg>[BG])\s+)?(?P<tier>[1-6])[\^*#+]?(?:\s{2,}(?P<limits>\S.*))?$")
+ROW_TIGHT = re.compile(r"^(?P<lead>\s*)(?P<name>\S.*?\S) (?P<tier>[1-6])[\^*#+]?(?:\s{2,}(?P<limits>\S.*))?$")  # name runs into the tier column
 HEADER = re.compile(r"Drug\s+Name.*(Drug\s+Tier|Requirements|Coverage rules|Drug\b)", re.I)
 NOISE = re.compile(r"(Last Updated|Formulary ID|Submission ID|symbols and abbreviations|this table mean|"
                    r"^this table\.?$|going to page|^\d{1,3}$|^Page \d|Version \d|Updated on|^[IVX]+-\d+$|"
@@ -148,16 +149,23 @@ def parse(pdf):
                 continue
             if s.lower() == "tier":
                 continue
+            if re.match(r"^index\b", s, re.I) and len(rows) > 200:   # back index starts (check before dot-leaders)
+                in_index = True
             if re.search(r"\.\s?\.{3,}", s):                 # dot-leader index line (front or back)
                 continue
-            if re.match(r"^index\b", s, re.I) and len(rows) > 200:
-                in_index = True
             if in_index or NOISE.search(s):
                 continue
             indent = len(line) - len(line.lstrip())
             m = ROW.match(line)
+            if not m and tier_col is not None:
+                t = ROW_TIGHT.match(line)
+                off = abs(len(t.group("lead")) + len(t.group("name")) + 1 - tier_col) if t else 99
+                # close to the tier column, or a bit further when a limits column follows (Aetna)
+                if off <= 5 or (off <= 10 and t.group("limits") and not t.group("name").rstrip().endswith(",")):
+                    m = t
             if m and re.search(r"[A-Za-z]", m.group("name")):
-                tier_col = len(m.group("lead")) + len(m.group("name")) + len(m.group("gap"))
+                if "gap" in m.groupdict():
+                    tier_col = len(m.group("lead")) + len(m.group("name")) + len(m.group("gap"))
                 last = {"name": m.group("name").strip(), "tier": int(m.group("tier")),
                         "limits": (m.group("limits") or "").strip(), "page": page, "indent": indent}
                 rows.append(last)
@@ -168,7 +176,8 @@ def parse(pdf):
                 last["limits"] = (last["limits"] + " " + s).strip()
                 continue
             no_strength_yet = not re.search(r"\d", last["name"])
-            wraps = (last["name"].endswith((",", "-", "/", "(", "&", ";"))
+            open_paren = last["name"].count("(") > last["name"].count(")")   # "(Oral Tablet ... 24" / "Hour)"
+            wraps = (open_paren or last["name"].endswith((",", "-", "/", "(", "&", ";"))
                      or s[0].islower() or s[0].isdigit() or s[0] in "(#*"
                      or indent > last["indent"]
                      or (not is_heading(s)))
