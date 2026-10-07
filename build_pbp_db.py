@@ -14,10 +14,15 @@ B4 (emergency room), B1a (inpatient hospital per-day).
 import os
 import sqlite3
 
+import sys
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-PBP_DIR = os.path.join(HERE, "PBP file")
-MN_DB = os.path.join(HERE, "medicare_mn.db")
-OUT_DB = os.path.join(HERE, "pbp_benefits.db")
+# Defaults build today's 2026 file. For another plan year pass the folders/files (2026-10-06):
+#   python build_pbp_db.py pbp-benefits-2027 medicare_mn_2027.db pbp_benefits_2027.db
+_args = sys.argv[1:] if __name__ == "__main__" else []
+PBP_DIR = os.path.join(HERE, _args[0] if len(_args) > 0 else "PBP file")
+MN_DB = os.path.join(HERE, _args[1] if len(_args) > 1 else "medicare_mn.db")
+OUT_DB = os.path.join(HERE, _args[2] if len(_args) > 2 else "pbp_benefits.db")
 
 
 def mn_plan_keys():

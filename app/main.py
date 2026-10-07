@@ -17,7 +17,8 @@ from datetime import datetime, date
 
 app = Flask(__name__)
 
-DB_PATH           = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medicare_mn.db")
+from app import data_meta
+DB_PATH           = data_meta.DB_PATH
 PROVIDERS_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "medica_providers.db")
 BCBS_DB_PATH      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bcbs_providers.db")
 HP_DB_PATH        = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hp_providers.db")
@@ -119,9 +120,34 @@ FRIENDLY_NAMES = {
     ("S5921", "406"): "AARP Rx Preferred",
 }
 
-# Where the plan data comes from. Shown to agents in the plan picker; must change in lockstep
-# with a data refresh (same caveat as the hard-coded report footer).
-DATA_VINTAGE = "CMS Q1 2026"
+# Where the plan data comes from. Shown to agents in the plan picker and on the reports. Read from
+# the database's meta table (2026-10-06); "CMS Q1 2026" for the original 2026 database.
+DATA_VINTAGE = data_meta.DEFAULTS["data_vintage"]
+
+
+def data_vintage():
+    return data_meta.data_vintage(DB_PATH)
+
+
+def plan_label(conn, cid, pid, plan_name=None):
+    """Short label agents see for a plan. A plan-year database with a meta table stores its own
+    labels (plans.carrier, made by the yearly builder); the original 2026 database uses the
+    hand-written FRIENDLY_NAMES. Last resort: the CMS plan name, shortened."""
+    pid = str(pid).zfill(3)
+    if data_meta.has_meta(DB_PATH):
+        row = conn.execute("SELECT carrier FROM plans WHERE contract_id=? AND plan_id=? AND carrier IS NOT NULL "
+                           "AND carrier != '' LIMIT 1", (cid, pid)).fetchone()
+        if row:
+            return row[0]
+    elif (cid, pid) in FRIENDLY_NAMES:
+        return FRIENDLY_NAMES[(cid, pid)]
+    return plan_name[:35] if plan_name else cid
+
+
+def calendar_month(month_num):
+    """'January'..'December' for 1..12 (no year involved)."""
+    import calendar
+    return calendar.month_name[int(month_num)]
 
 
 def resolve_county(conn, zip_code):
@@ -249,7 +275,7 @@ def resolve_selected_plans(conn, zip_code, selected, max_ma=MAX_SELECTED_MA, max
         else:
             n_ma += 1
         premium, deductible = plan_premium_deductible(conn, cid, pid, row)
-        label = FRIENDLY_NAMES.get(key, row[2][:35] if row[2] else cid)
+        label = plan_label(conn, cid, pid, row[2])
         if label in used_labels:
             label = f"{label} ({cid}-{pid})"
         used_labels.add(label)
@@ -293,6 +319,7 @@ def get_plans_for_zip(conn, zip_code):
         "H2001": "UHC",
         "H3186": "Align",
         "H9834": "Quartz",
+        "H2461": "Blue Cross Cost",
     }
 
     # Pick best plan per carrier family (lowest premium from plans table, prefer $0)
@@ -336,7 +363,7 @@ def get_plans_for_zip(conn, zip_code):
         if key in seen:
             continue
         seen.add(key)
-        carrier = FRIENDLY_NAMES.get(key, row["plan_name"][:35] if row["plan_name"] else row["contract_id"])
+        carrier = plan_label(conn, key[0], key[1], row["plan_name"])
         plans.append({
             "carrier": carrier,
             "contract_id": row["contract_id"],
@@ -378,7 +405,7 @@ def get_plans_for_zip(conn, zip_code):
             if key in seen:
                 continue
             seen.add(key)
-            carrier = FRIENDLY_NAMES.get(key, row["plan_name"][:35] if row["plan_name"] else row["contract_id"])
+            carrier = plan_label(conn, key[0], key[1], row["plan_name"])
             plans.append({
                 "carrier": carrier,
                 "contract_id": row["contract_id"],
@@ -418,7 +445,7 @@ def get_plans_for_zip(conn, zip_code):
         if key in seen:
             continue
         seen.add(key)
-        carrier = FRIENDLY_NAMES.get(key, d["plan_name"][:35] if d["plan_name"] else d["contract_id"])
+        carrier = plan_label(conn, key[0], key[1], d["plan_name"])
         plans.append({
             "carrier": carrier,
             "contract_id": d["contract_id"],
@@ -446,8 +473,18 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
         "core", "comfort", "choice", "complete", "pace", "stride", "steady", "smart",
         "birch", "cedar", "value", "preferred", "select", "solution", "basic", "premier",
         "saver", "classic", "signature", "enhanced", "grand", "eagle", "fit", "freedom",
-        "elite", "plus", "standard", "focus", "thrift",
+        "elite", "plus", "standard", "focus", "thrift", "essential", "gold", "securechoice", "assurance",
     }
+
+    def _friendly(cid, pid, plan_name):
+        """Short label. plan_name '' = scoring (unknown -> ''); otherwise unknown -> the plan name / contract.
+        Plan-year databases carry their own labels; the original 2026 database uses FN below."""
+        if data_meta.has_meta(DB_PATH):
+            label = plan_label(conn, cid, pid, plan_name or None)
+            return "" if (plan_name == "" and label == cid) else label
+        if plan_name == "":
+            return FN.get((cid, pid), "")
+        return FN.get((cid, pid), plan_name[:35] if plan_name else cid)
     FN = {
         ("H4882","009"): "HealthPartners Journey Pace",
         ("H4882","003"): "HealthPartners Journey Steady",
@@ -527,7 +564,7 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
     def score_plan(req_str, cid, pid, plan_name):
         req = req_str.lower().strip()
         pname = plan_name.lower() if plan_name else ""
-        friendly = FN.get((cid, pid.zfill(3)), "").lower()
+        friendly = _friendly(cid, pid.zfill(3), "").lower()
         score = 0
         for alias, expanded in ALIASES.items():
             if alias in req:
@@ -565,7 +602,7 @@ def resolve_custom_plans(conn, custom_plans_str, existing_plan_keys):
                 unmatched.append(f"Requested plan '{req_str}' is already included in the comparison")
                 continue
             existing_plan_keys.add(key)
-            friendly = FN.get(key, best_plan[2][:35] if best_plan[2] else cid)
+            friendly = _friendly(key[0], key[1], best_plan[2])
             pt_row = conn.execute("SELECT plan_type FROM service_area WHERE contract_id=? AND plan_id=? LIMIT 1", (cid, pid)).fetchone()
             ptype = "Cost" if (pt_row and "Cost" in pt_row[0]) else "MA"
             resolved.append({
@@ -621,10 +658,12 @@ def is_insulin(drug_name):
     return any(kw in name_lower for kw in INSULIN_KEYWORDS)
 
 def get_mfp(drug_name):
-    """Return CMS negotiated MFP for a drug, or None if not in program."""
+    """Return CMS negotiated MFP for a drug, or None if not in program. The plan-year database's
+    negotiated_prices table when it has one (2027: 25 drugs), else the 2026 list above."""
     if not drug_name:
         return None
-    return MFP_2026.get(drug_name.lower().strip())
+    table = data_meta.negotiated_prices(DB_PATH)
+    return (table if table is not None else MFP_2026).get(drug_name.lower().strip())
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -2071,7 +2110,7 @@ def get_mail_order_cost(conn, contract_id, plan_id, tier, cost_type_mail, cost_a
     deductible_remaining = 0  # Mail order typically post-deductible pricing
     
     for month_num in months_remaining:
-        month_name = datetime(2026, month_num, 1).strftime("%B")
+        month_name = calendar_month(month_num)
         if cost_type_mail == 0:
             monthly_cost = 0.0
         elif cost_type_mail == 1:
@@ -2277,7 +2316,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
         # Insulin: flat $35/month cap, no deductible applies
         monthly_costs = []
         for month_num in months_remaining:
-            month_name = datetime(2026, month_num, 1).strftime("%B")
+            month_name = calendar_month(month_num)
             monthly_costs.append({"month": month_name, "cost": 35.00})
         return {
             "tier": tier, "covered": True, "ndc": ndc,
@@ -2301,7 +2340,7 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     deductible_remaining = deductible
 
     for month_num in months_remaining:
-        month_name = datetime(2026, month_num, 1).strftime("%B")
+        month_name = calendar_month(month_num)
         if ded_applies == "N" or deductible_remaining <= 0:
             if cost_type == 0:
                 monthly_cost = 0.0
@@ -2342,7 +2381,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     custom_plans_str: optional comma-separated agent-requested plan names
     """
     months_remaining = get_remaining_months(soa_date)
-    month_names = [datetime(2026, m, 1).strftime("%B") for m in months_remaining]
+    month_names = [calendar_month(m) for m in months_remaining]
 
     conn = get_db()
 
@@ -2709,7 +2748,7 @@ def build_pdf_v1(client_name, dob, zip_code, soa_date, plan_summaries, drug_deta
                    [Paragraph("DOB: " + (str(dob) if dob else "—") + "  ·  Zip: " + (str(zip_code) if zip_code else "—"), h2)]]
     header_right = [[Paragraph("INTERNAL USE ONLY", badge_txt)],
                     [Paragraph(f"Generated: {datetime.today().strftime('%m/%d/%Y')}", gen_txt)],
-                    [Paragraph("Data: CMS Medicare Formulary Q1 2026", gen_txt)],
+                    [Paragraph("Data: " + data_vintage(), gen_txt)],
                     [Paragraph(conf_text, S("ct", fontSize=6, textColor=colors.HexColor("#0d9488"), alignment=TA_RIGHT, leading=7))]]
     tl = Table([[Table(header_left, colWidths=[200*mm]),
                  Table(header_right, colWidths=[80*mm])]],
@@ -3168,7 +3207,7 @@ def build_pdf_v1(client_name, dob, zip_code, soa_date, plan_summaries, drug_deta
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=MID_GRAY, spaceBefore=0.1*mm, spaceAfter=0.1*mm))
     elements.append(Paragraph(
-        "Internal use only · Agent reference · CMS Medicare Q1 2026 · Verify before presenting", footer))
+        "Internal use only · Agent reference · " + data_vintage() + " · Verify before presenting", footer))
 
     # ── Page 2: Provider Network Directory ───────────────────────────────
     if provider_results:
@@ -3647,7 +3686,7 @@ def plans_for_zip_route():
     finally:
         conn.close()
     return jsonify({"zip_code": zip_code, "county": county, "county_exact": bool(exact),
-                    "data_vintage": DATA_VINTAGE, "plans": ma + pd})
+                    "data_vintage": data_vintage(), "plans": ma + pd})
 
 
 def _require_zip(data):
@@ -3962,9 +4001,9 @@ def client_comparison_route():
     client_state = data.get("client_state", "MN")
     county = data.get("county", "")
     try:
-        plan_year = int(data.get("plan_year", 2027))
+        plan_year = int(data.get("plan_year", data_meta.data_year(DB_PATH)))
     except Exception:
-        plan_year = 2027
+        plan_year = data_meta.data_year(DB_PATH)
 
     providers_raw = data.get("providers", [])
     if isinstance(providers_raw, str):

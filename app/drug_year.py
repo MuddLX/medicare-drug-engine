@@ -18,8 +18,22 @@ PART_D_OOP_CAP = {2025: 2000.0, 2026: 2100.0, 2027: 2400.0}
 DATA_YEAR = 2026
 
 
+def data_year():
+    """The CMS data year of the loaded database (its meta table), else DATA_YEAR."""
+    from app import data_meta
+    return data_meta.data_year() if data_meta.has_meta() else DATA_YEAR
+
+
 def oop_cap(year=None):
-    return PART_D_OOP_CAP[year or DATA_YEAR]
+    """Yearly out-of-pocket cap: the database's own value (Landscape file) when it has one,
+    else this table for the data year."""
+    if year is None:
+        from app import data_meta
+        override = data_meta.oop_cap_override()
+        if override:
+            return override
+        year = data_year()
+    return PART_D_OOP_CAP[year]
 
 
 def _after_deductible(t, price):

@@ -308,7 +308,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         right = [f"Generated {datetime.today().strftime('%m/%d/%Y')}"]
         if plan_year:
             right.append(f"{plan_year} plan year")
-        right.append("Data: CMS Q1 2026")
+        from app import data_meta
+        right.append("Data: " + data_meta.data_vintage())
+        if data_meta.prices_estimated():
+            right.append("Drug prices: " + (data_meta.meta().get("prices_vintage") or "prior year") + " estimate")
         if confidence:
             try:
                 right.append(f"Confidence {float(confidence):.0%}")

@@ -76,7 +76,8 @@ CONTRACT_CARRIER = {
     "H3186": "Align",
     "H9834": "Quartz",
     "S4802": "Wellcare",
-    "S5617": "HealthSpring",
+    "S5617": "HealthSpring", "S5715": "HealthSpring",
+    "H2461": "Blue Cross",
     "S5743": "MedicareBlue Rx",
 }
 
