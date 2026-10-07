@@ -8,6 +8,7 @@ import json, re, subprocess, sys
 
 ROW = re.compile(r"^(?P<lead>\s*)(?P<name>\S.*?\S)(?P<gap>\s{2,})(?:(?P<bg>[BG])\s+)?(?P<tier>[1-6])[\^*#+]?(?:\s{2,}(?P<limits>\S.*))?$")
 ROW_TIGHT = re.compile(r"^(?P<lead>\s*)(?P<name>\S.*?\S) (?P<tier>[1-6])[\^*#+]?(?:\s{2,}(?P<limits>\S.*))?$")  # name runs into the tier column
+LIMIT_CODE = re.compile(r"(PA|QL|ST|LD|LA|MO|NDS|HRM|ACS|DL|B/D|BvsD|EX|NM|SP|GC|OTC|LTC|B|G|\^|\*)")
 HEADER = re.compile(r"Drug\s+Name.*(Drug\s+Tier|Requirements|Coverage rules|Drug\b)", re.I)
 NOISE = re.compile(r"(Last Updated|Formulary ID|Submission ID|symbols and abbreviations|this table mean|"
                    r"^this table\.?$|going to page|^\d{1,3}$|^Page \d|Version \d|Updated on|^[IVX]+-\d+$|"
@@ -156,6 +157,7 @@ def parse(pdf):
             if in_index or NOISE.search(s):
                 continue
             indent = len(line) - len(line.lstrip())
+            line = re.sub(r"(\s[BG]\s+[1-6])([A-Z]{2})", r"\1  \2", line)   # "B  5DL; QL" -> tier 5, limits "DL; QL"
             m = ROW.match(line)
             if not m and tier_col is not None:
                 t = ROW_TIGHT.match(line)
@@ -193,6 +195,18 @@ def parse(pdf):
 if __name__ == "__main__":
     pdf, out = sys.argv[1], sys.argv[2]
     rows = parse(pdf)
+    for r in rows:   # limit codes that sat in the limits column while the name wrapped
+        parts = re.split(r"\s{4,}", r["name"].strip())
+        if len(parts) > 1:
+            name, lims = [parts[0]], []
+            for part in parts[1:]:
+                toks = part.split()
+                while toks and LIMIT_CODE.fullmatch(toks[0].rstrip(";,")):
+                    lims.append(toks.pop(0))
+                name.extend(toks)
+            r["name"] = " ".join(name)
+            if lims:
+                r["limits"] = (r["limits"] + " " + " ".join(lims)).strip()
     for r in rows:   # footer text that slipped into a wrapped name
         r["name"] = re.sub(r"\s+20\d\d$", "", r["name"])   # stray footer year (Blue Cross / MedicareBlue)
         r["name"] = re.sub(r"\s*(\d+\s+)?Updated \d{2}/\d{2}/\d{4}.*$|\s{3,}\d+\s+\d{4}\s+\S+\s+\d+\s+v\d+\s+effective.*$", "", r["name"]).strip()
