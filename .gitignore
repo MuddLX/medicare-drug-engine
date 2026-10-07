@@ -15,5 +15,11 @@ mn_pharmacy_names.txt
 # Quarantined / dead files
 _archive/
 
-# CMS source downloads (2+ GB each)
-cms_files/
+# Raw downloads: CMS, Census, carrier PDFs (several GB)
+source_data/
+
+# Throwaway renders
+_scratch/*.pdf
+_scratch/*.png
+_scratch/*.db
+_scratch/*.log

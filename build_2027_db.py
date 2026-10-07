@@ -5,7 +5,7 @@ Built one step at a time; each step can be re-run on its own:
 
 Steps so far:
   zip_county   : every Minnesota ZIP with ALL the counties it touches and each county's share of the ZIP's land.
-                 Source: Census 2020 ZCTA-to-county file (tab20_zcta520_county20_natl.txt in this folder).
+                 Source: Census 2020 ZCTA-to-county file (source_data/census/tab20_zcta520_county20_natl.txt).
   service_area : every Minnesota plan x county with premiums and deductible (CMS 2027 Landscape file).
   plans        : one row per plan with drug coverage, its drug list (formulary) ID and a short label.
   costs        : what the member pays per tier (copay or coinsurance, 30/90-day, preferred/standard, mail)
@@ -21,10 +21,11 @@ from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.environ.get("BUILD_2027_DB") or os.path.join(HERE, "medicare_mn_2027.db")   # override for dry runs
-CENSUS = os.path.join(HERE, "tab20_zcta520_county20_natl.txt")
+SRC = os.path.join(HERE, "source_data")          # raw downloads (CMS, Census, carrier files)
+CENSUS = os.path.join(SRC, "census", "tab20_zcta520_county20_natl.txt")
 MN_FIPS = "27"
-LANDSCAPE = os.path.join(HERE, "cy2027_landscape_202609.1", "CY2027_Landscape_202609.1", "CY2027_Landscape_202609.csv")
-PBP = os.path.join(HERE, "pbp-benefits-2027")
+LANDSCAPE = os.path.join(SRC, "cms_2027", "cy2027_landscape_202609.1", "CY2027_Landscape_202609.1", "CY2027_Landscape_202609.csv")
+PBP = os.path.join(SRC, "cms_2027", "pbp-benefits-2027")
 
 # Which 2027 drug list each plan uses. Taken from each carrier's 2027 formulary PDF (the plans it names).
 # None = the carrier has not published its 2027 list yet; the plan still shows, marked "drug list not loaded".
@@ -280,7 +281,7 @@ import statistics
 import time
 import zipfile
 
-WORK = os.path.join(HERE, "cms_files", "_work")
+WORK = os.path.join(SRC, "cms_files", "_work")
 MN_ZIPS = {str(z).zfill(5) for z in range(55001, 56764)}
 
 # Medicare negotiated monthly prices in effect for 2027 (CMS: the 2026 ten continue, 15 new drugs
@@ -654,7 +655,7 @@ def step_place_county(conn):
     import sys as _s
     sys.path.insert(0, HERE)
     from app.main import _place_key
-    path = os.path.join(HERE, "national_place_by_county2020.txt")
+    path = os.path.join(SRC, "census", "national_place_by_county2020.txt")
     if not os.path.exists(path):
         sys.exit(f"Missing {path}")
     rows = set()

@@ -20,7 +20,7 @@ import openpyxl
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(HERE, "providers_2027.db")
-SHEET = os.path.join(HERE, "2027 AEP Plan Comparison Sharaeable.xlsx")
+SHEET = os.path.join(HERE, "source_data", "providers_2027", "2027 AEP Plan Comparison Sharaeable.xlsx")
 CONFIRM = os.path.join(HERE, "providers_2027", "confirmations.csv")
 UHC_SOURCE = "Agency AEP sheet (UHC 2027 directories, Aug 10 2026)"
 UHC_SCOPE = "UHC AARP MN-0001, MN-0002, FG-0001 (H2001-116, 117, 118)"

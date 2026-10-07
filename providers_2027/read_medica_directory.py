@@ -17,7 +17,7 @@ import sys
 import pdfplumber
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PDF = os.path.join(HERE, "Medica 2027 Provider Directory.pdf")
+PDF = os.path.join(HERE, "source_data", "providers_2027", "Medica 2027 Provider Directory.pdf")
 DB = os.path.join(HERE, "providers_2027.db")
 SOURCE = "Medica 2027 Provider Directory (Medica Advantage PPO)"
 

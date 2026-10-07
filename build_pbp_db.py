@@ -18,9 +18,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Defaults build today's 2026 file. For another plan year pass the folders/files (2026-10-06):
-#   python build_pbp_db.py pbp-benefits-2027 medicare_mn_2027.db pbp_benefits_2027.db
+#   python build_pbp_db.py source_data/cms_2027/pbp-benefits-2027 medicare_mn_2027.db pbp_benefits_2027.db
 _args = sys.argv[1:] if __name__ == "__main__" else []
-PBP_DIR = os.path.join(HERE, _args[0] if len(_args) > 0 else "PBP file")
+PBP_DIR = os.path.join(HERE, _args[0] if len(_args) > 0 else os.path.join("source_data", "cms_2026", "PBP File"))
 MN_DB = os.path.join(HERE, _args[1] if len(_args) > 1 else "medicare_mn.db")
 OUT_DB = os.path.join(HERE, _args[2] if len(_args) > 2 else "pbp_benefits.db")
 
@@ -237,7 +237,7 @@ def build_star_ratings(mn_contract_ids, base_dir):
     Contract-level: every plan under an H-number shares its contract's rating.
     Matches the rating column on 'Overall' so the 2027 file drops in unchanged."""
     import glob
-    paths = glob.glob(os.path.join(base_dir, "Star Ratings", "**", "*Summary Ratings*.xlsx"),
+    paths = glob.glob(os.path.join(base_dir, "source_data", "**", "*Summary Ratings*.xlsx"),
                       recursive=True)
     if not paths:
         print("  WARNING: Star Ratings Summary xlsx not found - stars skipped.")
