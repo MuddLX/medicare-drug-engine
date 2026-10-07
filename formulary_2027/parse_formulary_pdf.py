@@ -169,7 +169,8 @@ def parse(pdf):
                 if "gap" in m.groupdict():
                     tier_col = len(m.group("lead")) + len(m.group("name")) + len(m.group("gap"))
                 last = {"name": m.group("name").strip(), "tier": int(m.group("tier")),
-                        "limits": (m.group("limits") or "").strip(), "page": page, "indent": indent}
+                        "limits": (m.group("limits") or "").strip(), "page": page, "indent": indent,
+                        "bg": m.groupdict().get("bg") or ""}
                 rows.append(last)
                 continue
             if last is None:
