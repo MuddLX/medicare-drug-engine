@@ -109,8 +109,7 @@ Coreg|12.5 mg|carvedilol|12.5|coreg|
 Singulair|10 mg|montelukast|10|singulair|
 Flomax|0.4 mg|tamsulosin|0.4|flomax|
 Protonix|40 mg|pantoprazole|40|protonix|
-Prilosec|20 mg|omeprazole|20||
-# (Prilosec is only made as granules now: 20 mg is read as omeprazole 20 mg, with a note)
+Prilosec|20 mg|omeprazole|20|prilosec|
 Toprol XL|50 mg|metoprolol|50|toprol|
 Wellbutrin XL|150 mg|bupropion|150|wellbutrin|
 Diovan|80 mg|valsartan|80|diovan|

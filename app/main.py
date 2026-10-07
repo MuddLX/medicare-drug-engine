@@ -2877,6 +2877,25 @@ def _require_zip(data):
     return None, (jsonify({"error": "A 5-digit ZIP code is required to look up plans and pharmacies."}), 400)
 
 
+@app.route("/check-drugs", methods=["POST"])
+def check_drugs_route():
+    """Drug names as typed on the Details tab -> what to tell the agent (2026-10-07, Roundabout Phase 33).
+    Body: {"drugs": [{"name": "Atorvastin", "dosage": "40 mg"}, ...]}  (at most 60)
+    Reply: {"drugs": [{"name", "dosage", "status", "suggestion", "candidates", "read_as", "note"}, ...]}
+      status: ok | spelling (suggestion = corrected name) | strength (note) | unknown (candidates) | empty
+    Local RxNorm only - no AI call, no internet, nothing logged."""
+    data = request.get_json(silent=True) or {}
+    drugs = data.get("drugs")
+    if not isinstance(drugs, list) or len(drugs) > 60:
+        return jsonify({"error": 'Send {"drugs": [{"name": "...", "dosage": "..."}]} (at most 60)'}), 400
+    out = []
+    for d in drugs:
+        d = d if isinstance(d, dict) else {}
+        name, dosage = str(d.get("name") or "")[:200], str(d.get("dosage") or "")[:100]
+        out.append({"name": name, "dosage": dosage, **drug_resolver.check(name, dosage)})
+    return jsonify({"drugs": out})
+
+
 @app.route("/process-soa", methods=["POST"])
 def process_soa():
     """

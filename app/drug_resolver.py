@@ -72,6 +72,8 @@ class Resolution:
     how: str = ""                                    # "brand" | "ingredient" | ""
     flag: str = ""                                   # for the agent, e.g. spelling read as ...
     strength_matched: bool = True
+    fix_from: str = ""                               # spelling: the word as written ...
+    fix_to: str = ""                                 # ... and the real name it was read as
 
     def __bool__(self):
         return bool(self.rxcuis)
@@ -87,13 +89,14 @@ def _load():
             with gzip.open(DATA, "rt", encoding="utf-8") as f:
                 concepts = json.load(f)["concepts"]
             index = RxIndex(concepts)
+            proper = {c["name"].lower(): c["name"] for c in concepts if c["tty"] in ("BN", "IN", "PIN", "MIN")}
             vocab = {w for w in index.by_word if len(w) >= 5 and w not in FORM_WORDS and w not in SALTS}
             vocab |= {b for b in index.by_brand if " " not in b and len(b) >= 5}
             vocab = sorted(vocab)
             sounds = {}
             for v in vocab:
                 sounds.setdefault(_sound(v), []).append(v)
-            _state.update(index=index, vocab=vocab, sounds=sounds)
+            _state.update(index=index, vocab=vocab, sounds=sounds, proper=proper)
     return _state["index"], _state["vocab"]
 
 
@@ -312,6 +315,7 @@ def _by_spelling(index, text):
             return None                                   # two different drugs about equally close
     found = best[2]
     found.flag = "check spelling"
+    found.fix_from, found.fix_to = wrong, best[1]
     return found
 
 
@@ -334,6 +338,66 @@ def resolve(name, dosage="", alternates=()):
             if found:
                 return found
     return _by_spelling(index, text) or Resolution()
+
+
+def display_name(word):
+    """RxNorm's own capitalisation for a brand ("Plavix", "NovoLog"); ingredients get a capital first letter."""
+    _load()
+    proper = _state["proper"].get(word.lower())
+    if proper and any(ch.isupper() for ch in proper):
+        return proper
+    return word[:1].upper() + word[1:]
+
+
+def corrected(name, res):
+    """The name as written, with the misspelled word replaced: "Atorvastin 40" -> "Atorvastatin 40"."""
+    if not res.fix_from:
+        return name
+    return re.sub(rf"(?i)\b{re.escape(res.fix_from)}\b", display_name(res.fix_to), name, count=1)
+
+
+def suggestions(name, dosage="", limit=3):
+    """Closest real drug names for a name that couldn't be identified, best first ("Did you mean ...?").
+    Unlike automatic correction, these are for a PERSON to choose from, so the strength rule doesn't
+    apply - but each must be a name the resolver can read."""
+    if not (name or "").strip():
+        return []
+    index, _ = _load()
+    text = _prepare(name, dosage)
+    wrong, scored = _spelling_candidates(index, text)
+    out = []
+    for _, right in scored:
+        if _exact(index, re.sub(rf"\b{wrong}\b", right, text)):
+            label = re.sub(rf"(?i)\b{re.escape(wrong)}\b", display_name(right), name, count=1)
+            if label not in out:
+                out.append(label)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def check(name, dosage=""):
+    """What the agent should see for one drug on the Details tab (engine endpoint /check-drugs):
+    status  ok | spelling | strength | unknown | empty
+    suggestion  the corrected name (spelling) ;  candidates  closest names (unknown)"""
+    name = (name or "").strip()
+    if not name:
+        return {"status": "empty", "suggestion": "", "candidates": [], "read_as": "", "note": ""}
+    res = resolve(name, dosage)
+    if res and res.flag == "check spelling":
+        return {"status": "spelling", "suggestion": corrected(name, res), "candidates": [],
+                "read_as": display_name(res.matched), "note": f'Looks like "{corrected(name, res)}"'}
+    if res and res.flag:
+        return {"status": "strength", "suggestion": "", "candidates": [], "read_as": display_name(res.matched),
+                "note": res.flag}
+    if res:
+        note = "" if res.strength_matched or not numbers(_prepare("", dosage)) else \
+            "This strength wasn't found for this drug - check the dosage"
+        return {"status": "ok", "suggestion": "", "candidates": [], "read_as": display_name(res.matched),
+                "note": note}
+    cands = suggestions(name, dosage)
+    return {"status": "unknown", "suggestion": "", "candidates": cands, "read_as": "",
+            "note": "Not recognized" + (" - did you mean one of these?" if cands else " - check the name")}
 
 
 def warm():
