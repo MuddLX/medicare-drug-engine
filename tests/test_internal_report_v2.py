@@ -56,10 +56,16 @@ def drugs(labels, n=4, tiers=(1, 3, 4)):
     return out
 
 
-def doctors(n):
+STATUS_CYCLE = [{"status": "in", "detail": "Clinic · City"}, {"status": "not_found", "detail": "not in 2027 directory"},
+                {"status": "system", "detail": "Allina · system level"}, {"status": "not_checked"}]
+
+
+def doctors(n, labels=None):
+    """2027 provider shape (app/providers_2027.py): one status per plan column."""
+    labels = labels or [f"MA {i}" for i in range(7)]
     return [{"raw_text": f"Dr. Doc {i}", "first_name": "Doc", "last_name": f"Number{i}", "specialty": "Cardiology",
-             "bcbs_status": "In Network", "bcbs_detail": "Clinic · City", "aetna_status": "Not Found",
-             "hp_status": "In Network", "hp_detail": "HP Clinic · City"} for i in range(n)]
+             "system": "Allina", "plans": {l: STATUS_CYCLE[j % len(STATUS_CYCLE)] for j, l in enumerate(labels)}}
+            for i in range(n)]
 
 
 def render(s, d, provs=None, **kw):
@@ -115,22 +121,27 @@ def test_soa_era_flags_are_dropped_from_alerts():
 
 
 # ------------------------------------------------------------------ 2026-10-02 follow-ups
-def test_wrong_first_name_match_is_possible_match_not_in_network():
+def test_doctor_statuses_render_with_2027_wording():
+    s = summaries(4, 0)
+    txt = text_of(render(s, drugs(list(s), 1), doctors(1)))
+    assert "2027 SOURCES" in txt and "2026" not in txt.split("DOCTORS")[1]
+    for needle in ("In network", "Not found", "Likely in", "Not checked"):
+        assert needle in txt, needle
+    assert "out of network" not in txt.lower()           # only an agency confirmation can say that
+
+
+def test_agency_confirmed_out_of_network_shows():
     s = summaries(1, 0)
-    prov = [{"raw_text": "Dr. Sarah Johnson - HealthPartners Roseville", "first_name": "Sarah", "last_name": "Johnson",
-             "specialty": "Family Medicine", "matched_first": "Steven", "matched_last": "Johnson", "credentials": "DDS",
-             "aetna_status": "In Network", "aetna_detail": "Some Clinic · City"}]
-    txt = text_of(render(s, drugs(list(s), 1), prov))
-    assert "Dr. Sarah Johnson" in txt                       # row shows what the client wrote
-    assert "Possible match" in txt and "Steven Johnson" in txt
-    assert "In network" not in txt
+    prov = [{"raw_text": "Dr. Ann Lee", "first_name": "Ann", "last_name": "Lee",
+             "plans": {"MA 0": {"status": "out", "detail": "confirmed by Lacey 10/12/2026"}}}]
+    assert "Out of network" in text_of(render(s, drugs(list(s), 1), prov))
 
 
 def test_clinic_only_entry_is_labelled_by_the_clinic():
     s = summaries(1, 0)
     prov = [{"raw_text": "Park Nicollet Clinic", "clinic_name": "Park Nicollet Clinic", "first_name": "", "last_name": "",
-             "matched_first": "Amanda", "matched_last": "Christ", "credentials": "MD",
-             "aetna_status": "In Network", "aetna_detail": "Park Nicollet Clinic Bloomington · Bloomington"}]
+             "system": "Park Nicollet Methodist",
+             "plans": {"MA 0": {"status": "system", "detail": "Park Nicollet Methodist - system level"}}}]
     txt = text_of(render(s, drugs(list(s), 1), prov))
     assert "Park Nicollet Clinic" in txt and "Amanda" not in txt.split("MEDICATIONS")[0]
 
@@ -172,12 +183,10 @@ def test_warning_field_paths_are_cleaned_and_unknown_note_deduped():
     assert "couldn't identify" not in text            # the misspelling note covers it
 
 
-def test_illegible_doctor_name_is_never_plain_in_network():
-    s = summaries(3, 0)
-    prov = doctors(1)
-    prov[0].update({"first_name": "", "last_name": "Sch...dt", "raw_text": "Dr. Sch...dt - Allina Coon Rapids"})
-    txt = text_of(render(s, drugs(list(s), 1), prov))
-    assert "Possible match" in txt and "In network" not in txt
+def test_illegible_doctor_name_is_never_matched():
+    from app import providers_2027 as P
+    r = P.check([{"first_name": "", "last_name": "Sch...dt"}], [("Medica", "H8889", "022", "MA")])[0]
+    assert r["plans"]["Medica"]["status"] != "in"
 
 
 def test_drug_without_strength_is_called_out():

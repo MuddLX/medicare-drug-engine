@@ -22,7 +22,7 @@ from xml.sax.saxutils import escape
 
 # carrier key used by the provider lookups (r["<key>_status"]) per CMS contract
 CONTRACT_PROVIDER_KEY = {
-    "H5959": "bcbs",
+    "H5959": "bcbs", "H2461": "bcbs",
     "H4882": "hp", "H6309": "hp",
     "H6154": "medica", "H8889": "medica", "H2450": "medica",
     "H5216": "humana", "H8145": "humana",
@@ -500,37 +500,40 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         # doctors
         used_keys = set()
         if provider_results:
-            group("DOCTORS — NETWORK STATUS (2026 DIRECTORIES; VERIFY WITH CARRIER)")
+            group("DOCTORS — NETWORK STATUS (2027 SOURCES; VERIFY WITH CARRIER)")
             for pr in provider_results:
                 spec = (pr.get("specialty") or "").strip()
                 lab_parts = [Paragraph(escape(_written_name(pr)), lab)]
-                if spec:
-                    lab_parts.append(Paragraph(escape(spec[:40]), lab_sub))
+                doc_note = " · ".join(x for x in (spec[:30], pr.get("system") or "") if x)
+                if doc_note:
+                    lab_parts.append(Paragraph(escape(doc_note[:48]), lab_sub))
                 row = [lab_parts]
                 r = len(rows)
                 for ci, l in enumerate(cols, start=1):
                     if l in pd:
                         row.append(C("—", "drug plan"))
                         continue
+                    res = (pr.get("plans") or {}).get(l) or {"status": "not_checked", "detail": "no 2027 source yet"}
+                    st, detail = res.get("status"), (res.get("detail") or "").strip()
                     key = CONTRACT_PROVIDER_KEY.get(plan_summaries[l].get("contract_id", ""))
-                    status = pr.get(f"{key}_status") if key else None
-                    if status == "In Network" and (_match_conflict(pr) or _name_illegible(pr)):
-                        used_keys.add(key)
-                        row.append(C("Possible match", f"{_doctor_name(pr)} — verify"))
-                        tint(r, ci, AMBER_BG)
-                    elif status == "In Network":
-                        used_keys.add(key)
-                        detail = (pr.get(f"{key}_detail") or "").strip()
-                        if pr.get(f"{key}_accepting") == "N":
+                    if st == "in":
+                        if res.get("accepting") == "N":
                             detail = (detail + " · not accepting new").strip(" ·")
                         row.append(C("In network", detail[:48] or None))
                         tint(r, ci, GREEN_BG)
-                    elif status == "Not Found":
+                    elif st == "system":
                         used_keys.add(key)
-                        row.append(C("Not found", "verify with carrier"))
+                        row.append(C("Likely in", detail[:48] or None))
+                        tint(r, ci, GREEN_BG)
+                    elif st == "out":
+                        row.append(C("Out of network", detail[:48] or None))
+                        tint(r, ci, RED_BG)
+                    elif st in ("not_found", "verify"):
+                        used_keys.add(key)
+                        row.append(C("Not found" if st == "not_found" else "Verify", detail[:48] or "verify with carrier"))
                         tint(r, ci, AMBER_BG)
                     else:
-                        row.append(C("Not checked", "no directory loaded"))
+                        row.append(C("Not checked", "no 2027 source yet"))
                 rows.append(row)
 
         t = Table(rows, colWidths=[label_w] + [col_w] * len(cols), repeatRows=1)

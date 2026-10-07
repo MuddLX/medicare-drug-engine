@@ -17,12 +17,7 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
 DB_PATH           = "medicare_mn.db"
-PROVIDERS_DB_PATH = "medica_providers.db"
-BCBS_DB_PATH      = "bcbs_providers.db"
-HP_DB_PATH        = "hp_providers.db"
-HUMANA_DB_PATH    = "humana_providers.db"
-UHC_DB_PATH       = "uhc_providers.db"
-AETNA_DB_PATH     = "aetna_providers.db"
+PROVIDERS_2027_DB_PATH = "providers_2027.db"   # 2027 doctor/clinic networks (the 2026 directory DBs were retired 2026-10-06)
 PBP_DB_PATH       = "pbp_benefits.db"
 REQUIRED_ENV_VARS = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "R2_BUCKET_NAME"]
 
@@ -106,12 +101,7 @@ def download_db():
     bucket = os.environ["R2_BUCKET_NAME"]
     client = get_r2_client()
     download_file_from_r2(client, bucket, "medicare_mn.db",       DB_PATH,           "medicare_mn.db")
-    download_file_from_r2(client, bucket, "medica_providers.db",  PROVIDERS_DB_PATH, "medica_providers.db")
-    download_file_from_r2(client, bucket, "bcbs_providers.db",    BCBS_DB_PATH,      "bcbs_providers.db")
-    download_file_from_r2(client, bucket, "hp_providers.db",      HP_DB_PATH,        "hp_providers.db")
-    download_file_from_r2(client, bucket, "humana_providers.db",  HUMANA_DB_PATH,    "humana_providers.db")
-    download_file_from_r2(client, bucket, "uhc_providers.db",     UHC_DB_PATH,       "uhc_providers.db")
-    download_file_from_r2(client, bucket, "aetna_providers.db",   AETNA_DB_PATH,     "aetna_providers.db")
+    download_file_from_r2(client, bucket, "providers_2027.db",    PROVIDERS_2027_DB_PATH, "providers_2027.db")
     download_file_from_r2(client, bucket, "pbp_benefits.db",      PBP_DB_PATH,       "pbp_benefits.db")
 
 
@@ -145,98 +135,24 @@ def validate_db():
         print(f"ERROR: medicare_mn.db validation failed: {e}")
         sys.exit(1)
 
-    # -- Validate medica_providers.db ------------------------------------------
+    # -- Validate providers_2027.db (doctor/clinic networks) ------------------
     try:
-        conn = sqlite3.connect(PROVIDERS_DB_PATH)
-        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
-            print("ERROR: medica_providers.db is missing the providers table.")
+        conn = sqlite3.connect(PROVIDERS_2027_DB_PATH)
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        missing = {"directory", "systems", "system_network", "confirmations"} - tables
+        if missing:
+            print(f"ERROR: providers_2027.db is missing tables: {sorted(missing)}")
             conn.close(); sys.exit(1)
-        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+        n_dir = conn.execute("SELECT COUNT(*) FROM directory").fetchone()[0]
+        n_sys = conn.execute("SELECT COUNT(*) FROM system_network").fetchone()[0]
+        n_conf = conn.execute("SELECT COUNT(*) FROM confirmations").fetchone()[0]
         conn.close()
-        if provider_count < 20000:
-            print(f"ERROR: medica_providers.db has only {provider_count} providers. Expected ~25,000.")
+        if n_dir < 1000 or n_sys < 50:
+            print(f"ERROR: providers_2027.db looks incomplete ({n_dir} directory rows, {n_sys} system rows).")
             sys.exit(1)
-        print(f"  medica_providers.db validation passed: {provider_count:,} providers.")
+        print(f"  providers_2027.db validation passed: {n_dir:,} directory rows, {n_sys} system rows, {n_conf} confirmations.")
     except sqlite3.Error as e:
-        print(f"ERROR: medica_providers.db validation failed: {e}"); sys.exit(1)
-
-    # -- Validate bcbs_providers.db --------------------------------------------
-    try:
-        conn = sqlite3.connect(BCBS_DB_PATH)
-        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
-            print("ERROR: bcbs_providers.db is missing the providers table.")
-            conn.close(); sys.exit(1)
-        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
-        dental_count   = conn.execute("SELECT COUNT(*) FROM providers WHERE source='dental'").fetchone()[0]
-        conn.close()
-        if provider_count < 20000:
-            print(f"ERROR: bcbs_providers.db has only {provider_count} providers. Expected ~24,000.")
-            sys.exit(1)
-        print(f"  bcbs_providers.db validation passed: {provider_count:,} providers ({dental_count:,} dental).")
-    except sqlite3.Error as e:
-        print(f"ERROR: bcbs_providers.db validation failed: {e}"); sys.exit(1)
-
-    # -- Validate hp_providers.db ----------------------------------------------
-    try:
-        conn = sqlite3.connect(HP_DB_PATH)
-        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
-            print("ERROR: hp_providers.db is missing the providers table.")
-            conn.close(); sys.exit(1)
-        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
-        dental_count   = conn.execute("SELECT COUNT(*) FROM providers WHERE source='dental'").fetchone()[0]
-        conn.close()
-        if provider_count < 30000:
-            print(f"ERROR: hp_providers.db has only {provider_count} providers. Expected ~43,000.")
-            sys.exit(1)
-        print(f"  hp_providers.db validation passed: {provider_count:,} providers ({dental_count:,} dental).")
-    except sqlite3.Error as e:
-        print(f"ERROR: hp_providers.db validation failed: {e}"); sys.exit(1)
-
-    # -- Validate humana_providers.db ------------------------------------------
-    try:
-        conn = sqlite3.connect(HUMANA_DB_PATH)
-        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
-            print("ERROR: humana_providers.db is missing the providers table.")
-            conn.close(); sys.exit(1)
-        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
-        dental_count   = conn.execute("SELECT COUNT(*) FROM providers WHERE source='dental'").fetchone()[0]
-        conn.close()
-        if provider_count < 15000:
-            print(f"ERROR: humana_providers.db has only {provider_count} providers. Expected ~23,000.")
-            sys.exit(1)
-        print(f"  humana_providers.db validation passed: {provider_count:,} providers ({dental_count:,} dental).")
-    except sqlite3.Error as e:
-        print(f"ERROR: humana_providers.db validation failed: {e}"); sys.exit(1)
-
-    # -- Validate uhc_providers.db ---------------------------------------------
-    try:
-        conn = sqlite3.connect(UHC_DB_PATH)
-        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
-            print("ERROR: uhc_providers.db is missing the providers table.")
-            conn.close(); sys.exit(1)
-        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
-        conn.close()
-        if provider_count < 400:
-            print(f"ERROR: uhc_providers.db has only {provider_count} providers. Expected ~600+.")
-            sys.exit(1)
-        print(f"  uhc_providers.db validation passed: {provider_count:,} providers.")
-    except sqlite3.Error as e:
-        print(f"ERROR: uhc_providers.db validation failed: {e}"); sys.exit(1)
-
-    # -- Validate aetna_providers.db -------------------------------------------
-    try:
-        conn = sqlite3.connect(AETNA_DB_PATH)
-        if "providers" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
-            print("ERROR: aetna_providers.db is missing the providers table.")
-            conn.close(); sys.exit(1)
-        provider_count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
-        conn.close()
-        if provider_count < 100:
-            print(f"ERROR: aetna_providers.db has only {provider_count} providers. Expected ~279.")
-            sys.exit(1)
-        print(f"  aetna_providers.db validation passed: {provider_count:,} providers.")
-    except sqlite3.Error as e:
-        print(f"ERROR: aetna_providers.db validation failed: {e}"); sys.exit(1)
+        print(f"ERROR: providers_2027.db validation failed: {e}"); sys.exit(1)
 
     # -- Validate pbp_benefits.db (client-facing plan benefits) ----------------
     try:
@@ -246,7 +162,7 @@ def validate_db():
             conn.close(); sys.exit(1)
         benefit_count = conn.execute("SELECT COUNT(*) FROM plan_benefits").fetchone()[0]
         conn.close()
-        if benefit_count < 40:
+        if benefit_count < 30:          # 2026: 56 plans; 2027: 37
             print(f"ERROR: pbp_benefits.db has only {benefit_count} plans. Expected ~56.")
             sys.exit(1)
         print(f"  pbp_benefits.db validation passed: {benefit_count} plan benefit rows.")
