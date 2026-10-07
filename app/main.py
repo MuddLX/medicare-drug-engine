@@ -1203,6 +1203,8 @@ Rules:
 - Map nicknames (water pill -> Furosemide, blood thinner -> use context or flag)
 - Map generics to their most common formulary name
 - Keep dosage separate from name
+- Leave out device and delivery names that are not part of the drug's brand name
+  (Trelegy Ellipta -> Trelegy, Lantus SoloStar -> Lantus, Humalog KwikPen -> Humalog, Ventolin HFA -> Ventolin)
 - If completely unrecognizable, set confidence below 0.5 and explain in flag
 - Never guess wildly — if unsure set confidence low and flag it"""
 
@@ -1231,6 +1233,30 @@ Rules:
                  "dosage": d.get("dosage", ""), "confidence": 1.0, "flag": ""} for d in drugs]
 
 
+# Device / delivery names that are part of how people say a drug but NOT part of RxNorm's brand
+# name (2026-10-07, Dorothy Halvorsen test): RxNorm knows "Trelegy" and "Lantus", not
+# "Trelegy Ellipta" or "Lantus SoloStar", so those came back "couldn't identify".
+DEVICE_WORDS = (
+    "ellipta", "solostar", "max solostar", "flexpen", "flextouch", "kwikpen", "junior kwikpen", "tempo pen",
+    "penfill", "inpen", "clickject", "sensoready", "pen-injector", "pen injector", "auto-injector",
+    "autoinjector", "prefilled syringe", "prefilled pen", "pen", "pens", "inhaler", "hfa", "respimat",
+    "diskus", "handihaler", "pressair", "aerosphere", "digihaler", "redihaler", "twisthaler", "neohaler",
+    "vial", "cartridge", "u-100", "u100",
+)
+_DEVICE_RE = None
+
+
+def strip_device_words(drug_name):
+    """'Trelegy Ellipta' -> 'Trelegy'; 'Lantus SoloStar' -> 'Lantus'; 'Ozempic pen' -> 'Ozempic'.
+    Whole words only ('Penicillin' is untouched). Returns '' if nothing but device words is left."""
+    import re
+    global _DEVICE_RE
+    if _DEVICE_RE is None:
+        words = sorted(DEVICE_WORDS, key=len, reverse=True)
+        _DEVICE_RE = re.compile(r"(?<![\w-])(" + "|".join(re.escape(w) for w in words) + r")(?![\w-])", re.I)
+    return re.sub(r"\s+", " ", _DEVICE_RE.sub(" ", drug_name or "")).strip()
+
+
 def lookup_rxcuis(drug_name, dosage=""):
     """Look up product-level RXCUIs, trying name+dosage first then name only."""
     def fetch(search_str):
@@ -1250,6 +1276,10 @@ def lookup_rxcuis(drug_name, dosage=""):
     rxcuis = fetch(f"{drug_name} {dosage}") if dosage else []
     if not rxcuis:
         rxcuis = fetch(drug_name)
+    if not rxcuis:
+        bare = strip_device_words(drug_name)          # "Trelegy Ellipta" -> "Trelegy"
+        if bare and bare.lower() != drug_name.lower():
+            rxcuis = fetch(bare)
     if not rxcuis:
         try:
             url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={requests.utils.quote(drug_name)}&search=2"
