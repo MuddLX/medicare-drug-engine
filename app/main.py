@@ -23,7 +23,7 @@ from app import drug_resolver   # local RxNorm drug-name reader (2026-10-07)
 DB_PATH           = data_meta.DB_PATH
 # Doctor/clinic networks: 2027 sources only (app/providers_2027.py, providers_2027.db). The 2026
 # carrier directory databases were retired 2026-10-06.
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# Claude is reached through AWS Bedrock only (see _claude_reply); no Anthropic API key is used (2026-10-08).
 
 # ===== FALLBACK PLANS (used when service_area table not available) =====
 FALLBACK_PLANS = [
@@ -1209,7 +1209,69 @@ def get_mail_order_cost(conn, contract_id, plan_id, tier, cost_type_mail, cost_a
 
 
 
-NORMALIZE_MODEL = os.environ.get("NORMALIZE_MODEL", "claude-sonnet-5-5")
+# Claude runs through AWS Bedrock (2026-10-08), covered by the agency's AWS BAA. The engine never calls
+# api.anthropic.com any more - if Bedrock isn't set up or fails, drug names go through as written.
+# Settings (Railway variables / local .env):
+#   AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY   the roundabout-engine-bedrock login
+#   BEDROCK_MODEL_ID   default us.anthropic.claude-sonnet-4-6 (US-only routing). Sonnet 5.5 later is a
+#                      settings change once AWS enables it for the account.
+BEDROCK_MODEL_ID_DEFAULT = "us.anthropic.claude-sonnet-4-6"
+_BEDROCK_CLIENT = None
+
+
+def bedrock_model_id():
+    return os.environ.get("BEDROCK_MODEL_ID", "").strip() or BEDROCK_MODEL_ID_DEFAULT
+
+
+def bedrock_configured():
+    return bool(os.environ.get("AWS_ACCESS_KEY_ID", "").strip() and os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip())
+
+
+def _bedrock_client():
+    global _BEDROCK_CLIENT
+    if _BEDROCK_CLIENT is None:
+        import boto3
+        from botocore.config import Config
+        _BEDROCK_CLIENT = boto3.client(
+            "bedrock-runtime",
+            region_name=os.environ.get("AWS_REGION", "").strip() or "us-east-2",
+            config=Config(connect_timeout=5, read_timeout=45, retries={"max_attempts": 3, "mode": "standard"}),
+        )
+    return _BEDROCK_CLIENT
+
+
+def _claude_reply(prompt, max_tokens=4000):
+    """One Claude call through AWS Bedrock. Returns Claude's reply as a dict ({"content": [...], "stop_reason": ...}).
+    Raises on any failure (callers fall back). Temperature 0 for repeatable answers; newer models reject the
+    setting, so it is dropped and the call retried once if Bedrock says so."""
+    if not bedrock_configured():
+        raise RuntimeError("Bedrock not configured")
+    body = {"anthropic_version": "bedrock-2023-05-31", "max_tokens": max_tokens, "temperature": 0,
+            "messages": [{"role": "user", "content": prompt}]}
+    client = _bedrock_client()
+    try:
+        resp = client.invoke_model(modelId=bedrock_model_id(), body=json.dumps(body))
+    except Exception as exc:
+        try:
+            msg = str(exc.response.get("Error", {}).get("Message", ""))
+        except Exception:
+            msg = ""
+        if "temperature" not in msg.lower():
+            raise
+        body.pop("temperature", None)
+        resp = client.invoke_model(modelId=bedrock_model_id(), body=json.dumps(body))
+    return json.loads(resp["body"].read())
+
+
+def _error_label(exc):
+    """Safe log label: the error type and AWS error code only - never the message, which can echo input."""
+    code = ""
+    if hasattr(exc, "response"):
+        try:
+            code = exc.response.get("Error", {}).get("Code", "")
+        except Exception:
+            code = ""
+    return f"{type(exc).__name__}{(' ' + code) if code else ''}"
 
 
 def _json_array(text):
@@ -1226,8 +1288,8 @@ def normalize_drugs(drugs):
       original, normalized, dosage, confidence, flag   (as before)
       ingredient   generic ingredient name(s), e.g. "ondansetron" for Zofran - how retired brands are read
       brand        brand name if one was written, else ""
-    2026-10-07: current model (env NORMALIZE_MODEL), structured fields, temperature 0. If Claude is
-    unreachable, the names go through unchanged and the local resolver still reads them.
+    2026-10-07: structured fields, temperature 0. 2026-10-08: through AWS Bedrock (BAA), see _claude_reply.
+    If Claude is unreachable, the names go through unchanged and the local resolver still reads them.
     """
     if not drugs:
         return []
@@ -1260,23 +1322,7 @@ Reply with ONLY the JSON array, no other text:
 [{{"original": "", "normalized": "", "ingredient": "", "brand": "", "dosage": "", "confidence": 0.95, "flag": ""}}]"""
 
     try:
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": NORMALIZE_MODEL,
-                "max_tokens": 4000,
-                "temperature": 0,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
+        data = _claude_reply(prompt, max_tokens=4000)
         # The reply's TEXT block - newer models can put other blocks (e.g. thinking) first (2026-10-07).
         text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
         if data.get("stop_reason") == "max_tokens":
@@ -1296,7 +1342,7 @@ Reply with ONLY the JSON array, no other text:
             it.setdefault("brand", "")
         return items
     except Exception as exc:
-        print(f"normalize_drugs: Claude unavailable or unreadable reply ({type(exc).__name__}); using names as written")
+        print(f"normalize_drugs: Claude (Bedrock) unavailable or unreadable reply ({_error_label(exc)}); using names as written")
         return [{"original": d.get("name", ""), "normalized": d.get("name", ""), "ingredient": "", "brand": "",
                  "dosage": d.get("dosage", ""), "confidence": 1.0, "flag": ""} for d in drugs]
 
