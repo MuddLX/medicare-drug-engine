@@ -1216,6 +1216,7 @@ def get_mail_order_cost(conn, contract_id, plan_id, tier, cost_type_mail, cost_a
 #   BEDROCK_MODEL_ID   default us.anthropic.claude-sonnet-4-6 (US-only routing). Sonnet 5.5 later is a
 #                      settings change once AWS enables it for the account.
 BEDROCK_MODEL_ID_DEFAULT = "us.anthropic.claude-sonnet-4-6"
+LOW_CONFIDENCE = 0.7   # below this Claude's reading is a guess: the drug stays as written (normalize_drugs)
 _BEDROCK_CLIENT = None
 
 
@@ -1314,9 +1315,9 @@ For EACH line, in the same order, return:
 - "brand": the brand name if a brand was written, else "".
 - "dosage": the strength as written (e.g. "10 mg", "100/62.5/25 mcg"); "" if none. Not the directions.
 - "confidence": 0 to 1 - how sure you are which drug this is.
-- "flag": a short note when unsure or when the line is not one specific drug (e.g. "water pill" - name the likely drug in "normalized" only if the line makes it clear), else "".
+- "flag": a short note when unsure or when the line is not one specific drug, else "".
 
-Never invent a drug. If a line is not identifiable, keep "normalized" as written, set confidence below 0.5 and explain in "flag".
+Never invent a drug. If a line is not identifiable, or names a kind of drug rather than one drug (e.g. "water pill", "blood thinner", "cholesterol pill", "inhaler"), keep "normalized" as written, leave "ingredient" and "brand" empty, set confidence below 0.5 and put the likely drug(s) in "flag".
 
 Reply with ONLY the JSON array, no other text:
 [{{"original": "", "normalized": "", "ingredient": "", "brand": "", "dosage": "", "confidence": 0.95, "flag": ""}}]"""
@@ -1340,14 +1341,15 @@ Reply with ONLY the JSON array, no other text:
             it.setdefault("flag", "")
             it.setdefault("ingredient", "")
             it.setdefault("brand", "")
-            # A guess is not a drug (2026-10-08, Sonnet 4.6 on Bedrock: "water pill" -> furosemide at 0.4).
-            # Below 0.5 the line stays as written so it shows as "couldn't identify" instead of being
-            # priced as a drug the client may not take; the guess is kept in the flag for the agent.
+            # A guess is not a drug (2026-10-08, Sonnet 4.6 on Bedrock: "water pill" -> furosemide at 0.4 on one
+            # run, priced as furosemide on Railway on the next). Below LOW_CONFIDENCE (the same 0.7 the report
+            # already calls "low confidence") the line stays as written, so it shows as "couldn't identify"
+            # instead of being priced as a drug the client may not take; the guess is kept in the flag.
             try:
                 conf = float(it.get("confidence", 1.0))
             except (TypeError, ValueError):
                 conf = 0.0
-            if conf < 0.5:
+            if conf < LOW_CONFIDENCE:
                 guess = (it.get("normalized") or "").strip()
                 written = (d.get("name") or "").strip()
                 if guess and guess.lower() != written.lower():

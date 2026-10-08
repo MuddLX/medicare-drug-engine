@@ -116,6 +116,21 @@ def test_low_confidence_guess_is_not_priced_as_a_drug(aws):
     assert "possibly furosemide" in out["flag"] and "several diuretics" in out["flag"]
 
 
+def test_borderline_guess_is_not_priced_either(aws):
+    guess = [{"original": "water pill", "normalized": "furosemide", "ingredient": "furosemide", "brand": "",
+              "dosage": "", "confidence": 0.6, "flag": "class term"}]
+    aws([ok(guess)])
+    out = M.normalize_drugs([{"name": "water pill", "dosage": ""}])[0]
+    assert out["normalized"] == "water pill" and "possibly furosemide" in out["flag"]
+
+
+def test_prompt_says_drug_kinds_stay_as_written(aws):
+    fake = aws([ok()])
+    M.normalize_drugs(DRUGS)
+    prompt = fake.calls[0]["body"]["messages"][0]["content"]
+    assert "water pill" in prompt and "keep \"normalized\" as written" in prompt
+
+
 def test_confident_answer_is_kept(aws):
     sure = [{"original": "metforman", "normalized": "metformin", "ingredient": "metformin", "brand": "",
              "dosage": "500 mg", "confidence": 0.97, "flag": "Misspelling of metformin"}]
