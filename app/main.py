@@ -839,19 +839,34 @@ def get_client_coords(conn, zip_code, address=None, city=None, state=None):
     return None, None, None
 
 
+def load_zip_coords(conn):
+    """Every ZIP centroid as {zip: (lat, lon)}, read once per request (2026-10-08). The pharmacy
+    search used to look each network ZIP up one query at a time, for every plan: ~12,000 small
+    queries to price 29 plans. Same values, one query."""
+    return {z: (lat, lon) for z, lat, lon in conn.execute("SELECT zip, lat, lon FROM zip_coords")}
+
+
 def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30,
-                          client_address=None, client_city=None, client_state=None):
+                          client_address=None, client_city=None, client_state=None,
+                          client_coords=None, zip_coords=None):
     """
     Find closest preferred retail pharmacies to client location.
     Uses real street address geocoding when available for precise distances.
     Falls back to zip centroid.
+
+    client_coords / zip_coords (2026-10-08): a caller pricing many plans for one client passes the
+    client's (lat, lon, city) and load_zip_coords() once, so the address is geocoded ONCE per
+    request (not once per plan) and ZIP centroids come from memory. Results are identical.
     """
     plan_id_padded = plan_id.zfill(3)
 
     # Get client coordinates - prefer real address over zip centroid
-    client_lat, client_lon, client_city = get_client_coords(
-        conn, client_zip, address=client_address, city=client_city, state=client_state
-    )
+    if client_coords is not None:
+        client_lat, client_lon, client_city = client_coords
+    else:
+        client_lat, client_lon, client_city = get_client_coords(
+            conn, client_zip, address=client_address, city=client_city, state=client_state
+        )
     if not client_lat:
         return []
 
@@ -895,11 +910,36 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
     # Only include pharmacies that are confirmed in-network for this plan
     # We verify by checking if their zip is in pharmacy_network for this plan
     candidates = []
+    # Fast path (2026-10-08, when the caller passes zip_coords): read this plan's in-network named
+    # pharmacies ONCE and split them by ZIP in memory. Same rows, same order per ZIP as the per-ZIP
+    # query below (the plan's network index is walked in the same order; npi is unique in
+    # pharmacy_names, so DISTINCT over the plan = DISTINCT per ZIP) - proven identical by
+    # _scratch/pharmacy_equivalence.py and tests/test_pharmacy_fast_path.py.
+    plan_pharms_by_zip = None
+    if zip_coords is not None:
+        plan_pharms_by_zip = {}
+        for row in conn.execute("""
+            SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain,
+                   pn.lat, pn.lon,
+                   net.generic_fee_30, net.brand_fee_30, net.selected_fee_30,
+                   net.preferred_retail, pn.zip
+            FROM pharmacy_names pn
+            INNER JOIN pharmacy_network net ON net.npi = pn.npi
+            WHERE net.contract_id = ?
+            AND net.plan_id = ?
+            AND net.is_retail = 1
+            AND pn.name != 'Unknown Pharmacy'
+            AND pn.name IS NOT NULL
+        """, (contract_id, plan_id_padded)):
+            plan_pharms_by_zip.setdefault(row[11], []).append(row[:11])
     for pharm_zip, info in zip_info.items():
         # Get zip coordinates
-        coords = conn.execute(
-            "SELECT lat, lon FROM zip_coords WHERE zip = ?", (pharm_zip,)
-        ).fetchone()
+        if zip_coords is not None:
+            coords = zip_coords.get(pharm_zip)
+        else:
+            coords = conn.execute(
+                "SELECT lat, lon FROM zip_coords WHERE zip = ?", (pharm_zip,)
+            ).fetchone()
         if not coords or not coords[0]:
             continue
 
@@ -909,7 +949,10 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
 
         # Get pharmacies in this zip that are confirmed in-network
         # Pull per-pharmacy dispensing fees directly (not zip-level aggregated)
-        pharms = conn.execute("""
+        if plan_pharms_by_zip is not None:
+            pharms = plan_pharms_by_zip.get(pharm_zip, [])
+        else:
+            pharms = conn.execute("""
             SELECT DISTINCT pn.npi, pn.name, pn.address, pn.city, pn.is_chain,
                    pn.lat, pn.lon,
                    net.generic_fee_30, net.brand_fee_30, net.selected_fee_30,
@@ -922,7 +965,7 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
             AND net.is_retail = 1
             AND pn.name != 'Unknown Pharmacy'
             AND pn.name IS NOT NULL
-        """, (pharm_zip, contract_id, plan_id_padded)).fetchall()
+            """, (pharm_zip, contract_id, plan_id_padded)).fetchall()
 
         for npi, name, address, city, is_chain, pharm_lat, pharm_lon, \
                 generic_fee, brand_fee, selected_fee, pref_retail in pharms:
@@ -1548,15 +1591,22 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
     results = []
     warnings = []
 
-    # Get nearby pharmacies per plan (keyed by carrier)
+    # Get nearby pharmacies per plan (keyed by carrier). The client is geocoded ONCE and ZIP
+    # centroids are read once for all plans (2026-10-08: was once per plan - slow, and one live
+    # address lookup per plan).
     pharmacy_map = {}  # carrier -> list of nearby pharmacies
+    client_coords = get_client_coords(conn, zip_code, address=client_address, city=client_city,
+                                      state=client_state) if plan_details else None
+    zip_coords = load_zip_coords(conn) if plan_details else None
     for carrier, plan in plan_details.items():
         nearby = get_nearby_pharmacies(
             conn, plan["contract_id"], plan["plan_id"], zip_code,
             max_results=4, max_miles=30,
             client_address=client_address,
             client_city=client_city,
-            client_state=client_state
+            client_state=client_state,
+            client_coords=client_coords,
+            zip_coords=zip_coords,
         )
         pharmacy_map[carrier] = nearby
 
