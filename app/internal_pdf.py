@@ -17,8 +17,12 @@ Same inputs as main.build_pdf_v1 (the previous layout, kept as a fallback).
 """
 import io
 import re
+import sqlite3
 from datetime import datetime
 from xml.sax.saxutils import escape
+
+from app import availability as AV
+from app import data_meta
 
 # carrier key used by the provider lookups (r["<key>_status"]) per CMS contract
 CONTRACT_PROVIDER_KEY = {
@@ -200,6 +204,16 @@ def _cheapest_field(label, drug_detail, pharmacy_name, key):
     return None
 
 
+def _short_share(cs):
+    """'$0 copay' / '13%' / '$35/mo max' + ', no ded.' - fits under a tier in a narrow column."""
+    if cs.get("insulin_cap"):
+        return "$35/mo max (insulin)"
+    r = (cs.get("retail") or "").replace(" coinsurance", "")
+    if cs.get("retail_standard"):
+        r += " pref."
+    return r + (" · ded. applies" if cs.get("deductible_applies") else " · no ded.")
+
+
 def _typical_month(values):
     """The monthly cost the client pays most months (deductible months and the $0 months after
     the yearly cap aren't "typical"). Ties go to the later month."""
@@ -310,8 +324,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             right.append(f"{plan_year} plan year")
         from app import data_meta
         right.append("Data: " + data_meta.data_vintage())
-        if data_meta.prices_estimated():
-            right.append("Drug prices: " + (data_meta.meta().get("prices_vintage") or "prior year") + " estimate")
+        if data_meta.prices_estimated():                 # 2026-10-08: no estimates shown - say so plainly
+            right.append("Drug prices: " + AV.PRICES_NOTE)
         if confidence:
             try:
                 right.append(f"Confidence {float(confidence):.0%}")
@@ -397,6 +411,28 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         def tint(r, c, bg, tx=None):
             ts.append(("BACKGROUND", (c, r), (c, r), bg))
 
+        # Official-data gates (2026-10-08, app/availability.py): estimates and carried-over data are not shown.
+        prices_ok = AV.prices_official()
+        _avconn = sqlite3.connect(f"file:{data_meta.DB_PATH}?mode=ro", uri=True)
+        try:
+            list_ok = {}
+            for l in cols:
+                s_ = plan_summaries[l]
+                row_ = _avconn.execute("SELECT formulary_id FROM plans WHERE contract_id=? AND plan_id=?",
+                                       (s_.get("contract_id"), str(s_.get("plan_id") or "").zfill(3))).fetchone()
+                list_ok[l] = AV.list_official(_avconn, row_[0] if row_ else None)
+            share = {}
+            for d in (drug_detail or []):
+                for l in cols:
+                    pc = d.get("plans", {}).get(l, {}) or {}
+                    if pc.get("covered") and pc.get("tier"):
+                        s_ = plan_summaries[l]
+                        cs = AV.cost_share(_avconn, s_.get("contract_id"), s_.get("plan_id"), pc["tier"],
+                                           insulin=bool(pc.get("insulin_cap")))
+                        share[(id(d), l)] = cs
+        finally:
+            _avconn.close()
+
         # cost
         group(f"COST — {period.upper()}")
         drug_cost_label = "Est. yearly drug cost" if full_year else f"Est. drug cost ({period})"
@@ -420,6 +456,9 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                 extra = "drugs + premium only" if (bold and l in pd) else None
                 if s.get("drug_list_missing") and title in (drug_cost_label, total_label):
                     extra = "drug list not out yet"
+                if title in (drug_cost_label, total_label) and not prices_ok:
+                    row.append(C("Available January", "2027 drug prices", cell))
+                    continue
                 row.append(C(fn(s), extra, cell_b if bold else cell))
             rows.append(row)
 
@@ -448,6 +487,9 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     elif pcost.get("injectable") or d.get("is_injectable"):
                         row.append(C("Verify coverage", "injectable"))
                         tint(r, ci, AMBER_BG)
+                    elif not pcost.get("covered", False) and not list_ok.get(l):
+                        row.append(C(AV.NOT_ON_LIST, AV.NOT_ON_LIST_DETAIL))     # our reading of a carrier PDF
+                        tint(r, ci, AMBER_BG)
                     elif not pcost.get("covered", False):
                         row.append(C("Not covered"))
                         tint(r, ci, RED_BG)
@@ -455,6 +497,9 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         tier = pcost.get("tier")
                         if tier:
                             note = TIER_NOTE.get(tier)
+                            cs = share.get((id(d), l))         # the plan's official 2027 copay / coinsurance
+                            if cs and not prices_ok:       # until real prices: the official copay instead
+                                note = _short_share(cs)
                             if pcost.get("as_generic"):      # brand not listed; its generic is
                                 note = "as generic" + (f" · {note}" if note else "")
                             row.append(C(f"Tier {tier}", note))
@@ -464,8 +509,13 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                             row.append(C("—"))
                 rows.append(row)
 
-        # pharmacy
-        if drug_detail:
+        # pharmacy - its costs, deductible month and cap month all come from drug PRICES: shown only when
+        # the official prices are loaded (2026-10-08).
+        if drug_detail and not prices_ok:
+            group("PHARMACY COSTS")
+            rows.append([[Paragraph("Yearly cost, deductible met, cap", lab),
+                          Paragraph("need drug prices", lab_sub)]] + [C("Available January", "2027 drug prices") for _ in cols])
+        if drug_detail and prices_ok:
             where = f"{client_address}, {client_city}" if (client_address and client_city) else f"ZIP {zip_code}"
             group(f"PHARMACY — NEAREST IN-NETWORK TO {where.upper()}")
             summaries = {l: pharmacy_summary(l, drug_detail, months) for l in cols}
@@ -555,7 +605,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
 
     def footer_text(used_keys):
         parts = ["Tiers are plain text; only Tier 4–5, not covered, unidentified and injectable drugs, "
-                 "and doctors not found are highlighted. Costs are estimates."]
+                 "and doctors not found are highlighted. "
+                 + ("Costs are estimates." if AV.prices_official() else
+                    "Copays/coinsurance: each plan's official 2027 amount per fill. Dollar totals need 2027 "
+                    "drug prices (Jan). \"Not on carrier's list\": verify until CMS lists load (Oct 15).")]
         phones = [CARRIER_PHONES[k] for k in ("medica", "bcbs", "hp", "humana", "uhc", "aetna") if k in used_keys]
         if phones:
             parts.append("Verify networks: " + " · ".join(phones) + ".")

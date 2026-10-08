@@ -232,6 +232,9 @@ def build_b14(mn):
     return out
 
 
+STARS_YEAR = None
+
+
 def build_star_ratings(mn_contract_ids, base_dir):
     """Overall CMS star rating per contract, from the Star Ratings Summary xlsx.
     Contract-level: every plan under an H-number shares its contract's rating.
@@ -251,6 +254,8 @@ def build_star_ratings(mn_contract_ids, base_dir):
         return max(ys) if ys else 0
     paths.sort(key=_year, reverse=True)
     print(f"  Star ratings from: {os.path.relpath(paths[0], base_dir)}")
+    global STARS_YEAR                       # recorded in the db's meta table (2026-10-08): the engine shows
+    STARS_YEAR = _year(paths[0]) or None    # stars only when this equals the plan year (app/availability.py)
     wb = openpyxl.load_workbook(paths[0], read_only=True, data_only=True)
     ws = wb["Summary_Rating"] if "Summary_Rating" in wb.sheetnames else wb[wb.sheetnames[0]]
     rows = ws.iter_rows(values_only=True)
@@ -326,6 +331,12 @@ def main():
     for (cid, pid), b in benefits.items():
         conn.execute(f"INSERT OR REPLACE INTO plan_benefits VALUES ({ph})",
                      (cid, pid, *[b.get(c) for c in COLUMNS]))
+    # Which year's star ratings these are (2026-10-08). CMS names the file for the plan year it rates
+    # ("2027 Star Ratings" = ratings shown for 2027 plans). No file -> no record -> stars not shown.
+    conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+    if STARS_YEAR:
+        conn.execute("INSERT OR REPLACE INTO meta VALUES ('stars_year', ?)", (str(STARS_YEAR),))
+        print(f"Star ratings year recorded: {STARS_YEAR}")
     conn.commit()
 
     def sh(copay, coins):

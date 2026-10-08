@@ -185,6 +185,16 @@ NOT_INCLUDED = "Not included"
 
 def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_meta, client, plan_year):
     """Selected plans + engine data + real PBP benefits -> the renderer's input."""
+    import sqlite3
+    from app import availability as AV
+    from app import data_meta
+    prices_ok = AV.prices_official()       # 2026-10-08: no estimated dollar figures on a client sheet
+    _conn = sqlite3.connect(f"file:{data_meta.DB_PATH}?mode=ro", uri=True)
+
+    def _list_ok(cand):
+        row = _conn.execute("SELECT formulary_id FROM plans WHERE contract_id=? AND plan_id=?",
+                            (cand.get("contract_id"), str(cand.get("plan_id") or "").zfill(3))).fetchone()
+        return AV.list_official(_conn, row[0] if row else None)
     total_drugs = len(drug_detail)
     plans = []
     for cand, verdict, cost in selection["selected"]:
@@ -201,12 +211,15 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
         #   unverified   - couldn't identify it (engine error), injectable (agency rule skips
         #                  the coverage check), or no entry for this plan -> "confirm with agent"
         covered, not_covered, unverified = 0, [], 0
+        list_ok = _list_ok(cand)
         for d in drug_detail:
             pc = d["plans"].get(key, {})
             if d.get("error") or pc.get("injectable") or pc.get("drug_list_missing") or not pc:
                 unverified += 1
             elif pc.get("covered") or pc.get("annual_total") is not None:
                 covered += 1
+            elif not list_ok:
+                unverified += 1          # not found on our reading of the carrier's PDF: confirm, never "not covered"
             else:
                 not_covered.append(d.get("original_name") or d.get("drug_name"))
 
@@ -216,8 +229,9 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
             # ---- from the drug engine ----
             "plan_premium": f"${s['premium_monthly']:,.0f}",
             "part_d_premium": "Included",
-            "est_annual_drug_cost": (f"${s['total_drug_cost']:,.0f}" if s.get("total_drug_cost") is not None
-                                     else "Drug list not published yet"),
+            "est_annual_drug_cost": ("Drug list not published yet" if s.get("total_drug_cost") is None
+                                     else f"${s['total_drug_cost']:,.0f}" if prices_ok
+                                     else "Available January 2027"),
             "rx": {"covered": covered, "total": total_drugs, "not_covered": not_covered,
                    "unverified": unverified},
             # ---- interim states ----
@@ -242,6 +256,7 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
             plan["part_b_giveback"] = None
         plans.append(plan)
 
+    _conn.close()
     meta = dict(agency_meta)
     meta.update({"plan_year": plan_year, "num_drugs": total_drugs,
                  "num_providers": client.get("num_providers", 0)})

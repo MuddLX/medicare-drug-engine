@@ -74,7 +74,7 @@ def drug_status(drug, cell):
     if cell.get("injectable") or drug.get("is_injectable"):
         return "verify_injectable"
     if not cell.get("covered", False):
-        return "not_covered"
+        return "not_covered"          # compare() turns this into "not_on_list" while the list isn't CMS's
     return "covered"
 
 
@@ -105,6 +105,7 @@ def compare(data):
     returns (payload, http_status)."""
     from app import main as M
     from app import data_meta
+    from app import availability as AV
     from app.internal_pdf import pharmacy_summary, _written_name
 
     started = time.perf_counter()
@@ -137,6 +138,8 @@ def compare(data):
         type_of = {(p["contract_id"], str(p["plan_id"]).zfill(3)): p.get("type") or p.get("plan_type")
                    for p in resolved}
         have_flags = {"prior_auth", "step_therapy", "quantity_limit"} <= set(M._table_cols(conn, "formulary"))
+        # Official-data gates (2026-10-08): nothing estimated or carried over is shown as fact.
+        prices_ok, networks_ok, stars_ok = AV.prices_official(M.DB_PATH), AV.networks_official(M.DB_PATH), AV.stars_official()
         formulary_of = {(c, str(p).zfill(3)): f for c, p, f in
                         conn.execute("SELECT contract_id, plan_id, formulary_id FROM plans")}
 
@@ -165,19 +168,23 @@ def compare(data):
             label = label_of[k]
             summ = result["plan_summaries"].get(label, {})
             priced = bool(drugs) and p["drug_list_loaded"] and summ.get("total_drug_cost") is not None
+            list_ok = AV.list_official(conn, formulary_of.get(k))
+            costs_ok = priced and prices_ok
             try:
                 benefits = format_benefits(lookup_benefits(*k)) if p["plan_type"] != "PD" else {}
             except Exception:
                 benefits = {}
-            pharm = pharmacy_summary(label, detail, months) if priced else None
+            pharm = pharmacy_summary(label, detail, months) if (costs_ok and networks_ok) else None
             cells, counts = [], {"covered": 0, "not_covered": 0, "list_not_out": 0, "not_identified": 0,
                                  "verify_injectable": 0, "price_unknown": 0}
             ded_met = cap_reached = None
             for d in detail:
                 cell = d.get("plans", {}).get(label, {}) or {}
                 status = drug_status(d, cell)
-                counts[status] += 1
-                if cell.get("price_unknown"):
+                if status == "not_covered" and not list_ok:      # our reading of a carrier PDF, not CMS's list
+                    status = "not_on_list"
+                counts[status] = counts.get(status, 0) + 1
+                if cell.get("price_unknown") and prices_ok:
                     counts["price_unknown"] += 1
                 ded_met = ded_met or cell.get("ded_met")
                 cap_reached = cap_reached or cell.get("cap_reached")
@@ -188,34 +195,39 @@ def compare(data):
                     "as_generic": bool(cell.get("as_generic")),
                     **(_restrictions(conn, formulary_of.get(k), cell.get("ndc"), have_flags) if status == "covered"
                        else dict(_NO_FLAGS)),
-                    "price_unknown": bool(cell.get("price_unknown")),
+                    "price_unknown": bool(cell.get("price_unknown")) and prices_ok,
                     "insulin_cap": bool(cell.get("insulin_cap")),
-                    # No price on file -> the cost is UNKNOWN: blank, never $0 (same rule as the reports' warning).
+                    # The plan's OFFICIAL 2027 copay / coinsurance for this drug's tier (CMS plan benefit files).
+                    "cost_share": AV.cost_share(conn, k[0], k[1], cell.get("tier"), insulin=bool(cell.get("insulin_cap")))
+                                  if status == "covered" else None,
+                    # Dollar amounts only from official prices; no price on file -> blank, never $0.
                     "est_year": _money(cell.get("annual_total"))
-                                if status == "covered" and not cell.get("price_unknown") else None,
+                                if costs_ok and status == "covered" and not cell.get("price_unknown") else None,
                     "monthly": [_money(x["cost"]) for x in cell.get("monthly_costs") or []]
-                               if status == "covered" and not cell.get("price_unknown") else [],
+                               if costs_ok and status == "covered" and not cell.get("price_unknown") else [],
                 })
             out_plans.append({
                 **{f: p[f] for f in ("contract_id", "plan_id", "plan_number", "carrier", "plan_name",
                                      "display_name", "official_name", "premium_monthly", "drug_deductible",
                                      "counties", "in_county", "drug_list_loaded", "drug_list_note")},
                 "plan_type": "PD" if p["plan_type"] == "PD" else (type_of.get(k) or "MA"),
-                "priced": priced,
-                "est_drug_cost_year": _money(summ.get("total_drug_cost")) if priced else None,
-                "est_total_year": _money(summ.get("total_drug_plus_premium")) if priced else None,
+                "priced": priced,                         # the drugs were checked against this plan's list
+                "prices_available": bool(costs_ok),       # official prices -> dollar estimates below are real
+                "drug_list_official": list_ok,            # CMS's own 2027 list (else our reading of the carrier PDF)
+                "est_drug_cost_year": _money(summ.get("total_drug_cost")) if costs_ok else None,
+                "est_total_year": _money(summ.get("total_drug_plus_premium")) if costs_ok else None,
                 "premium_year": _money(summ.get("premium_remaining_year")) if priced
                                 else round(p["premium_monthly"] * 12, 2),
-                "deductible_met": ded_met if priced else None,
-                "cap_reached": cap_reached if priced else None,
-                "coverage": dict(counts, total=len(detail)),
+                "deductible_met": ded_met if costs_ok else None,
+                "cap_reached": cap_reached if costs_ok else None,
+                "coverage": dict({"not_on_list": 0, **counts}, total=len(detail)),
                 "drugs": cells,
                 "pharmacy": None if not pharm else {
                     "name": pharm["name"], "distance": pharm["distance"], "est_year": _money(pharm["annual"]),
                     "typical_month": _money(pharm["steady"]),
                     "mail_order_year": _money(pharm["mail_annual"]),
                     "mail_order_saves": _money(pharm["mail_saves"]) if pharm["mail_annual"] is not None else None},
-                "star_rating": benefits.get("star_rating"),
+                "star_rating": benefits.get("star_rating") if stars_ok else None,
                 "benefits": {k2: v for k2, v in benefits.items() if k2 != "star_rating"} or None,
                 "doctors": [{"name": _written_name(doc), "system": doc.get("system") or "",
                              **(doc.get("plans", {}).get(label) or {"status": "not_applicable", "detail": "",
@@ -232,6 +244,13 @@ def compare(data):
         "plan_year": plan_year,
         "data_vintage": M.data_vintage(),
         "prices_are_estimates": bool(data_meta.prices_estimated(M.DB_PATH)),
+        # What is official right now (2026-10-08). False = that data is held back, with the note to show.
+        "availability": {
+            "prices": prices_ok, "prices_note": "" if prices_ok else AV.PRICES_NOTE,
+            "networks": networks_ok, "networks_note": "" if networks_ok else AV.NETWORK_NOTE,
+            "stars": stars_ok, "stars_note": "" if stars_ok else AV.STARS_NOTE,
+            "not_on_list_label": AV.NOT_ON_LIST, "not_on_list_detail": AV.NOT_ON_LIST_DETAIL,
+        },
         "months": months,
         "drugs": [{"written": d.get("original_name") or "", "read_as": d.get("drug_name") or "",
                    "dosage": d.get("dosage") or "", "identified": not d.get("error"),

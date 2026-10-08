@@ -40,7 +40,12 @@ def _post(client, body):
 
 
 @needs27
-def test_every_plan_matches_what_the_report_shows_for_that_plan(engine):
+def test_every_plan_matches_what_the_report_shows_for_that_plan(engine, monkeypatch):
+    # The dollar math is checked as it will run once official prices load (January); until then the
+    # figures are held back (test_nothing_estimated_is_shown_before_official_prices).
+    from app import availability as AV
+    monkeypatch.setattr(AV, "prices_official", lambda *a, **k: True)
+    monkeypatch.setattr(AV, "networks_official", lambda *a, **k: True)
     client = engine(DB27)
     status, j = _post(client, {"zip_code": "55443", "client_address": "8120 Zane Ave N",
                                "client_city": "Brooklyn Park", "drugs": SUSAN})
