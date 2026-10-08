@@ -1,5 +1,5 @@
 # Data refresh & go-live routine — 2027 plan year
-*Rewritten October 7, 2026. Replaces the May 2026 quarterly-refresh guide (kept as `_archive/README_REFRESH_2026-05.md`;
+*Rewritten October 7, 2026; updated Oct 8 (stars gate, Bedrock troubleshooting). Replaces the May 2026 quarterly-refresh guide (kept as `_archive/README_REFRESH_2026-05.md`;
 `quarterly_refresh.py` is retired).*
 
 Everything here is run by Jordon in **PowerShell, from the engine folder** (`C:\Users\Mudd\medicare_drug_engine`),
@@ -98,7 +98,8 @@ with who confirmed it and when). **No client names** go in the file — only pro
 3. Rebuild benefits: `python build_pbp_db.py source_data\cms_2027\pbp-benefits-2027 medicare_mn_2027.db pbp_benefits_2027.db`
    → the line `Star ratings from: …2027…` must name the 2027 file.
 4. Standard upload of `pbp_benefits_2027.db --as pbp_benefits.db`.
-Until this is done the client sheet shows **2026** stars — no client sheets go out before it.
+Until this is done every screen and report says "2027 rating(s) not out yet" (since Oct 8 nothing shows 2026 stars).
+After the upload, check a client sheet shows stars again (the gate compares the `stars_year` the builder records with the data year).
 
 ## 6. Oct 15: 2027 drug lists and pharmacy networks (monthly PUF)
 1. Download the **Monthly Prescription Drug Plan Formulary and Pharmacy Network Information** file dated
@@ -146,6 +147,8 @@ prices; then the switch (section 2) when ready. Provider sources for the new yea
 ## Troubleshooting
 | Symptom | Cause / fix |
 |---|---|
+| Drug names come back exactly as written; log says `normalize_drugs: Claude (Bedrock) unavailable … (AccessDeniedException …)` | AWS key or policy problem — check `/health` → `claude.configured`, the Railway AWS variables, and the IAM policy. Names still go through the local reader, so reports keep working. |
+| `/health` → `claude.configured: false` | One of `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` is missing on Railway. |
 | Railway won't start, log says `has only N plans` | Startup floor is 30 plans. A smaller file = a broken build; roll back. |
 | `disk I/O error` building a database | A leftover journal file. The builders use `journal_mode=TRUNCATE`; close other programs using the file and rerun. |
 | `This file has contract years [...]` | You loaded a file for the wrong plan year. Nothing changed. |

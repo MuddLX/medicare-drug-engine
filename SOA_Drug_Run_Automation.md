@@ -1,13 +1,78 @@
 # SOA Drug Run Automation — Complete Project Documentation
 *Last updated: October 7, 2026*
 
-> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
+> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. **On 2026-10-08 Claude moved to AWS Bedrock (engine name clean-up + the n8n reading step), the Plans page and client records shipped in Roundabout, and only official numbers are shown as fact — start with the ⭐ October 8 box.** Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
 
 ---
 
 ## ═══ CURRENT ARCHITECTURE (October 2026) ═══
 
 *Live, authoritative description. Folds in the former Phase 8 review-loop and Human-Readable Filenames build docs.*
+
+### ⭐ October 8, 2026 — Claude moved to AWS Bedrock · Plans page + client records · only official numbers (read this first)
+*Authoritative as of Oct 8, 2026 (evening). Where anything further down (including the Oct 7 box) disagrees, this box
+wins. Go-live blockers: `FUTURE_IMPROVEMENTS.md` §1. Data routine: `README_REFRESH.md`.*
+
+**1. Claude now runs through AWS Bedrock (covered by the agency's AWS BAA) — both places Claude is used**
+| | Before (Oct 7) | Now (Oct 8) |
+|---|---|---|
+| Engine name clean-up (`normalize_drugs`) | `api.anthropic.com`, `claude-sonnet-5-5` | Bedrock **InvokeModel** (bedrock-runtime, `us-east-2`), model **`us.anthropic.claude-sonnet-4-6`** (US-only routing). Never calls Anthropic directly; Bedrock down/not set up → names go through as written (local reader still reads them). Verified live on Railway, 3 of 3 runs. |
+| n8n reading step | `Extract with Claude (6)` — Anthropic node, `claude-sonnet-5-5` | **`Build Bedrock Body (6a)`** (Code) → **`Extract with Claude Bedrock (6b)`** (HTTP Request) → `Parse JSON (7)` unchanged. Verified end to end on the fake handwritten sheet (Testy McTestface) → Roundabout → both reports. Old node left on the canvas **disconnected** as a fallback; delete after a few days. |
+
+- **Why Sonnet 4.6, not 5.5:** the AWS account (784917519457) returns "not available for this account" for every
+  model on the new **bedrock-mantle** entrance (where Sonnet 5.5 / Haiku 4.5 live), even from the console Workbench —
+  an account-level hold on AWS's side. Sonnet 4.6 works on the older **bedrock-runtime** entrance. Jordon is emailing
+  `bedrock-ant-eap@amazon.com` (draft in the Oct 8 chat) for Sonnet 5.5 access + written BAA confirmation for the
+  mantle entrance. **Switching to 5.5 later:** mantle uses a different URL, API and permission
+  (`bedrock-mantle:CreateInference`, already in the policy) — test with `_scratch\bedrock_check.py anthropic.claude-sonnet-5-5`
+  first; it is not just a model-name swap.
+- **AWS pieces (all in us-east-2, Ohio):** IAM policy `Bedrock-claude-sonnet-5-5-invoke-only` (name is historical) allows
+  only: `bedrock-mantle:CreateInference` on the default project (us-east-1/2, us-west-2); `bedrock:InvokeModel(+Stream)`
+  on Sonnet 5.5 + Sonnet 4.6 inference profiles/models; `bedrock:CallWithBearerToken`. Two IAM users, no console
+  access, policy attached directly: **`Roundabout-engine-bedrock`** (access key → engine `.env` + Railway variables)
+  and **`n8n-bedrock`** (access key unused for now + a **Bedrock API key, no expiry** → n8n credential
+  "AWS Bedrock API key (n8n-bedrock)", Header Auth). CSVs/keys kept privately by Jordon, never in chat or OneDrive.
+- **Railway variables:** `AWS_REGION=us-east-2`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  `BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-6`. `ANTHROPIC_API_KEY` no longer used (Jordon to delete it).
+  `GET /health` → `"claude": {"via": "aws-bedrock", "configured": true, "model": …}` (never the key).
+- **Still test data only:** the engine itself is on **Railway (no BAA)** — moving it to AWS is the next go-live blocker.
+
+**2. Engine changes on Oct 8 (847 offline tests)**
+- `e8a9611` pricing many plans: geocode once, one pharmacy query per plan (3.4 s → ~1 s for 23 plans).
+- `02b8782` **`POST /compare-plans`** (Roundabout Plans page): every plan in the client's ZIP, priced, with an
+  `availability` block. `app/compare_plans.py`.
+- `b0e3552` **Medica 2027 drug lists loaded** from PDFs Jill supplied (Medica Advantage `00027425`, Prime Solution
+  Cost `00027424`; 87–88% of rows matched).
+- `1e80041` **Only official numbers shown as fact** (Jordon: "only show data backed by official numbers… otherwise
+  say not available yet"). `app/availability.py` gates: **prices** (off until the Jan 20, 2027 file — reports say
+  "Available January"), **pharmacy networks** (off until Oct 15), **carrier-PDF drug lists** ("Not on carrier's
+  list — verify", never "Not covered", until CMS lists Oct 15), **stars** (off until `pbp meta stars_year` = data
+  year). Each gate turns on by itself when its data loads. Shown as fact today: premiums, deductibles, each plan's
+  official 2027 copay/coinsurance per tier (`cost_share`, CMS PBP, verified by hand on H3219-001), $35 insulin cap.
+- `6aca462` / `8dc3ac7` / `dd877a2` / `1fcc3e0` Bedrock (above) + **a guess is never priced as a drug**: a kind of
+  drug ("water pill", "blood thinner") stays as written; any reading below 0.7 confidence stays as written with
+  "possibly X" in the flag.
+- `aa734b5` **client sheet no longer shows last year's stars** (the benefits overlay put them back) — header reads
+  "2027 rating not out yet" until 2027 ratings load.
+
+**3. Roundabout (Claude Code), Phases 34–42 (Oct 7–8)** — 34 client records (`Clients/<ULID>__client.json` are the
+truth, SQLite index) · 35 Clients page, agent chooses "Who is this for?" at Submit · 36 client page (Edit info,
+versions) · 37 **Plans page** (every 2027 plan for a client or a ZIP-only lookup, priced; compare up to 6) ·
+38 reports from the Plans page, Save as client · 39 **no gendered pronouns anywhere** · 40 compare screen cleanup
+(tiers / not covered only) + fair totals · 41 checkbox hit area + release build (watchdog → polling observer) ·
+42 only official numbers on every Plans screen. **Next prompt written: Phase 43 — Delete any sheet from In Progress**
+(a sheet stuck on "Generating reports…" had no Delete). Version still 0.1.0 (bump to 0.2.0 pending).
+
+**4. Fake test sheet:** `Fake Client Sheet - Testy McTestface.pdf` (image-only scan, handwriting font; unreadable DOB
+digit, "25 or 50?" dose, crossed-out Lisinopril, Ozempic pen, Levothyroxine with no dose, margin note "also check
+Aetna Signature", two doctors). Open question: the report showed **Aetna Enhanced** — did the agent pick it, or did the
+margin note match the wrong Aetna plan?
+
+**5. n8n testing gotchas learned Oct 8:** the OneDrive trigger only emits files it hasn't seen — to re-test, upload
+under a new name with the workflow **on**, or pin `[{ "id": "<file id>" }]` on the trigger (find the id with a
+temporary OneDrive *Folder → Get Children* node on Incoming). Bedrock HTTP node needs header **`Accept:
+application/json`** (n8n's default Accept list is rejected) and the credential value **`Bearer ABSK…`** (AWS shows the
+key as `AWS_BEARER_TOKEN=ABSK…` — drop the label).
 
 ### ⭐ October 7, 2026 — 2027 plan year LIVE · new drug-name reader · county switch (read this first)
 *Authoritative as of Oct 7, 2026. Where anything further down (including the Oct 2 box below) disagrees, this box wins.
@@ -54,12 +119,12 @@ Go-live blockers and known gaps: `FUTURE_IMPROVEMENTS.md`.*
   strengths (Janumet 50/1000), misspellings (only when the corrected drug comes in the written strength; always
   flagged "check spelling"). Scored on ~345 written-out drug names (`tests/data/drug_cases*.psv`), 100%;
   readings must also appear on a CMS drug list. RxNav stays as the backup.
-- **AI name clean-up** (`normalize_drugs`): model `claude-sonnet-5-5` (env `NORMALIZE_MODEL`), temperature 0, also
+- **AI name clean-up** (`normalize_drugs`) *(Oct 8: now AWS Bedrock, Sonnet 4.6 — see the ⭐ October 8 box)*: model `claude-sonnet-5-5` (env `NORMALIZE_MODEL`), temperature 0, also
   returns the ingredient (how retired brands like Zofran/Amaryl are read); reads the reply's text block wherever it is.
 - **New endpoint `POST /check-drugs`** (Roundabout Details tab: one-click spelling fixes, "did you mean"); `/health`
   shows the live data year.
 
-**n8n (Oct 7):** `Extract with Claude (6)` model → `claude-sonnet-5-5`; `Parse JSON (7)` rewritten to read the text
+**n8n (Oct 7):** *(Oct 8: replaced by Bedrock nodes 6a/6b — see the ⭐ October 8 box)* `Extract with Claude (6)` model → `claude-sonnet-5-5`; `Parse JSON (7)` rewritten to read the text
 block wherever it is (newer models can send a non-text block first) — code in the reference section below.
 
 **Roundabout (Claude Code), Phases 26–33:** 26 delete sheets (tombstones) · 27 click a picked plan to remove it ·
@@ -181,7 +246,7 @@ Confirm folder-based naming + resume twin, remove dead dedup nodes, main-path Fa
 > Quick capture so this lives outside a chat. The plan for getting the **internal** drug-run engine sharpened and AEP-ready (PY2027, ~Oct 15 – Dec 7, 2026). Naming note: this is really a "client information" engine now, but we're keeping the SOA name since we're far enough in.
 
 ### ═══ OCTOBER 2026 UPDATE ═══
-*Last updated: Oct 7, 2026. The September section below is preserved as history; this section is the live picture (newest entries first).*
+*Last updated: Oct 8, 2026 (Oct 8 detail: the ⭐ October 8 box at the top). The September section below is preserved as history; this section is the live picture (newest entries first).*
 
 #### Oct 3, 2026 — Report clarity + ZIP safety (engine)
 - `20fc83d` **one shared deductible + the yearly Part D out-of-pocket cap** across all drugs (each drug used to pay its own deductible and nothing stopped at the cap: Harold Lindgren's test showed $2,928 in a $2,100-cap year). Month-by-month walk in `app/drug_year.py`.
@@ -695,6 +760,28 @@ Watch → Download → Extract with Claude → Parse JSON → **Route by Confide
 
 ## Extract with Claude — n8n Anthropic Node
 
+> **Replaced Oct 8, 2026 — Claude through AWS Bedrock (BAA).** The live path is now
+> `Download PDF → Build Bedrock Body (6a) → Extract with Claude Bedrock (6b) → Parse JSON (7)`. The Anthropic node below
+> is kept on the canvas, disconnected, as a fallback (delete after a few days of use). The prompt is unchanged (v3) —
+> it now lives as the `PROMPT` constant inside node 6a.
+>
+> **Build Bedrock Body (6a)** — Code node, Run Once for All Items, JavaScript. Reads the file from Download PDF's binary
+> (`data`), base64s it, sends a PDF as a `document` block and a PNG/JPG/GIF/WEBP screenshot as an `image` block (any
+> other type stops with a plain message), adds the prompt, and outputs `{ body: JSON.stringify(...), file_name,
+> file_type, file_kb }`. Body: `anthropic_version: "bedrock-2023-05-31"`, `max_tokens: 8000`, `temperature: 0`.
+> Source of truth for the code: **`n8n_nodes/build_bedrock_body_6a.js`** in this repo (paste it whole; edit the prompt there first).
+>
+> **Extract with Claude Bedrock (6b)** — HTTP Request: `POST
+> https://bedrock-runtime.us-east-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/invoke` · Authentication: Generic
+> Credential Type → Header Auth → **AWS Bedrock API key (n8n-bedrock)** (Name `Authorization`, Value `Bearer ABSK…`) ·
+> Send Headers: `Accept: application/json` (required — n8n's default Accept is rejected: "The provided Accept Type is
+> invalid") · Send Body: JSON, Using JSON, `{{ $json.body }}` · Timeout 120000. Bedrock returns the same Messages shape
+> (`content[]`, `stop_reason`) as Anthropic, so **Parse JSON (7) is unchanged**.
+>
+> **Why an API key, not n8n's AWS credential:** n8n 2.19.5's AWS signing for HTTP Request has a bedrock-runtime bug
+> (fixed ~2.26). The Bedrock API key avoids signing entirely. Long term: upgrade n8n and switch to the `n8n-bedrock`
+> access key with AWS signing, or keep the key and rotate it — decide before real clients (FUTURE_IMPROVEMENTS §1).
+
 **Node:** Extract with Claude · **Type:** Anthropic (LangChain) — Analyze Document · **Resource:** Document
 **Model:** `claude-sonnet-5-5` (since Oct 7, 2026; was `claude-sonnet-4-6`) · **Input:** Binary (from Download PDF) · **Simplify:** off · **Credential:** Anthropic API
 
@@ -989,8 +1076,10 @@ medicare_drug_engine/
 **Environment Variables (Railway):**
 | Variable | Purpose |
 |----------|---------|
-| `ANTHROPIC_API_KEY` | Claude API key (drug-name clean-up) |
-| `NORMALIZE_MODEL` | *(optional)* model for the clean-up; default `claude-sonnet-5-5` |
+| `AWS_REGION` | `us-east-2` — Bedrock region for the drug-name clean-up (Oct 8) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | the **Roundabout-engine-bedrock** IAM user (Bedrock invoke only) |
+| `BEDROCK_MODEL_ID` | `us.anthropic.claude-sonnet-4-6` (default if unset) |
+| ~~`ANTHROPIC_API_KEY`~~ / ~~`NORMALIZE_MODEL`~~ | no longer used since Oct 8 (the engine never calls api.anthropic.com) — delete from Railway |
 | `COUNTY_ADDRESS_LOOKUP` | *(optional)* `off` disables the Census street-address → county lookup |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT_URL` | Cloudflare R2 credentials |
 | `R2_BUCKET_NAME` | `medicare-db` |
@@ -1134,7 +1223,7 @@ Two types of warning banners appear at the top of the report when needed:
 Drug names arrive messy — misspellings, brand vs generic, nicknames, the device ("Lantus SoloStar"), release forms
 ("Metformin ER"), abbreviations ("HCTZ"). Each drug goes through:
 
-1. **AI clean-up (`normalize_drugs`, `claude-sonnet-5-5`)** — fixes spelling, keeps a written brand, drops device
+1. **AI clean-up (`normalize_drugs`, Claude Sonnet 4.6 on AWS Bedrock since Oct 8)** — fixes spelling, keeps a written brand, drops device
    words, and also returns the plain **ingredient** (so retired brands like Zofran → ondansetron still work) and the
    strength exactly as written. If the AI is unreachable, the names go on unchanged.
 2. **Local drug-name reader (`app/drug_resolver.py`)** — matches the name against a local copy of RxNorm (the
@@ -1422,6 +1511,7 @@ A drug showing green regardless of its tier number means the copay is $0 — the
 | August 29, 2026 | Restored the truncated Extract with Claude prompt in the live node; verified end-to-end on a real handwritten SOA (custom_plans + flags + providers) — see below |
 | September 19, 2026 | Engine health check (Goal A — all green) + agent-report visual refresh (Goal B pt.1): slate palette, best-plan highlight removed, two-up pharmacy grid, section spacing; plus repo hygiene — see below |
 | September 21, 2026 | Flags → PDF banner plumbing closed — **Goal B fully done**: n8n **Build Railway Body** now sends the `flags` array; the engine reads it and merges into the ⚠ Drug Verification banner. Proven engine-side (fake-flags POST) then end-to-end on a real flagged sheet — see below |
+| October 8, 2026 | **Claude moved to AWS Bedrock** (engine `normalize_drugs` + n8n nodes 6a/6b, Sonnet 4.6; Sonnet 5.5 awaiting AWS account access); `POST /compare-plans` + pharmacy fast path; Medica 2027 lists; **only official numbers** shown as fact (`app/availability.py`); guesses never priced; client-sheet stars gated; Roundabout Phases 34–42 (client records, Plans page, compare) — see the ⭐ October 8 box |
 | October 7, 2026 | **2027 plan year switched live** (R2 backups `backup_2026/`); three fake-client tests (Margaret Ellison, Dorothy Halvorsen, Harold Brekke) found and fixed: CMS "not applicable" pharmacy columns read as $0, device names, brands gone generic, unpriced generics shown as $0, HCTZ combo rows; **local drug-name reader** scored on ~345 names; name clean-up on `claude-sonnet-5-5`; n8n Parse JSON (7) rewritten; `POST /check-drugs`; `/health` data year; docs rewritten (README_REFRESH, FUTURE_IMPROVEMENTS, this doc) — see roadmap Oct 7 |
 | October 3–6, 2026 | Shared deductible + out-of-pocket cap; deductible-met / cap months on the report; **2027 data built**: carrier drug-list PDF reader + offline RxNorm matcher (13 lists), `build_2027_db.py`, 2027 PBP benefits, 2026-price estimates, DB-driven plan year (`meta`), mail-order + negotiated-price cost fixes, counties for split ZIPs, `providers_2027` (Medica 2027 directory, health-system map, agency confirmations), folder tidy; Roundabout Phases 28–33 — see roadmap Oct 3–6 |
 | October 2, 2026 (evening) | Messy fake sheet (Harold Lindgren) test; engine `a944eeb` bolder report section bands + `21dd8d1` readable reader notes / illegible doctors never "In network" / no-strength callout / no contract number in plan names; n8n extraction prompt v3 (never guess, `crossed_out`, `field_notes`) + Build Review JSON v3 (flagged_fields from notes + deterministic checks); app Phases 22–25 specified (pinned selection, blue Edit + Save confirmation, Plans tab room, Details cards with must-fix vs check + remove drug) — see the evening block in the October roadmap update |
