@@ -2858,66 +2858,77 @@ def _parse_selected_plans(data):
     return sel
 
 
+def plan_list_for_zip(conn, zip_code, address=None, city=None, state=None):
+    """(choice, plans) - every plan a client in this ZIP could choose, across all the ZIP's counties,
+    as the agent plan picker lists them. Shared by /plans-for-zip and /compare-plans (2026-10-08) so
+    the two can never list different plans. `choice` is county_choice(); plans is [] when no county."""
+    from app.client_comparison import carrier_display, official_plan_name, display_plan_name
+
+    choice = county_choice(conn, zip_code, address, city, state)
+    county = choice["county"]
+    if not county:
+        return choice, []
+    all_counties = [c["county"] for c in choice["counties"]] or [county]
+    rows, where = {}, {}
+    for cty in all_counties:
+        ma_rows, pd_rows = eligible_plan_rows(conn, cty)
+        for r, ptype in [(r, "MA") for r in ma_rows] + [(r, "PD") for r in pd_rows]:
+            k = (r[0], str(r[1]).zfill(3))
+            rows.setdefault(k, (r, ptype))
+            where.setdefault(k, []).append(cty)
+
+    def entry(r, ptype):
+        cid, pid = r[0], str(r[1]).zfill(3)
+        carrier = carrier_display(cid, r[3])
+        official = (r[2] or official_plan_name(cid, pid) or "").strip()
+        name = display_plan_name(official, f"{cid}-{pid}")
+        premium, deductible = plan_premium_deductible(conn, cid, pid, r)
+        cs = where[(cid, pid)]
+        return {"contract_id": cid, "plan_id": pid, "plan_type": ptype,
+                "carrier": carrier, "plan_name": name,
+                "display_name": f"{carrier} \u2014 {name}",
+                # Agent-facing detail for the picker (2026-10-02). Same source as the reports.
+                "plan_number": f"{cid}-{pid}",
+                "official_name": official or name,
+                "premium_monthly": round(premium, 2),
+                "drug_deductible": round(deductible, 2),
+                # ZIPs that cross county lines (2026-10-06): where this plan is sold, and whether
+                # that includes the county we assumed for the client.
+                "counties": cs if len(all_counties) > 1 and ptype != "PD" else [],
+                "in_county": county in cs,
+                # Carrier hasn't published this year's drug list yet (2027 database)
+                "drug_list_loaded": bool(r[7]),
+                "drug_list_note": "" if r[7] else "Drug list not published yet - drug costs can't be shown"}
+
+    def key(p):
+        return (not p["in_county"], p["carrier"].lower(), p["plan_name"].lower())
+    entries = [entry(r, t) for r, t in rows.values()]
+    ma = sorted((e for e in entries if e["plan_type"] == "MA"), key=key)
+    pd = sorted((e for e in entries if e["plan_type"] == "PD"), key=key)
+    return choice, ma + pd
+
+
 @app.route("/plans-for-zip", methods=["GET"])
 def plans_for_zip_route():
     """Every plan a client in this ZIP could choose (agent plan picker, 2026-10-02).
     Same eligibility rule as the reports (eligible_plan_rows). Medicare Advantage first, then
     standalone Part D; each sorted by carrier, then plan name. Contains no client data."""
-    from app.client_comparison import carrier_display, official_plan_name, display_plan_name
-
     zip_code = (request.args.get("zip") or "").strip()
     if len(zip_code) != 5 or not zip_code.isdigit():
         return jsonify({"error": "Provide a 5-digit ZIP, e.g. /plans-for-zip?zip=55441"}), 400
     conn = get_db()
     try:
-        choice = county_choice(conn, zip_code, request.args.get("address"), request.args.get("city"),
-                               request.args.get("state"))
+        choice, plans = plan_list_for_zip(conn, zip_code, request.args.get("address"),
+                                          request.args.get("city"), request.args.get("state"))
         county = choice["county"]
         if not county:
             return jsonify({"error": f"No county found for ZIP {zip_code}"}), 404
-        all_counties = [c["county"] for c in choice["counties"]] or [county]
-        rows, where = {}, {}
-        for cty in all_counties:
-            ma_rows, pd_rows = eligible_plan_rows(conn, cty)
-            for r, ptype in [(r, "MA") for r in ma_rows] + [(r, "PD") for r in pd_rows]:
-                k = (r[0], str(r[1]).zfill(3))
-                rows.setdefault(k, (r, ptype))
-                where.setdefault(k, []).append(cty)
-
-        def entry(r, ptype):
-            cid, pid = r[0], str(r[1]).zfill(3)
-            carrier = carrier_display(cid, r[3])
-            official = (r[2] or official_plan_name(cid, pid) or "").strip()
-            name = display_plan_name(official, f"{cid}-{pid}")
-            premium, deductible = plan_premium_deductible(conn, cid, pid, r)
-            cs = where[(cid, pid)]
-            return {"contract_id": cid, "plan_id": pid, "plan_type": ptype,
-                    "carrier": carrier, "plan_name": name,
-                    "display_name": f"{carrier} \u2014 {name}",
-                    # Agent-facing detail for the picker (2026-10-02). Same source as the reports.
-                    "plan_number": f"{cid}-{pid}",
-                    "official_name": official or name,
-                    "premium_monthly": round(premium, 2),
-                    "drug_deductible": round(deductible, 2),
-                    # ZIPs that cross county lines (2026-10-06): where this plan is sold, and whether
-                    # that includes the county we assumed for the client.
-                    "counties": cs if len(all_counties) > 1 and ptype != "PD" else [],
-                    "in_county": county in cs,
-                    # Carrier hasn't published this year's drug list yet (2027 database)
-                    "drug_list_loaded": bool(r[7]),
-                    "drug_list_note": "" if r[7] else "Drug list not published yet - drug costs can't be shown"}
-
-        def key(p):
-            return (not p["in_county"], p["carrier"].lower(), p["plan_name"].lower())
-        entries = [entry(r, t) for r, t in rows.values()]
-        ma = sorted((e for e in entries if e["plan_type"] == "MA"), key=key)
-        pd = sorted((e for e in entries if e["plan_type"] == "PD"), key=key)
     finally:
         conn.close()
     return jsonify({"zip_code": zip_code, "county": county, "county_exact": bool(choice["exact"]),
                     "county_method": choice["method"], "counties": choice["counties"],
                     "county_note": choice["note"],
-                    "data_vintage": data_vintage(), "plans": ma + pd})
+                    "data_vintage": data_vintage(), "plans": plans})
 
 
 def _require_zip(data):
@@ -2929,6 +2940,25 @@ def _require_zip(data):
     if m:
         return m.group(1), None
     return None, (jsonify({"error": "A 5-digit ZIP code is required to look up plans and pharmacies."}), 400)
+
+
+@app.route("/compare-plans", methods=["POST"])
+def compare_plans_route():
+    """EVERY plan in the client's ZIP, priced for their drugs (Roundabout Plans page, 2026-10-08).
+    Body: {"zip_code", "drugs": [{"name", "dosage"}], optional "client_address"/"client_city"/
+    "client_state", "providers": [...], "plan_year"}. Same numbers as the reports - see
+    app/compare_plans.py. Agent research tool; test data only until the BAA host."""
+    from app import compare_plans
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        payload, status = compare_plans.compare(data)
+    except compare_plans.BadRequest as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        print(f"compare-plans failed: {type(exc).__name__}")   # no message: it could hold client details
+        return jsonify({"error": "Plan comparison failed on the server. Try again; if it keeps failing, "
+                                 "tell Jordon."}), 500
+    return jsonify(payload), status
 
 
 @app.route("/check-drugs", methods=["POST"])
