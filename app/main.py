@@ -1340,6 +1340,20 @@ Reply with ONLY the JSON array, no other text:
             it.setdefault("flag", "")
             it.setdefault("ingredient", "")
             it.setdefault("brand", "")
+            # A guess is not a drug (2026-10-08, Sonnet 4.6 on Bedrock: "water pill" -> furosemide at 0.4).
+            # Below 0.5 the line stays as written so it shows as "couldn't identify" instead of being
+            # priced as a drug the client may not take; the guess is kept in the flag for the agent.
+            try:
+                conf = float(it.get("confidence", 1.0))
+            except (TypeError, ValueError):
+                conf = 0.0
+            if conf < 0.5:
+                guess = (it.get("normalized") or "").strip()
+                written = (d.get("name") or "").strip()
+                if guess and guess.lower() != written.lower():
+                    note = f"possibly {guess}"
+                    it["flag"] = f"{it['flag']} ({note})".strip() if it.get("flag") else note
+                it["normalized"], it["ingredient"], it["brand"] = written, "", ""
         return items
     except Exception as exc:
         print(f"normalize_drugs: Claude (Bedrock) unavailable or unreadable reply ({_error_label(exc)}); using names as written")

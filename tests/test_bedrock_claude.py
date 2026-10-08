@@ -105,3 +105,20 @@ def test_engine_code_has_no_anthropic_direct_call():
     src = open(M.__file__, encoding="utf-8").read()
     assert "api.anthropic.com/v1" not in src
     assert "x-api-key" not in src
+
+
+def test_low_confidence_guess_is_not_priced_as_a_drug(aws):
+    guess = [{"original": "water pill", "normalized": "furosemide", "ingredient": "furosemide", "brand": "",
+              "dosage": "", "confidence": 0.4, "flag": "Generic term; could be several diuretics"}]
+    aws([ok(guess)])
+    out = M.normalize_drugs([{"name": "water pill", "dosage": ""}])[0]
+    assert out["normalized"] == "water pill" and out["ingredient"] == "" and out["brand"] == ""
+    assert "possibly furosemide" in out["flag"] and "several diuretics" in out["flag"]
+
+
+def test_confident_answer_is_kept(aws):
+    sure = [{"original": "metforman", "normalized": "metformin", "ingredient": "metformin", "brand": "",
+             "dosage": "500 mg", "confidence": 0.97, "flag": "Misspelling of metformin"}]
+    aws([ok(sure)])
+    out = M.normalize_drugs([{"name": "metforman", "dosage": "500"}])[0]
+    assert out["normalized"] == "metformin" and out["ingredient"] == "metformin"
