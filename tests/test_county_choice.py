@@ -101,9 +101,12 @@ def test_agent_can_pick_a_plan_from_the_other_county(use27):
 
 
 def test_plans_without_a_drug_list_still_show_marked(use27):
+    # 2026-10-08: Medica's 2027 lists are loaded now; Humana's drug-only plans (S5884) are the ones still
+    # unpublished, so they carry this check (same rule, different example).
     j = M.app.test_client().get("/plans-for-zip?zip=55447").get_json()
-    medica = [p for p in j["plans"] if p["contract_id"] == "H8889"]
-    assert medica and all(p["drug_list_loaded"] is False for p in medica)
+    humana = [p for p in j["plans"] if p["contract_id"] == "S5884"]
+    assert humana and all(p["drug_list_loaded"] is False for p in humana)
+    assert all(p["drug_list_loaded"] for p in j["plans"] if p["contract_id"] == "H8889")
     assert all(p["drug_list_loaded"] for p in j["plans"] if p["contract_id"] == "H3219")
 
 
@@ -114,19 +117,19 @@ def test_report_for_a_plan_without_a_drug_list_says_so(use27, monkeypatch):
                                                           "dosage": "10mg", "confidence": 1.0}])
     monkeypatch.setattr(M, "lookup_rxcuis", lambda n, d: [rx])
     plans = [{"contract_id": "H3219", "plan_id": "001", "carrier": "Aetna Signature", "type": "MA"},
-             {"contract_id": "H8889", "plan_id": "022", "carrier": "Medica Essential ($20)", "type": "MA"}]
+             {"contract_id": "S5884", "plan_id": "145", "carrier": "Humana Basic Rx", "type": "PD"}]   # 2026-10-08: was Medica (now loaded)
     out = M.compute_drug_costs([{"name": "testgeneric", "dosage": "10mg"}], "55447", "01/01/2027", plans_override=plans)
-    cell = out["drug_detail"][0]["plans"]["Medica Essential ($20)"]
+    cell = out["drug_detail"][0]["plans"]["Humana Basic Rx"]
     assert cell["drug_list_missing"] is True and cell.get("covered") is not False
-    s = out["plan_summaries"]["Medica Essential ($20)"]
+    s = out["plan_summaries"]["Humana Basic Rx"]
     assert s["drug_list_missing"] is True and s["total_drug_cost"] is None
     assert out["plan_summaries"]["Aetna Signature"]["total_drug_cost"] is not None
     pdf = M.build_pdf("T", "01/01/1950", "55447", "01/01/2027", out["plan_summaries"], out["drug_detail"],
                       out["months_remaining"], plan_year=2027, county="Hennepin")
     assert pdf
     from app import client_comparison as CC
-    sel = CC.agent_selection(out["plan_summaries"], ["Aetna Signature", "Medica Essential ($20)"])
+    sel = CC.agent_selection(out["plan_summaries"], ["Aetna Signature", "Humana Basic Rx"])
     payload = CC.assemble_renderer_payload(sel, out["plan_summaries"], out["drug_detail"], {}, {}, 2027)
-    medica = next(p for p in payload["plans"] if "Essential" in (p.get("plan_name") or ""))
-    assert "drug list" in medica["est_annual_drug_cost"].lower()
-    assert medica["rx"]["not_covered"] == []          # never "not covered" for a list we don't have
+    humana = next(p for p in payload["plans"] if "Basic Rx" in (p.get("plan_name") or ""))
+    assert "drug list" in humana["est_annual_drug_cost"].lower()
+    assert humana["rx"]["not_covered"] == []          # never "not covered" for a list we don't have

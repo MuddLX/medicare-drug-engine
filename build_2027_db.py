@@ -42,7 +42,12 @@ FORMULARY_2027 = {
     ("S4802", "089"): "00027163", ("S4802", "158"): "00027165",
     ("S5715", "043"): "00027061", ("S5743", "001"): "00027147",
     ("S5921", "370"): "00027001", ("S5921", "406"): "00027000",
-    # Medica (H8889, H2450) and Humana (S5884): not published yet
+    # Medica (2026-10-08, PDFs from Jill, dated 08/28/2026): Medica Advantage (PPO) MN/NE/ND/SD + Dual = 00027425 v6;
+    # Medica Prime Solution (Cost) Part D + group plans = 00027424 v7.
+    ("H8889", "002"): "00027425", ("H8889", "019"): "00027425", ("H8889", "020"): "00027425", ("H8889", "021"): "00027425",
+    ("H8889", "022"): "00027425", ("H8889", "023"): "00027425", ("H8889", "024"): "00027425",
+    ("H2450", "007"): "00027424", ("H2450", "016"): "00027424", ("H2450", "049"): "00027424",
+    # Humana (S5884): not published yet
 }
 
 # Short labels agents see in the picker (plan names are long). Order matters: first match wins.
@@ -535,7 +540,7 @@ def step_carrier_formularies(conn, zip_2026):
              "00027044": "bcbs_27044", "00027045": "bcbs_27045", "00027233": "align", "00027354": "quartz",
              "00027163": "wellcare_classic_27163_2027", "00027165": "wellcare_valuescript_27165_2027",
              "00027061": "healthspring", "00027147": "medicareblue_27147", "00027001": "aarp_saver_27001",
-             "00027000": "aarp_preferred_27000"}
+             "00027000": "aarp_preferred_27000", "00027425": "medica_27425", "00027424": "medica_27424"}
     rx_ndc = defaultdict(set)
     for idx, p in _rows(zip_2026, "basic drugs formulary"):
         rx_ndc[_get(idx, p, "RXCUI")].add(_get(idx, p, "NDC"))

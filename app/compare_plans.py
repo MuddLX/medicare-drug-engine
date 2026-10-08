@@ -190,9 +190,11 @@ def compare(data):
                        else dict(_NO_FLAGS)),
                     "price_unknown": bool(cell.get("price_unknown")),
                     "insulin_cap": bool(cell.get("insulin_cap")),
-                    "est_year": _money(cell.get("annual_total")) if status == "covered" else None,
+                    # No price on file -> the cost is UNKNOWN: blank, never $0 (same rule as the reports' warning).
+                    "est_year": _money(cell.get("annual_total"))
+                                if status == "covered" and not cell.get("price_unknown") else None,
                     "monthly": [_money(x["cost"]) for x in cell.get("monthly_costs") or []]
-                               if status == "covered" else [],
+                               if status == "covered" and not cell.get("price_unknown") else [],
                 })
             out_plans.append({
                 **{f: p[f] for f in ("contract_id", "plan_id", "plan_number", "carrier", "plan_name",

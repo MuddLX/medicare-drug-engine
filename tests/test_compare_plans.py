@@ -156,3 +156,30 @@ def test_flat_drug_strings_and_cost_period():
     from datetime import date
     assert CP.cost_start(2027, today=date(2026, 10, 8)) == "01/01/2027"
     assert CP.cost_start(2026, today=date(2026, 10, 8)) == "10/08/2026"
+
+
+@needs27
+def test_a_drug_with_no_price_on_file_is_blank_never_zero(engine):
+    """2026-10-08 (Medica check): generic sitagliptin / rivaroxaban have no 2026 price yet. Their cell
+    must have no yearly cost and no monthly series - not $0 - and the plan counts it as price_unknown."""
+    client = engine(DB27)
+    _s, j = _post(client, {"zip_code": "55443", "drugs": [{"name": "Januvia", "dosage": "100 mg"},
+                                                          {"name": "Xarelto", "dosage": "20 mg"}]})
+    unknown = [(p, c) for p in j["plans"] for c in p["drugs"] if c["price_unknown"]]
+    if not unknown:
+        pytest.skip("every drug has a price in the current database")
+    for p, c in unknown:
+        assert c["est_year"] is None and c["monthly"] == [], (p["display_name"], c["drug"])
+        assert p["coverage"]["price_unknown"] >= 1
+
+
+@needs27
+def test_medica_2027_lists_loaded_and_priced(engine):
+    """2026-10-08: Medica's 2027 lists (00027425 Medica Advantage, 00027424 Prime Solution Cost) are loaded."""
+    client = engine(DB27)
+    _s, j = _post(client, {"zip_code": "55443", "drugs": [{"name": "Atorvastatin", "dosage": "20 mg"},
+                                                          {"name": "Eliquis", "dosage": "5 mg"}]})
+    medica = [p for p in j["plans"] if p["contract_id"] == "H8889"]
+    assert medica and all(p["drug_list_loaded"] and p["priced"] for p in medica)
+    atorva = {p["plan_number"]: p["drugs"][0] for p in medica}
+    assert all(c["status"] == "covered" and c["tier"] == 6 for c in atorva.values())   # PDF: tier 6
