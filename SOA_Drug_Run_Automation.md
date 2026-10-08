@@ -1,13 +1,77 @@
 # SOA Drug Run Automation — Complete Project Documentation
-*Last updated: October 2, 2026*
+*Last updated: October 7, 2026*
 
-> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.**
+> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
 
 ---
 
-## ═══ CURRENT ARCHITECTURE (September 2026) ═══
+## ═══ CURRENT ARCHITECTURE (October 2026) ═══
 
 *Live, authoritative description. Folds in the former Phase 8 review-loop and Human-Readable Filenames build docs.*
+
+### ⭐ October 7, 2026 — 2027 plan year LIVE · new drug-name reader · county switch (read this first)
+*Authoritative as of Oct 7, 2026. Where anything further down (including the Oct 2 box below) disagrees, this box wins.
+Day-by-day detail: roadmap → OCTOBER 2026 UPDATE → Oct 3–7 entries. Data routine: `README_REFRESH.md`.
+Go-live blockers and known gaps: `FUTURE_IMPROVEMENTS.md`.*
+
+**Live state (end of Oct 7)**
+- Railway serves **plan year 2027**. R2 `medicare_mn.db` = local `medicare_mn_2027.db` (46 plans: Medicare Advantage,
+  Cost, Part D), R2 `pbp_benefits.db` = `pbp_benefits_2027.db` (37 MA plans), plus `providers_2027.db`.
+  The 2026 files are kept in R2 under `backup_2026/` and locally as `medicare_mn.db` / `pbp_benefits.db`.
+  `GET /health` → `"data_year": 2027`.
+- Report label: "Data: CMS 2027 plan files (Sept 2026) + carrier drug lists · Drug prices: CMS Jul 2026 file estimate".
+- **Test data only** — Railway is not BAA-covered and the engine's endpoints have no access key yet.
+
+**Where each 2027 piece comes from**
+| Piece | Source today | Replaced by |
+|---|---|---|
+| Plans, premiums, deductibles, service areas | CMS 2027 Landscape (Sept 2026) | — |
+| Tier costs (copay / coinsurance) | CMS 2027 PBP | Oct 15 CMS monthly file |
+| Drug lists | 13 carrier 2027 lists (PDF/search tool) read and matched to RxNorm offline: UHC MN, AARP Rx Saver/Preferred, Aetna, Blue Cross (2), MedicareBlue Rx, HealthPartners, Align, Quartz, HealthSpring, Wellcare (2). Medica + Humana not published → "Drug list not out yet" | Oct 15 CMS monthly file |
+| Drug prices | **Estimates ("option B"):** the same plan's 2026 price for that drug (pooled by RxCUI), else an analog 2026 plan, else the Minnesota median | Jan 20, 2027 quarterly file |
+| Pharmacy networks | carried from 2026 (`network_estimated`) | Oct 15 CMS file |
+| Client-sheet benefits | CMS 2027 PBP | — |
+| Star ratings | **2026 ratings carried** | 2027 ratings (CMS, ~Oct 9–10) |
+| Medicare-negotiated prices | 2027 list (Ozempic/Rybelsus/Wegovy $274, Trelegy $175, Janumet $80, Tradjenta $78 …) + 2026's ten, in the DB | — |
+| Part D cap / standard deductible | $2,400 / $700 (from the DB `meta` table) | — |
+| Doctors | `providers_2027.db`: agency confirmations > Medica 2027 directory (doctor match) > health-system level (UHC 2027 sheet column; Medica from its directory) > "Not checked" | weekly agency lists |
+
+**Engine (all committed + live; 808 offline tests)**
+- **Year-dynamic:** the engine reads data year, cap, labels, "prices are estimates" and negotiated prices from the
+  database (`app/data_meta.py`). A switch = upload a different database; no code change.
+- **ZIPs that cross county lines:** county from the street address (Census geocoder; `COUNTY_ADDRESS_LOOKUP=off`
+  disables) → else the city (Census place-by-county) → else the county with most of the ZIP. `/plans-for-zip`
+  returns every county's plans with `counties`, `county_method`, `county_note`; the report's county = the county of
+  the agent's picks, and the report says how it was chosen.
+- Plans whose carrier hasn't published a 2027 drug list still show, marked "Drug list not out yet" (no cost).
+- **Cost fixes:** mail order reads the 90-day row; negotiated drugs use the plan's own tier cost-sharing (was a flat
+  25%); CMS "not applicable" pharmacy columns no longer price brand drugs at $0 (hit 49 of 65 plans in the 2026
+  data); on a tier, a package with a price beats one without; a drug with **no price on file** is flagged
+  "no price on file — verify", never shown as $0.
+- **Drug names (new reader, `app/drug_resolver.py`):** offline against a local RxNorm copy. Brand → that brand's
+  products + generic twins ("as generic" when a plan lists only the generic, e.g. Januvia → sitagliptin);
+  device names (Ellipta, SoloStar, KwikPen, HFA…), ER/XL/DR, abbreviations (HCTZ, KCl, ASA…), combination
+  strengths (Janumet 50/1000), misspellings (only when the corrected drug comes in the written strength; always
+  flagged "check spelling"). Scored on ~345 written-out drug names (`tests/data/drug_cases*.psv`), 100%;
+  readings must also appear on a CMS drug list. RxNav stays as the backup.
+- **AI name clean-up** (`normalize_drugs`): model `claude-sonnet-5-5` (env `NORMALIZE_MODEL`), temperature 0, also
+  returns the ingredient (how retired brands like Zofran/Amaryl are read); reads the reply's text block wherever it is.
+- **New endpoint `POST /check-drugs`** (Roundabout Details tab: one-click spelling fixes, "did you mean"); `/health`
+  shows the live data year.
+
+**n8n (Oct 7):** `Extract with Claude (6)` model → `claude-sonnet-5-5`; `Parse JSON (7)` rewritten to read the text
+block wherever it is (newer models can send a non-text block first) — code in the reference section below.
+
+**Roundabout (Claude Code), Phases 26–33:** 26 delete sheets (tombstones) · 27 click a picked plan to remove it ·
+28 paste a screenshot or email text as a sheet; date of birth optional · 29 Details polish; "To Do" renamed
+"In Progress" · 30 plans grouped by county + "Drug list not out yet" pill; sends address/city to the engine ·
+31 paste dialog shows/edits the full text, full-size image view · 32 county switch, Medicare Advantage / Part D
+tabs, compact rows · 33 must-fix banner with "Go to next" (F8), drug-name check with one-click fixes,
+"All counties" / "All" views, one-county-per-report safeguard, clearer toggles. *(31–33 reports still to be
+reviewed by Claude before the release build.)*
+
+**Before any real client:** `FUTURE_IMPROVEMENTS.md` §1 — BAA host + Bedrock, engine access key, 2027 stars,
+Oct 15 CMS lists checked against Medicare.gov, 2027 pharmacy names, release build.
 
 ### ⭐ October 2026 — Agent-chosen plans (supersedes system plan ranking)
 *Decided Oct 1, 2026 (Jordon + Jill). Engine side built + verified live Oct 2. App (Roundabout Phase 12) and n8n changes in progress. Where anything below this box describes the system picking plans, the high-confidence path generating reports automatically, or the resume workflow, this box wins.*
@@ -117,7 +181,77 @@ Confirm folder-based naming + resume twin, remove dead dedup nodes, main-path Fa
 > Quick capture so this lives outside a chat. The plan for getting the **internal** drug-run engine sharpened and AEP-ready (PY2027, ~Oct 15 – Dec 7, 2026). Naming note: this is really a "client information" engine now, but we're keeping the SOA name since we're far enough in.
 
 ### ═══ OCTOBER 2026 UPDATE ═══
-*Last updated: Oct 2, 2026. The September section below is preserved as history; this section is the live picture.*
+*Last updated: Oct 7, 2026. The September section below is preserved as history; this section is the live picture (newest entries first).*
+
+#### Oct 3, 2026 — Report clarity + ZIP safety (engine)
+- `20fc83d` **one shared deductible + the yearly Part D out-of-pocket cap** across all drugs (each drug used to pay its own deductible and nothing stopped at the cap: Harold Lindgren's test showed $2,928 in a $2,100-cap year). Month-by-month walk in `app/drug_year.py`.
+- `aa8a744` ER/XL/XR/SR/CR/DR/LA/24HR drugs identified (RxNav approximate search) — since replaced by the local reader (Oct 7).
+- `30ddae0` Internal report: "Deductible met" month and "Drug cap reached" month (Lacey), yearly cost first.
+- `f5ccd0b` Report endpoints refuse a missing/bad ZIP (it used to fall back to 55441 silently).
+- Roundabout Phase 28: paste a screenshot / email text as a sheet; date of birth optional.
+
+#### Oct 3–6, 2026 — 2027 data built (engine, "option B")
+**Why:** CMS's 2027 drug lists come ~Oct 15 and 2027 prices only on ~Jan 20, 2027, but AEP starts Oct 15. Jordon
+chose to build 2027 now from the carriers' own lists + 2026 price estimates, labelled as estimates.
+- **Carrier drug lists → RxNorm** (`formulary_2027/`, commits `3a7d9c8` … `73bff12`): a PDF table reader
+  (footer noise, wrapped names, tier/limit columns, back indexes) and an **offline RxNorm matcher** (RxNorm
+  product/name list downloaded by Jordon, `download_rxnorm.py`). Validated against CMS's 2026 lists for the same
+  carriers: ~85% of drugs overlap and 97–98% of those sit on the same tier. 13 lists matched (85–92% of rows).
+- **`build_2027_db.py`** (`a8f2bee`, `a90389b`): steps `zip_county` (all counties + land share), `service_area`,
+  `plans` (labels, drug-list IDs, `drug_list_status`), `costs` (PBP tier costs; Defined Standard plans = deductible
+  then 25%), `meta`, `carrier_formularies`, `estimate_prices`, `cms <zip> [year]` (loads a CMS monthly or quarterly
+  file, refuses the wrong contract year, keeps carrier lists for plans CMS lacks), `place_county`.
+  Oct 15 routine rehearsed on the Sept 2026 file. **`build_pbp_db.py`** builds 2027 client-sheet benefits.
+- **Engine reads its year from the DB** (`a6df252`): `meta` table + `negotiated_prices` table; a DB without `meta`
+  behaves as 2026. Also fixed: **mail order** asked CMS for a 90-day row that doesn't exist (`05443a4`), and
+  **negotiated drugs** were forced to 25% instead of the plan's own tier cost-sharing.
+- **Counties** (`e8d5cc3`): 228 Minnesota ZIPs touch counties with different plans. Street address → city →
+  largest county; picker shows all counties' plans labelled; plans without a published drug list shown and marked.
+  Checked: Cannon Falls → Goodhue, Hampton → Dakota, Forest Lake → Washington, Bemidji → Beltrami.
+- **Doctors, 2027 only** (`2e31c97`, `779da66`, `46327a3`): Jordon: "I don't want any 2026 data." Medica 2027
+  directory read into `providers_2027.db` (25,043 rows); health-system map from the agency AEP sheet's UHC 2027
+  column (H2001-116/117/118) and from the Medica directory; `providers_2027/confirmations.csv` for the agency's
+  weekly lists. Statuses: In network / Likely in (system level) / Out of network (agency-confirmed only) / Not found
+  / Verify / Not checked. The six 2026 directory databases were retired (Jordon deleted the archived copies).
+- **Folder tidy** (`7623db0`): raw downloads in `source_data/`, retired scripts in `_archive/`, README folder map.
+- Roundabout Phases 29–30 (Details polish, "In Progress"; county grouping + drug-list pill).
+
+#### Oct 7, 2026 — 2027 switched live; three test clients; drug-name reader
+- **Switch:** 2026 files backed up to R2 `backup_2026/`, 2027 files uploaded under the live names, startup floor
+  lowered to 30 plans (`e62f82e` — 2027 has 46 and the old floor of 50 would have stopped Railway). First upload
+  raced the redeploy (engine still showed 2026); re-upload + push fixed it. `/health` now reports `data_year`.
+- **Test 1 — Margaret Ellison (55433):** UHC/Humana/SilverScript yearly drug cost = deductible only. Root cause:
+  CMS marks a pharmacy column a plan doesn't use as cost type 0 ("not applicable"); the engine read it as $0
+  (`7a7e2e9`). SilverScript's mail order was in CMS's standard-mail column, which we never loaded (patched into the
+  2026 DB; the 2027 loader keeps it).
+- **Test 2 — Dorothy Halvorsen (55025 Forest Lake, county from street address):** Trelegy Ellipta / Lantus SoloStar
+  "couldn't identify" (device names, `5d21eac`); Januvia "Not covered" everywhere although all plans cover generic
+  sitagliptin (`71e0cc5`); generic sitagliptin had no price and showed $0 (now "no price on file — verify").
+  Also found: 9 UHC/AARP HCTZ combination rows were matched to the wrong pill (HCTZ abbreviation) — fixed and the
+  2027 DB rebuilt.
+- **Drug-name reader** (`029ee94`): Jordon: "make sure we cover this 100% moving forward." Local RxNorm resolver
+  scored first on 220 names (tuning list), then on 125 names written afterwards (honest check: 88.8% → fixes →
+  100%), then on 1,832 real carrier-list rows (100% agreement; the disagreements were the old matcher's errors),
+  and every reading must appear on a CMS drug list (caught "omeprazole" being read as a rare plain tablet).
+  Name clean-up moved to `claude-sonnet-5-5` and returns the ingredient (retired brands).
+- **n8n Parse JSON (7)** failed after Jordon switched the extract node to Sonnet 5.5 (`undefined is not valid JSON`:
+  the reply's first block wasn't text). Node 7 rewritten; the engine had the same assumption (`09aba78`).
+- **Test 3 — Harold Brekke (55009 Cannon Falls, no street address):** ran end to end; county switch shows Goodhue
+  (from city) / Dakota. Jordon's notes → Roundabout Phase 33 + engine `POST /check-drugs` (`e2e4733`).
+- **Found:** the engine has **no access control** (go-live blocker). The CMS public data API (data.cms.gov) was
+  explored: it does not serve plan drug lists/prices as rows (same ZIP files we use); Medicare Plan Finder has no
+  public API. The NPI Registry API will be used for 2027 pharmacy names.
+- Docs brought up to date (this entry, `README_REFRESH.md` rewritten, `FUTURE_IMPROVEMENTS.md` rewritten).
+
+#### Remaining before AEP / real clients (as of Oct 7)
+1. ⬜ Review Claude Code's Phase 31–33 reports → release build.
+2. ⬜ 2027 Star Ratings when CMS posts them (README_REFRESH §5).
+3. ⬜ Oct 15 CMS monthly file → `cms` + `estimate_prices` → upload; compare 3–4 test clients with Medicare.gov.
+4. ⬜ 2027 pharmacy names (NPI Registry).
+5. ⬜ Engine access key (Roundabout + n8n) and the BAA host move + Bedrock — before any real client.
+6. ⬜ Weekly agency provider lists → `confirmations.csv`.
+7. ⬜ Jan 20, 2027: real 2027 prices (README_REFRESH §8).
+
 
 #### Oct 1, 2026 — Architecture change: agents choose the plans (meeting with Jill)
 Full design in the ⭐ October 2026 box at the top of Current Architecture. Jordon's decisions, in short:
@@ -214,7 +348,7 @@ Full design in the ⭐ October 2026 box at the top of Current Architecture. Jord
 - A crossed-out drug stays on the list but blocks Submit until the agent keeps or removes it.
 - Plan-picker and Details changes are layout-only; selection/ordering/saving logic untouched.
 
-#### Remaining before Saturday (in order)
+#### Remaining before Saturday (in order) — historical (Oct 2); current list: "Remaining before AEP / real clients (as of Oct 7)" above
 *Evening update (Oct 2):*
 - ✅ Phase 21 done (test-data reset + Help "contact Jordon"). Ruth / Gerald / Linda re-run through the new build — uploads, status changes and tab defaults all good.
 - ⬜ Push engine commits `a944eeb` + `21dd8d1` (`git push origin main`) → Railway redeploys.
@@ -562,9 +696,9 @@ Watch → Download → Extract with Claude → Parse JSON → **Route by Confide
 ## Extract with Claude — n8n Anthropic Node
 
 **Node:** Extract with Claude · **Type:** Anthropic (LangChain) — Analyze Document · **Resource:** Document
-**Model:** `claude-sonnet-4-6` · **Input:** Binary (from Download PDF) · **Simplify:** off · **Credential:** Anthropic API
+**Model:** `claude-sonnet-5-5` (since Oct 7, 2026; was `claude-sonnet-4-6`) · **Input:** Binary (from Download PDF) · **Simplify:** off · **Credential:** Anthropic API
 
-The downloaded PDF is passed as binary; the prompt below is the instruction. The node returns Claude's raw text, which the **Parse JSON** code node then parses.
+The downloaded PDF is passed as binary; the prompt below is the instruction. *(Oct 2026: the live prompt is v3 — Client Information Sheet wording, never-guess rules, `crossed_out`, `field_notes`; see the roadmap entry "Oct 2, 2026 (evening)". The block below is the original SOA-era prompt, kept for history.)* The node returns Claude's raw text, which the **Parse JSON** code node then parses.
 
 > ✅ **RESOLVED (Aug 29, 2026).** The live prompt was previously truncated mid-sentence at `… specialty, clin`, dropping the rest of the providers instruction, the `custom_plans` margin-scanning instruction, and the `flags` instruction. The full prompt below was restored in the Extract with Claude node and verified end-to-end on a real handwritten SOA: `custom_plans` captured "HP Journey Steady" off a diagonal margin note, `flags` fired five items (including an over-max-dose catch on amlodipine 20mg), and `providers` behaved correctly. The live node now matches the prompt below.
 
@@ -622,11 +756,47 @@ For flags note anything unusual such as: Signature missing, Date missing or ille
 
 ### Parse JSON (Code Node)
 
-n8n does not auto-parse the Anthropic node's output the way Make.com did. A Code node converts Claude's text to JSON before anything downstream can read it:
+n8n does not auto-parse the Anthropic node's output the way Make.com did. A Code node converts Claude's text to JSON
+before anything downstream can read it.
+
+> **Updated Oct 7, 2026.** The original two-line version (`JSON.parse($input.item.json.content[0].text)`) broke when
+> the extract node moved to `claude-sonnet-5-5`: newer models can put a non-text block (e.g. thinking) before the
+> text, so `content[0].text` was undefined ("undefined is not valid JSON"). Current live code — reads the text block
+> wherever it is, tolerates ```json fences, and fails with a message that says what went wrong:
 
 ```javascript
-const rawText = $input.item.json.content[0].text;
-const parsed = JSON.parse(rawText);
+// Node 7 — Parse JSON
+const res = $input.item.json;
+
+// 1. The API itself returned an error (wrong model name, overloaded, bad key...)
+if (res.error || res.type === 'error') {
+  throw new Error(`Claude API error: ${JSON.stringify(res.error || res).slice(0, 500)}`);
+}
+
+// 2. Collect the text block(s), skipping thinking or other block types
+const blocks = Array.isArray(res.content) ? res.content : [];
+const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+if (!text) {
+  throw new Error(`No text in Claude reply. Block types: ${blocks.map(b => b.type).join(', ') || 'none'} | stop_reason: ${res.stop_reason}`);
+}
+
+// 3. Reply was cut off before the JSON finished
+if (res.stop_reason === 'max_tokens') {
+  throw new Error('Claude reply was cut off (max_tokens). Raise Max Tokens on the extract node.');
+}
+
+// 4. Pull the JSON out of the text (handles ```json fences or a sentence before/after it)
+const match = text.match(/[\[{][\s\S]*[\]}]/);
+if (!match) {
+  throw new Error(`No JSON found in Claude reply: ${text.slice(0, 300)}`);
+}
+let parsed;
+try {
+  parsed = JSON.parse(match[0]);
+} catch (e) {
+  throw new Error(`Claude reply is not valid JSON (${e.message}): ${text.slice(0, 300)}`);
+}
+
 return [{ json: parsed }];
 ```
 
@@ -751,20 +921,24 @@ Mapping mode is "Map each column manually." Field expressions read from the **Pa
 
 ## Railway API Reference
 
-**URL:** `https://web-production-dcce3.up.railway.app`  
+**URL:** `https://web-production-dcce3.up.railway.app` *(no access key yet — go-live blocker)*  
 **GitHub Repo:** `MuddLX/medicare-drug-engine`  
 **Plan:** Hobby ($5/month)
 **Server settings (Oct 2):** Railway's Custom Start Command (`bash -c "python startup.py && gunicorn app.main:app"`) overrides the Procfile. Concurrency comes from the Railway variable `GUNICORN_CMD_ARGS = --workers 3 --timeout 180 --graceful-timeout 30`. `INTERNAL_REPORT_V1=1` switches the internal report back to the previous layout.
 
 | Endpoint | Method | What It Does |
 |----------|--------|-------------|
-| `/process-soa` | POST | Full pipeline — takes client + drug + provider data, returns PDF |
-| `/health` | GET | Confirms DB is connected and returns row counts |
+| `/process-soa` | POST | Internal report PDF — client + drugs + doctors + `selected_plans` + `plan_year` |
+| `/client-comparison` | POST | Client-facing one-page plan comparison PDF (same `selected_plans`) |
+| `/plans-for-zip` | GET | `?zip=55441[&address=&city=&state=]` → every eligible MA / Cost / Part D plan for the ZIP's counties (no SNP/PACE/Medigap) with premium, drug deductible, plan number, official name, `counties`, `in_county`, `drug_list_loaded`; plus `county`, `county_method` (address / city / largest share / only), `counties`, `county_note`, `data_vintage` |
+| `/check-drugs` | POST | *(Oct 7, 2026)* `{"drugs":[{"name","dosage"}]}` (≤ 60) → per drug `status` ok / spelling / strength / unknown / empty, `suggestion`, `candidates`, `read_as`, `note`. Local RxNorm only — no AI call, nothing logged |
+| `/health` | GET | DB connected, row counts, **`data_year`, `data_vintage`, `prices_estimated`** (check after every switch) |
 | `/drug-costs` | POST | JSON drug cost lookup for testing |
 | `/plans` | GET | Lists all plans in the database |
 | `/debug-costs` | POST | Returns plan selection debug info |
-| `/plans-for-zip` | GET | *(Oct 2026)* `?zip=55441` → every eligible MA + Part D plan for the ZIP's county (no SNP/PACE/Medigap), for the app's plan picker |
-| `/client-comparison` | POST | *(Sept 2026)* Client-facing one-page plan comparison PDF |
+
+> ⚠ **No access control (as of Oct 7, 2026).** Every endpoint is public to anyone with the URL. Adding an access key
+> (Roundabout + n8n) is a go-live blocker — `FUTURE_IMPROVEMENTS.md` §1.
 
 > **`selected_plans` (Oct 2026):** `/process-soa` and `/client-comparison` both accept an optional ordered list `"selected_plans": [{"contract_id":"H2001","plan_id":"116"}, …]`. Pick order = column order. Limits: 7 MA + 3 PD (internal); the client sheet shows the first 3 MA + first PD. Bad picks return a 400 with a plain-English `error`. Send `plan_year` too so the internal report prices the full plan year.
 
@@ -789,32 +963,25 @@ $response = Invoke-WebRequest -Uri "https://web-production-dcce3.up.railway.app/
 
 ## Railway Project Structure
 
+> **Updated Oct 7, 2026.** The folder map lives in the repo's `README.md` (kept current). The old provider-directory
+> builders, `quarterly_refresh.py`, `validate_db.py` and the NPPES/UHC source folders are retired to `_archive/`.
+
 ```
 medicare_drug_engine/
-├── app/
-│   ├── __init__.py
-│   └── main.py              ← Flask API (all plan logic, provider lookups, PDF generation)
-├── startup.py               ← Downloads all DBs from R2 on every Railway startup
-├── validate_db.py           ← DB quality checks (run standalone anytime)
-├── quarterly_refresh.py     ← Master quarterly data refresh script
-├── README_REFRESH.md        ← Step-by-step refresh instructions
-├── r2_check.py              ← Verify DB is in Cloudflare R2
-├── build_aetna_providers.py ← Builds aetna_providers.db from NPPES bulk data
-├── build_uhc_db.py          ← Builds uhc_providers.db from myAARPMedicare PDFs
-├── build_bcbs_db.py         ← Builds bcbs_providers.db from BCBS PDFs
-├── build_hp_db.py           ← Builds hp_providers.db from HealthPartners PDFs
-├── build_humana_db.py       ← Builds humana_providers.db from Humana PDFs
-├── build_medica_db.py       ← Builds medica_providers.db from Medica FHIR API
-├── FUTURE_IMPROVEMENTS.md  ← Documented gaps and planned future work
-├── diagnose_nppes.py        ← NPPES diagnostic (column headers + sample Allina rows)
-├── diagnose_nppes2.py       ← Deep NPPES scan (full file, MN Allina rows, Parent LBN values)
-├── upload_aetna_db.py       ← Uploads aetna_providers.db to R2
-├── Allina NPPES/            ← NPPES bulk zip (NPPES_Data_Dissemination_May_2026_V2.zip, 1.05GB)
-├── UHC Provider PDF's/      ← Source PDFs for UHC provider DB
-├── Procfile
-├── requirements.txt         ← flask, gunicorn, requests, reportlab, boto3
-├── runtime.txt
-└── nixpacks.toml
+├── app/                    ← the engine (main.py endpoints; drug_resolver.py drug names; drug_year.py deductible + cap;
+│   │                         data_meta.py year facts; providers_2027.py doctors; internal_pdf / client_pdf reports)
+│   └── data/rxnorm_concepts.json.gz   ← local RxNorm copy (refresh monthly)
+├── startup.py              ← downloads medicare_mn.db, providers_2027.db, pbp_benefits.db from R2 + validates them
+├── build_2027_db.py        ← builds medicare_mn_2027.db (Landscape, PBP, carrier lists, CMS files, estimates)
+├── build_pbp_db.py         ← client-sheet benefits + star ratings
+├── r2_files.py             ← list / upload (--as) / delete files in R2
+├── formulary_2027/         ← carrier drug-list reader + RxNorm matcher + download_rxnorm.py
+├── providers_2027/         ← Medica 2027 directory reader, health-system map, confirmations.csv
+├── tools/                  ← drug_lookup_benchmark.py
+├── tests/                  ← 808 offline tests; tests/data/drug_cases*.psv
+├── source_data/ _archive/ _scratch/   ← not in git
+├── README.md · README_REFRESH.md · FUTURE_IMPROVEMENTS.md · SOA_Drug_Run_Automation.md
+├── Procfile · requirements.txt · runtime.txt · nixpacks.toml
 ```
 
 **Railway Start Command:** `bash -c "python startup.py && gunicorn app.main:app"`
@@ -822,66 +989,71 @@ medicare_drug_engine/
 **Environment Variables (Railway):**
 | Variable | Purpose |
 |----------|---------|
-| `ANTHROPIC_API_KEY` | Claude API key |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 credentials |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 credentials |
-| `R2_ENDPOINT_URL` | Cloudflare R2 endpoint |
+| `ANTHROPIC_API_KEY` | Claude API key (drug-name clean-up) |
+| `NORMALIZE_MODEL` | *(optional)* model for the clean-up; default `claude-sonnet-5-5` |
+| `COUNTY_ADDRESS_LOOKUP` | *(optional)* `off` disables the Census street-address → county lookup |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT_URL` | Cloudflare R2 credentials |
 | `R2_BUCKET_NAME` | `medicare-db` |
-| `MISE_PYTHON_GITHUB_ATTESTATIONS` | `false` — required workaround for Railway/mise build bug |
+| `GUNICORN_CMD_ARGS` | `--workers 3 --timeout 180 --graceful-timeout 30` |
+| `INTERNAL_REPORT_V1` | *(optional)* `1` = old internal report layout |
+| `MISE_PYTHON_GITHUB_ATTESTATIONS` | `false` — workaround for a Railway/mise build bug |
 
 ---
 
 ## Database & Infrastructure
 
-### Storage Architecture
-The database (`medicare_mn.db`, ~92MB) is stored in **Cloudflare R2** (free tier, 10GB). Railway downloads it automatically on every startup via `startup.py`. The DB is NOT stored in GitHub — only code lives there.
+> **Updated Oct 7, 2026 (2027 plan year live).** Routine for every refresh/switch: `README_REFRESH.md`.
 
-**Why R2 instead of GitHub:** GitHub has a 100MB file size limit. R2 is free, has no meaningful size limit, and zero egress cost.
+### Storage Architecture
+Databases live in **Cloudflare R2** (bucket `medicare-db`). Railway downloads them on every startup via `startup.py`,
+which validates them (required tables; ≥ 30 plans; providers ≥ 1,000 directory rows; benefits ≥ 30 plans) and stops
+the boot if a check fails. Databases are NOT in GitHub (size), only code.
 
 ### Databases in R2
 
-| File | Contents | Size |
-|------|----------|------|
-| `medicare_mn.db` | CMS formulary + pharmacy + plan data | ~92MB |
-| `medica_providers.db` | Medica provider directory (~25,000 providers) | ~5MB |
-| `bcbs_providers.db` | Blue Cross provider directory (~24,000 providers) | ~5MB |
-| `hp_providers.db` | HealthPartners provider directory (~43,000 providers) | ~9MB |
-| `humana_providers.db` | Humana provider directory (~23,000 providers) | ~6MB |
-| `uhc_providers.db` | UHC provider directory (7,720 providers) | ~2MB |
-| `aetna_providers.db` | Allina Health Aetna facility directory (279 facilities) | ~0.1MB |
+| R2 name (live) | Built from (local) | Contents |
+|---|---|---|
+| `medicare_mn.db` | `medicare_mn_2027.db` | 2027 plans, drug lists, tier costs, prices (estimates until Jan 2027), pharmacy networks, ZIP→county, `meta`, negotiated prices — ~41 MB |
+| `pbp_benefits.db` | `pbp_benefits_2027.db` | client-sheet benefits (MOOP, copays, dental/vision/hearing/OTC, fitness) + star ratings, 37 MA plans |
+| `providers_2027.db` | `providers_2027.db` | Medica 2027 directory, health systems, system networks, agency confirmations |
+| `backup_2026/medicare_mn.db`, `backup_2026/pbp_benefits.db` | 2026 files | rollback copies |
 
-### Database Tables (medicare_mn.db)
+*Retired Oct 6, 2026:* `medica_providers.db`, `bcbs_providers.db`, `hp_providers.db`, `humana_providers.db`,
+`uhc_providers.db`, `aetna_providers.db` (2026 directories). If `python r2_files.py list` still shows them, delete
+them (`python r2_files.py delete <name>`).
+
+### Database Tables (medicare_mn_2027.db)
 
 | Table | What's In It |
 |-------|-------------|
-| `plans` | All 65 MN plans — name, premium, deductible, formulary ID |
-| `formulary` | Every drug covered by each plan — tier level, prior auth, step therapy |
-| `beneficiary_cost` | Copay amounts per tier at preferred/standard/mail order pharmacy |
-| `pricing` | Average monthly cost per drug per plan |
-| `pharmacy_network` | Which pharmacies are in-network for each plan (by NPI number) |
-| `pharmacy_names` | Pharmacy names, addresses, and GPS coordinates |
-| `service_area` | Which plans are available in which MN counties |
-| `zip_county` | Maps zip codes to MN counties (888 MN zips) |
-| `zip_coords` | GPS coordinates for every MN zip code |
+| `plans` | 46 plans for 2027 (37 Medicare Advantage incl. Cost, 9 Part D): name, premium, deductible, formulary ID, label, `drug_list_status` |
+| `formulary` | drug ID (RxCUI) + package (NDC) → tier, limits, `source` (carrier list or CMS) per drug list |
+| `beneficiary_cost` | cost per tier: preferred / standard retail, mail, 1- and 3-month, deductible applies. Cost type 0 = "not applicable" (the engine falls back to the other column) |
+| `pricing` | monthly price per plan per package (estimates until the Jan 2027 file) |
+| `pharmacy_network` / `pharmacy_names` | in-network pharmacies per plan (NPI), names, addresses, coordinates |
+| `service_area` | which plans are sold in which counties |
+| `zip_county` | ZIP → every county it touches, land share, primary flag |
+| `place_county` | city name → county (Census places) for ZIPs that cross counties |
+| `zip_coords` | ZIP centroids |
+| `meta` | `data_year`, `oop_cap`, `data_vintage`, `prices_estimated`, `prices_vintage`, `network_estimated` |
+| `negotiated_prices` | Medicare-negotiated monthly prices for the year (drug name → price) |
 
 ### Plan Coverage
-The system knows about **65 Medicare Advantage and Part D plans** across all major MN carriers:
-HealthPartners, Blue Cross, Medica, Humana, Aetna/Allina, UHC/AARP, Align, and all Part D standalone plans.
+2027: **46 plans** — Medicare Advantage / Cost (UHC/AARP, Aetna/Allina, Blue Cross incl. Platinum Blue Cost,
+HealthPartners, Medica, Humana, Quartz, Align …) and 9 standalone Part D. The **agent picks** which plans appear on
+the reports (`/plans-for-zip` lists every plan sold in the client's county or counties).
 
-Plans are selected dynamically based on the client's zip code → county → which plans CMS says are available there. The 5 cheapest/best plans for that county show by default.
+### Provider data (2027)
 
-### Provider Directory Databases
+| Source | What it gives | Report wording |
+|---|---|---|
+| Agency confirmations (`providers_2027/confirmations.csv`, weekly lists from Jill / Lacey) | doctor or clinic + plan + status, who confirmed, when | **In network** / **Out of network** (the only source that can say "out") |
+| Medica 2027 directory (Medica Advantage PPO PDF, 25,043 rows) | individual doctors by name + clinic + city | **In network** (doctor match) |
+| Health-system map: UHC 2027 column of the agency AEP sheet (H2001-116/117/118); Medica derived from its directory | systems (Allina, Park Nicollet, Fairview …) in/out of each network | **Likely in** (system level) / **Verify** |
+| nothing for that carrier | — | **Not checked** ("no 2027 source yet") |
 
-| Carrier | Source | Providers | Build Script |
-|---------|--------|-----------|-------------|
-| Medica | CMS FHIR API (`flex.optum.com/fhirpublic/R4`) | ~25,000 | `build_medica_db.py` |
-| Blue Cross MN | Published PDF directories | ~24,000 | `build_bcbs_db.py` |
-| HealthPartners | Published PDF directories | ~43,000 | `build_hp_db.py` |
-| Humana | Published PDF directories | ~23,000 | `build_humana_db.py` |
-| UHC (H2001) | myAARPMedicare.com People Directory PDFs | 7,720 | `build_uhc_db.py` |
-| Allina Health Aetna (H3219) | NPPES CMS bulk NPI data (May 2026) | 279 | `build_aetna_providers.py` — facility-level only ⚠️ TO REVISIT |
-
-**Provider databases do NOT auto-refresh** with quarterly CMS data. They must be manually rebuilt annually when carriers update their directories. UHC PDFs should be re-downloaded from myAARPMedicare.com each fall after open enrollment.
+Absence never means out of network. No client names are stored. Rebuild: `python providers_2027\build_systems.py`
+(README_REFRESH §4).
 
 ---
 
@@ -914,6 +1086,8 @@ Agents can handwrite plan requests anywhere on the SOA — top of page, margins,
 ---
 
 ## PDF Report Sections
+
+> **Superseded (Oct 2–7, 2026).** The internal report is now **one table, one column per picked plan** (landscape): COST (premium, drug deductible, yearly drug cost, yearly total) · MEDICATIONS (tier per plan; "as generic", "Drug list not out", "Not identified", injectables "Verify coverage") · PHARMACY (cheapest nearby, mail order, deductible-met month, drug-cap month) · DOCTORS (2027 sources: In network / Likely in / Out of network / Not found / Verify / Not checked), with a "Medications to verify / Form notes / County" alert box at the top and the data label + "Drug prices: … estimate" in the header. The client sheet is the one-page 4-column comparison (Phase 3 doc). The description below is the pre-October layout.
 
 **Header:** Client name (large), DOB/Zip/SOA date, INTERNAL USE ONLY badge, confidence score. Warning banners appear here for drug issues or unavailable plan requests.
 
@@ -955,12 +1129,29 @@ Two types of warning banners appear at the top of the report when needed:
 
 ## Drug Normalization Pipeline (Plain English)
 
-Raw drug names from handwritten SOAs are messy — misspellings, brand names, nicknames, incomplete names. Before any lookup happens, every drug goes through:
+> **Rewritten Oct 7, 2026.**
 
-1. **Claude API** — fixes spelling, maps brand names to generic (Xarelto → rivaroxaban, Lantus → insulin glargine), handles nicknames ("water pill" → furosemide), flags unusual doses
-2. **RxNav NIH API** — looks up the official drug identifier (RxCUI) so the formulary lookup is exact
+Drug names arrive messy — misspellings, brand vs generic, nicknames, the device ("Lantus SoloStar"), release forms
+("Metformin ER"), abbreviations ("HCTZ"). Each drug goes through:
 
-The report shows both the original name and the interpreted name (e.g. "rivaroxaban 20mg (written: Xarelto 20mg)") so agents can verify.
+1. **AI clean-up (`normalize_drugs`, `claude-sonnet-5-5`)** — fixes spelling, keeps a written brand, drops device
+   words, and also returns the plain **ingredient** (so retired brands like Zofran → ondansetron still work) and the
+   strength exactly as written. If the AI is unreachable, the names go on unchanged.
+2. **Local drug-name reader (`app/drug_resolver.py`)** — matches the name against a local copy of RxNorm (the
+   federal drug dictionary). A brand gives that brand's products plus their generic twins; a generic gives every
+   product with exactly those ingredients; strength / form / release narrow the list only when they're written.
+   A misspelling is corrected only when one real drug is clearly closest **and** comes in the written strength, and
+   it's always flagged "check spelling" on the report. Names that aren't one specific drug ("water pill",
+   "insulin") are never guessed.
+3. **RxNav (NIH website)** — backup only, for names the local reader can't read (e.g. a drug launched after the
+   last monthly refresh).
+4. **Plan lookup** — the plan's best tier among those products; if a plan lists only the generic of a written
+   brand, the report shows the tier with "as generic" and prices the generic.
+
+**Quality gate:** `tests/data/drug_cases.psv` + `drug_cases_holdout.psv` (~345 names as people write them, with
+answers) run with every test run and must all pass; each reading must also appear on a CMS drug list. A drug missed
+in real use is added to the list first, then fixed. `tools/drug_lookup_benchmark.py` compares old vs new (internet).
+The Roundabout Details tab uses the same reader through `POST /check-drugs` (one-click spelling fixes, "did you mean").
 
 ---
 
@@ -980,49 +1171,26 @@ Because the report filename now carries the same suffix, /Reports/ no longer rel
 
 ## Quarterly Data Refresh
 
-CMS releases updated Medicare plan data 4 times a year. This needs to be run to keep drug costs, formulary tiers, and pharmacy data current.
+> **Replaced Oct 7, 2026.** The full routine is in **`README_REFRESH.md`** (rewritten). `quarterly_refresh.py` is
+> retired. The calendar now:
 
-**Release schedule:**
-| Quarter | Approximate Release Date |
-|---------|------------------------|
-| Q1 | Late January |
-| Q2 | Late April |
-| Q3 | Late July |
-| Q4 (+ new plan year) | Mid October ← most important |
+| When | What |
+|---|---|
+| Weekly (AEP) | agency provider confirmations → `providers_2027.db` |
+| ~Oct 9–10, 2026 | 2027 Star Ratings → `pbp_benefits_2027.db` |
+| Oct 15, 2026 | CMS monthly file: 2027 drug lists + pharmacy networks → `build_2027_db.py cms` + `estimate_prices` |
+| Monthly | RxNorm refresh (`formulary_2027\download_rxnorm.py`) |
+| ~Jan 20, 2027 | CMS quarterly file with real 2027 prices → `build_2027_db.py cms` (estimates end automatically) |
+| Apr / Jul / Oct 2027 | quarterly files, same step |
 
-**Your job each quarter (5 minutes of actual work):**
-
-1. Watch for CMS email notification (subscribe at `cms.gov/subscribe` → Part D updates)
-2. Download **SPUF quarterly zip** from `cms.gov` (the big formulary/pricing/pharmacy file)
-3. Download **Landscape CSV** from `cms.gov` (premiums and deductibles — small file)
-4. Drop both files into `C:\Users\Mudd\medicare_drug_engine\refresh_input\`
-5. Run: `python quarterly_refresh.py` from that folder
-6. Wait for Pushover notification (takes 30–45 min, mostly geocoding)
-7. Verify the report still looks right by running a test SOA
-
-**What the script does automatically:**
-- Extracts and processes all SPUF files
-- Rebuilds all database tables
-- Looks up pharmacy names from the NPI registry
-- Geocodes pharmacy addresses (Census API)
-- Rebuilds zip → county mappings
-- Validates the new database before deploying
-- Backs up the current database
-- Uploads new database to Cloudflare R2
-- Pushes to GitHub (triggers Railway redeploy)
-- Verifies Railway came up correctly
-- Runs a test SOA for Jack Reacher
-- Sends Pushover notification with results
-
-**If something goes wrong:** The script never touches the live database until everything passes validation. Rolling back is as simple as running `git revert` or restoring from the backup file.
-
-**Full instructions:** See `README_REFRESH.md` in the project folder.
-
-**Important:** Provider databases (medica, bcbs, hp, humana, uhc) are NOT rebuilt during quarterly refresh. They require manual rebuilding annually or when carriers publish updated directories.
+Every refresh ends the same way: tests → back up → `r2_files.py upload … --as …` → Redeploy → check the Railway log
+lines and `/health` → one test client.
 
 ---
 
 ## Known Issues & Limitations
+
+> **Oct 7, 2026:** the current list of known gaps (and when each closes) is `FUTURE_IMPROVEMENTS.md` §2. The table below is the May–Aug 2026 list, kept for history; several rows are resolved (error alerting exists since Sept, the 2026 provider directories are retired, the out-of-pocket cap is applied).
 
 | Issue | Details |
 |-------|---------|
@@ -1043,6 +1211,8 @@ CMS releases updated Medicare plan data 4 times a year. This needs to be run to 
 
 ## Error Handling
 
+> **Historical (Aug 2026).** Since Sept 2026 the global `CIS Pipeline - Error Handler` workflow emails on any failure and is set on the main workflow (Oct 2); failed sheets get a Failed file the app shows. The text below describes the gap as it was.
+
 > ⚠ **This is the biggest production gap.** The Make.com setup had a master error-handling scenario that emailed and sent a Pushover alert on any failure. **That did not carry over to n8n.** As exported, the n8n workflow has:
 
 - **No error workflow attached** (`errorWorkflow` is unset) — if any node throws, the execution just fails in the background and nobody is notified.
@@ -1059,6 +1229,8 @@ Google Sheets logging (**Log to Sheets**) is confirmed working on the high-confi
 ---
 
 ## Future Enhancements
+
+> **Oct 7, 2026:** superseded by the repo's `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps, next work). Kept for history.
 
 - [ ] **Configure an n8n error workflow + alerting** (email/Telegram/Pushover) — replaces the retired Make error scenario (near-term priority)
 - [x] **Restore the full Extract with Claude prompt** (providers tail + custom_plans + flags) and re-test extraction — ✅ done & verified Aug 29, 2026
@@ -1120,28 +1292,34 @@ Each carrier's in-network provider list. Sources vary by carrier — see Provide
 
 ### How We Calculate Drug Costs
 
-**Step 1: Identify the drug**
-Claude reads the drug name from the SOA (including misspellings and brand names) and maps it to the correct generic name and RxCUI identifier using the RxNav NIH API.
+> **Updated Oct 7, 2026.**
 
-**Step 2: Look up the formulary tier**
-We query the formulary database to find which tier the drug is on for each plan. Tier determines the copay structure.
+**Step 1: Identify the drug** — AI clean-up, then the local drug-name reader (see Drug Normalization Pipeline).
 
-**Step 3: Apply the correct copay logic**
+**Step 2: Find the tier** — the plan's best tier among the drug's products (brand, or its generic when only the
+generic is listed — shown "as generic"). On that tier, a package with a price is used over one without.
+
+**Step 3: Cost-sharing for that tier** (CMS `beneficiary_cost`, initial-coverage row)
 
 | Situation | What We Do |
 |-----------|-----------|
-| Insulin drugs | Apply the 2026 federal $35/month insulin cap (IRA law) |
-| MFP drugs (Xarelto, Eliquis, Jardiance, etc.) | Apply 25% coinsurance of the CMS Maximum Fair Price |
-| Tier 1–2 generics | Apply the plan's flat copay from CMS beneficiary_cost data |
-| Tier 3–4 brand drugs | Apply the plan's flat copay or coinsurance rate |
-| Specialty (Tier 5) | Apply plan's specialty copay |
-| Tier 6 (e.g. Align) | Apply $0 preferred tier rate |
+| Insulin | $35/month cap, no deductible |
+| Medicare-negotiated drugs (Eliquis, Jardiance, Januvia… ; 2027 adds Ozempic, Trelegy, Janumet…) | Price = the negotiated price; **the plan's own tier cost-sharing applies** (was a flat 25% until Oct 6) |
+| Copay tiers | the plan's flat copay |
+| Coinsurance tiers | percentage × price |
+| Preferred vs standard pharmacy | the column for that pharmacy type; when CMS marks it "not applicable" (cost type 0), the other column — never $0 |
+| Mail order | the 90-day row (CMS `days_supply` 2), shown per month; "not available" when the plan has no mail cost for that tier |
+| No price on file (and the cost depends on price) | left out of the total and flagged "no price on file — verify" |
+| Carrier hasn't published its drug list | "Drug list not out yet" — no cost, never "not covered" |
 
-**Step 4: Add pharmacy dispensing fee**
-Each pharmacy charges a small per-fill fee on top of the drug cost. These fees are different per pharmacy and come directly from the CMS SPUF pharmacy network file. Brand drugs use the `brand_fee_30` rate; generics use `generic_fee_30`. This is why CVS might show $85.25/mo while Walgreens shows $84.42/mo for the same drug on the same plan — the dispensing fees differ.
+**Step 4: Dispensing fee** — per pharmacy, from the CMS network file (brand vs generic fee).
 
-**Step 5: Apply deductible phase**
-If the plan has a drug deductible (e.g. $615), the client pays the full negotiated drug price until the deductible is met, then switches to the plan copay. We calculate this from the SOA date forward through December. The report shows each month where the cost changes (e.g. "May $232 → Jun $188 → Jul $84.42 steady").
+**Step 5: The year, all drugs together** (`app/drug_year.py`) — January–December for the coming plan year: **one
+shared deductible** for all drugs, then cost-sharing, and nothing after the **yearly out-of-pocket cap** ($2,100 in
+2026, **$2,400 in 2027**, read from the database). The report shows the month the deductible is met and the month
+the cap is reached.
+
+**2027 note:** until the Jan 20, 2027 CMS file, prices are 2026 prices carried forward and the report says "estimate".
 
 ---
 
@@ -1218,13 +1396,13 @@ A drug showing green regardless of its tier number means the copay is $0 — the
 "Our prices are from the same source but may differ by a few dollars because medicare.gov has access to the exact price each pharmacy has negotiated with the plan, which isn't in the public data. Our numbers will be within a few dollars of the actual cost — close enough to compare plans accurately. For the exact dollar amount, we always recommend verifying at medicare.gov or calling the plan directly before enrolling."
 
 **"How current is this data?"**
-"CMS releases new data every quarter — January, April, July, and October. We update our database each time. The report always shows which quarter's data was used."
+"For 2027 we use the plans' official 2027 files from CMS and the carriers' 2027 drug lists. CMS publishes the final 2027 drug lists in mid-October and 2027 drug prices in January; until then the report labels prices as estimates. The report always says which data it used." *(Updated Oct 7, 2026.)*
 
 **"Are these pharmacies actually in-network?"**
 "Yes — we verify each pharmacy against the plan's official network file from CMS. If a pharmacy appears in the report, it's confirmed in-network for that plan."
 
 **"Is my doctor in network?"**
-"Page 2 of the report shows your providers checked against each carrier's 2026 directory. Green means confirmed in-network. Red means not found — but always verify directly with the carrier before enrolling, as directories change throughout the year."
+"The doctors section shows what we know for each plan: confirmed in network by our agency, found in the plan's 2027 directory, or 'likely in' because your doctor's health system is in that network. 'Not checked' means we don't have that plan's 2027 list yet. Always verify directly with the plan before enrolling — networks change." *(Updated Oct 7, 2026.)*
 
 ---
 
@@ -1244,6 +1422,8 @@ A drug showing green regardless of its tier number means the copay is $0 — the
 | August 29, 2026 | Restored the truncated Extract with Claude prompt in the live node; verified end-to-end on a real handwritten SOA (custom_plans + flags + providers) — see below |
 | September 19, 2026 | Engine health check (Goal A — all green) + agent-report visual refresh (Goal B pt.1): slate palette, best-plan highlight removed, two-up pharmacy grid, section spacing; plus repo hygiene — see below |
 | September 21, 2026 | Flags → PDF banner plumbing closed — **Goal B fully done**: n8n **Build Railway Body** now sends the `flags` array; the engine reads it and merges into the ⚠ Drug Verification banner. Proven engine-side (fake-flags POST) then end-to-end on a real flagged sheet — see below |
+| October 7, 2026 | **2027 plan year switched live** (R2 backups `backup_2026/`); three fake-client tests (Margaret Ellison, Dorothy Halvorsen, Harold Brekke) found and fixed: CMS "not applicable" pharmacy columns read as $0, device names, brands gone generic, unpriced generics shown as $0, HCTZ combo rows; **local drug-name reader** scored on ~345 names; name clean-up on `claude-sonnet-5-5`; n8n Parse JSON (7) rewritten; `POST /check-drugs`; `/health` data year; docs rewritten (README_REFRESH, FUTURE_IMPROVEMENTS, this doc) — see roadmap Oct 7 |
+| October 3–6, 2026 | Shared deductible + out-of-pocket cap; deductible-met / cap months on the report; **2027 data built**: carrier drug-list PDF reader + offline RxNorm matcher (13 lists), `build_2027_db.py`, 2027 PBP benefits, 2026-price estimates, DB-driven plan year (`meta`), mail-order + negotiated-price cost fixes, counties for split ZIPs, `providers_2027` (Medica 2027 directory, health-system map, agency confirmations), folder tidy; Roundabout Phases 28–33 — see roadmap Oct 3–6 |
 | October 2, 2026 (evening) | Messy fake sheet (Harold Lindgren) test; engine `a944eeb` bolder report section bands + `21dd8d1` readable reader notes / illegible doctors never "In network" / no-strength callout / no contract number in plan names; n8n extraction prompt v3 (never guess, `crossed_out`, `field_notes`) + Build Review JSON v3 (flagged_fields from notes + deterministic checks); app Phases 22–25 specified (pinned selection, blue Edit + Save confirmation, Plans tab room, Details cards with must-fix vs check + remove drug) — see the evening block in the October roadmap update |
 | October 2, 2026 (afternoon) | App Phases 13–21 (new layout, freeze fix, colour rules, client cards, test-data reset); n8n claim-on-pickup + 15 s polling + Error Workflow + rewritten extraction prompt; engine 3 workers, picker detail, **one-table internal report** with Part D + doctors, injectables safety net, doctor "Possible match" honesty — see the afternoon block in the October roadmap update and the session detail below |
 | October 1–2, 2026 | **Architecture change: agent-chosen plans** (Jill meeting). Engine: `/plans-for-zip`, `selected_plans` on both reports, full-plan-year cost period for the internal report, Cost plans shown, "Not identified" in Section 2, Part D columns on the client sheet. Verified offline (22 tests) and live on Railway. App (Roundabout Phase 12) + n8n changes in progress — see the October 2026 update in the roadmap and the October 2, 2026 Session Detail |
@@ -1585,4 +1765,15 @@ Summary lives in the roadmap block **"Oct 2, 2026 (evening) — Messy-sheet test
 - **How the flagged-field gap was found:** Jordon's Details screenshots showed the orange set (DOB, ZIP, phone) didn't include the misspelled Lisinopril, the dose-less Metoprolol or the crossed-out Januvia, while the internal report's warning box listed all of them. Compared the live `Build Review JSON (19)` code (from the exported workflow) with the reader output → `flagged_fields` came only from `low_confidence_fields`. First fix (match paths inside `flags`) proved unreliable on the next run because the reader wrote plain sentences without paths → moved to structured `field_notes` + `crossed_out` + app-side severity.
 - **Live n8n text** for nodes 6, 7 and 19 was pasted by Jordon before editing, so the v3 replacements were written against the exact live versions.
 - Engine change verification: 47 offline tests (4 new: warning tidy + dedupe, illegible doctor → Possible match, no-strength callout, contract number stripped); one-page fit still holds for the 10-plan worst case.
+
+### October 3–7, 2026 Session Detail
+Summary lives in the roadmap blocks **"Oct 3"**, **"Oct 3–6"** and **"Oct 7"** and in the ⭐ October 7 box. Working notes:
+- **Division of work (unchanged):** engine, data and docs done by Claude through the linked computer (`M:\…`); Roundabout by Claude Code from prompts written in chat (Phases 28–33); n8n node changes by Jordon in the editor from code given in chat.
+- **No internet from Claude's side** (neither the linked computer's shell nor Claude's own workspace reach rxnav, census.gov or data.cms.gov). Downloads (RxNorm list, CMS files, Census files) are run by Jordon in PowerShell; Claude works offline on the results. The engine's RxNav/Census calls work on Railway.
+- **Long jobs on the linked computer** must finish inside one command (≈ 3 min); background processes die when the call ends. CMS zip-of-zips are extracted once to `source_data/cms_files/_work/` so later steps are fast.
+- **SQLite on the linked computer:** a left-over `-journal` file can't be deleted without delete permission and causes "disk I/O error"; builders use `PRAGMA journal_mode=TRUNCATE`.
+- **Git on the linked computer:** `git -c core.autocrlf=true`, commits as Jordon with Claude attribution lines; stage files by name (never `git add .`). Jordon pushes.
+- **Test data only.** Fake clients used: Margaret Ellison (55433 Coon Rapids), Robert Kessler (55446, written but not run yet), Dorothy Halvorsen (55025 Forest Lake), Harold Brekke (55009 Cannon Falls, no street address). Test emails are pasted into Roundabout (Phase 28 paste).
+- **Verification habits that paid off:** reproduce a report's numbers locally before guessing (Margaret's $0 months); score the drug reader on a list written *after* tuning (88.8% → real fixes); check every reading lands on a real drug list (caught omeprazole); compare against an independent source (1,832 carrier rows).
+- **Copies of this doc:** the repo copy is the master. On Oct 7 the claude.ai project copy was replaced with it; the Obsidian vault copy (`Projects/SOA Engine/`) is updated by Jordon copying the repo file over it (the vault isn't a folder Claude can reach).
 

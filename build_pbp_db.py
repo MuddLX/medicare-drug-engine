@@ -243,6 +243,14 @@ def build_star_ratings(mn_contract_ids, base_dir):
         print("  WARNING: Star Ratings Summary xlsx not found - stars skipped.")
         return {}
     import openpyxl
+    import re as _re
+    # Newest star year first (2026-10-07): with both the 2026 and 2027 files downloaded, glob order is
+    # arbitrary and could pick last year's ratings. The year comes from the file/folder name.
+    def _year(p):
+        ys = [int(y) for y in _re.findall(r"20[2-3]\d", p)]
+        return max(ys) if ys else 0
+    paths.sort(key=_year, reverse=True)
+    print(f"  Star ratings from: {os.path.relpath(paths[0], base_dir)}")
     wb = openpyxl.load_workbook(paths[0], read_only=True, data_only=True)
     ws = wb["Summary_Rating"] if "Summary_Rating" in wb.sheetnames else wb[wb.sheetnames[0]]
     rows = ws.iter_rows(values_only=True)

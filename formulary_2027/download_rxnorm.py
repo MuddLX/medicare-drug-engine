@@ -3,8 +3,9 @@
 Run this on a computer with internet (PowerShell, from the engine folder):
     python formulary_2027\\download_rxnorm.py
 
-It makes 2 requests and writes formulary_2027\\rxnorm_concepts.json (about 8 MB).
-The 2027 formulary matcher then runs offline against that file.
+It makes 2 requests and writes formulary_2027\\rxnorm_concepts.json (about 8 MB) - used by the carrier
+drug-list matcher - AND app\\data\\rxnorm_concepts.json.gz, the engine's drug-name reader (2026-10-07).
+Monthly routine (README_REFRESH.md): run this, run the tests, commit app/data, push.
 """
 import json
 import os
@@ -53,8 +54,14 @@ def main():
         json.dump(out, f)
     os.replace(tmp, OUT)                                          # only replace the file once it is complete
     print(f"Saved {OUT}")
+    import gzip                                                   # the engine's copy (app/drug_resolver.py)
+    engine_copy = os.path.join(os.path.dirname(os.path.dirname(OUT)), "app", "data", "rxnorm_concepts.json.gz")
+    with gzip.open(engine_copy + ".tmp", "wt", encoding="utf-8") as f:
+        json.dump(out, f, separators=(",", ":"))
+    os.replace(engine_copy + ".tmp", engine_copy)
+    print(f"Saved {engine_copy}")
     print("Counts:", counts)
-    print("Done. Tell Claude it's downloaded.")
+    print("Done. Next: python -m pytest tests  (the drug-name test lists must still pass), then commit app/data and push.")
 
 
 if __name__ == "__main__":

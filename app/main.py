@@ -2691,7 +2691,11 @@ def health():
         "tables": tables, "zip_county_rows": zip_county,
         "service_area_rows": service_area, "plans": plans,
         "pharmacy_network_plans": pharm_net,
-        "zip_55309_county": county_55309
+        "zip_55309_county": county_55309,
+        # Which data is live (2026-10-07): check these after every upload/switch (README_REFRESH.md).
+        "data_year": data_meta.data_year(DB_PATH),
+        "data_vintage": data_meta.data_vintage(DB_PATH),
+        "prices_estimated": data_meta.prices_estimated(DB_PATH),
     })
 
 
