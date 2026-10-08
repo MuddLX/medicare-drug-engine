@@ -2806,6 +2806,9 @@ def health():
         "data_year": data_meta.data_year(DB_PATH),
         "data_vintage": data_meta.data_vintage(DB_PATH),
         "prices_estimated": data_meta.prices_estimated(DB_PATH),
+        # Claude setup (2026-10-08): through AWS Bedrock only. Shows whether the AWS key is set and which
+        # model - never the key itself.
+        "claude": {"via": "aws-bedrock", "configured": bedrock_configured(), "model": bedrock_model_id()},
     })
 
 

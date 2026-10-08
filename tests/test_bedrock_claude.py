@@ -122,3 +122,16 @@ def test_confident_answer_is_kept(aws):
     aws([ok(sure)])
     out = M.normalize_drugs([{"name": "metforman", "dosage": "500"}])[0]
     assert out["normalized"] == "metformin" and out["ingredient"] == "metformin"
+
+
+def test_health_shows_claude_setup_without_the_key(monkeypatch):
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAFAKEFAKEFAKE")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake-secret-value")
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
+    with M.app.test_client() as c:
+        r = c.get("/health")
+    if r.status_code != 200:
+        pytest.skip("no local database for /health")
+    body = r.get_data(as_text=True)
+    assert r.get_json()["claude"] == {"via": "aws-bedrock", "configured": True, "model": "us.anthropic.claude-sonnet-4-6"}
+    assert "AKIAFAKE" not in body and "fake-secret-value" not in body
