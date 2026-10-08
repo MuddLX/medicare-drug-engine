@@ -176,6 +176,9 @@ def _plan_header(p, text_w, carrier, c_style, n_style, name_h):
         # neutral dash rather than claim the plan is unrated.
         star_cell = Spacer(1, 10.5)
         rating_cell = Paragraph("\u2014", _RATING)
+    elif rating is None and p.get("star_note"):   # this year's CMS ratings not published yet (2026-10-08)
+        star_cell = Spacer(1, 10.5)
+        rating_cell = Paragraph(escape(p["star_note"]), _RATING)
     elif rating is None:          # no CMS rating loaded yet, or plan too new to be rated
         star_cell = Spacer(1, 10.5)
         rating_cell = Paragraph("Not yet rated", _RATING)

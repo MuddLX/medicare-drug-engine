@@ -189,6 +189,7 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
     from app import availability as AV
     from app import data_meta
     prices_ok = AV.prices_official()       # 2026-10-08: no estimated dollar figures on a client sheet
+    stars_ok = AV.stars_official()         # 2026-10-08: last year's stars are never shown as this year's
     _conn = sqlite3.connect(f"file:{data_meta.DB_PATH}?mode=ro", uri=True)
 
     def _list_ok(cand):
@@ -246,6 +247,9 @@ def assemble_renderer_payload(selection, plan_summaries, drug_detail, agency_met
         }
         # overlay real CMS benefits (keyed by plan ID); no-op if the plan has no row
         plan.update(format_benefits(lookup_benefits(cand.get("contract_id"), cand.get("plan_id"))))
+        if not stars_ok:
+            plan["star_rating"] = None
+            plan["star_note"] = AV.STARS_NOTE.replace("ratings", "rating")   # "2027 rating not out yet"
         if cand.get("drug_plan_only"):
             # Standalone Part D: drug coverage only. Medical + extra-benefit rows say so plainly.
             plan["drug_plan_only"] = True

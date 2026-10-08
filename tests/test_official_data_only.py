@@ -117,6 +117,20 @@ def test_client_sheet_payload_holds_back_estimates_and_carrier_list_gaps(use27):
     assert plan["rx"]["unverified"] >= 1
 
 
+@needs27
+def test_client_sheet_never_shows_last_years_stars(use27, monkeypatch):
+    """The client sheet showed 2026 stars on a 2027 sheet (Testy McTestface run, 2026-10-08)."""
+    out = M.compute_drug_costs(DRUGS, "55443", "01/01/2027", plans_override=[
+        {"contract_id": "H3219", "plan_id": "002", "carrier": "Aetna Enhanced", "type": "MA"}])
+    sel = CC.agent_selection(out["plan_summaries"], ["Aetna Enhanced"])
+    monkeypatch.setattr(AV, "stars_official", lambda *a, **k: False)
+    plan = CC.assemble_renderer_payload(sel, out["plan_summaries"], out["drug_detail"], {}, {}, 2027)["plans"][0]
+    assert plan["star_rating"] is None and plan["star_note"] == "2027 rating not out yet"
+    monkeypatch.setattr(AV, "stars_official", lambda *a, **k: True)
+    plan = CC.assemble_renderer_payload(sel, out["plan_summaries"], out["drug_detail"], {}, {}, 2027)["plans"][0]
+    assert "star_note" not in plan
+
+
 def test_internal_report_holds_back_costs_and_still_fits_one_page(monkeypatch):
     from tests import test_internal_report_v2 as T
     monkeypatch.setattr(AV, "prices_official", lambda *a, **k: False)
