@@ -608,7 +608,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                  "and doctors not found are highlighted. "
                  + ("Costs are estimates." if AV.prices_official() else
                     "Copays/coinsurance: each plan's official 2027 amount per fill. Dollar totals need 2027 "
-                    "drug prices (Jan). \"Not on carrier's list\": verify until CMS lists load (Oct 15).")]
+                    "drug prices (Jan).")]          # 2026-10-15: all drug lists are CMS's own now
         phones = [CARRIER_PHONES[k] for k in ("medica", "bcbs", "hp", "humana", "uhc", "aetna") if k in used_keys]
         if phones:
             parts.append("Verify networks: " + " · ".join(phones) + ".")
