@@ -91,8 +91,15 @@ def test_lists_exactly_the_plans_the_picker_lists(engine):
 
 
 @needs27
-def test_plans_without_a_drug_list_are_never_priced_or_called_not_covered(engine):
-    client = engine(DB27)
+def test_plans_without_a_drug_list_are_never_priced_or_called_not_covered(engine, tmp_path):
+    # 2026-10-15: every 2027 list loaded from CMS; a copy un-publishes Humana's S5884 lists to keep this tested.
+    import shutil
+    pend = str(tmp_path / "pending.db")
+    shutil.copy(DB27, pend)
+    c = sqlite3.connect(pend)
+    c.execute("UPDATE plans SET formulary_id=NULL, drug_list_status='not published yet' WHERE contract_id='S5884'")
+    c.commit(); c.close()
+    client = engine(pend)
     _s, j = _post(client, {"zip_code": "55443", "drugs": SUSAN})
     missing = [p for p in j["plans"] if not p["drug_list_loaded"]]
     assert missing, "expected 2027 plans whose drug list isn't out yet"

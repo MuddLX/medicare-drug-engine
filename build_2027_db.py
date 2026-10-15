@@ -424,7 +424,10 @@ def step_cms(conn, zip_path, year="2027"):
     for key, fid in fids.items():
         conn.execute("UPDATE plans SET formulary_id=?, drug_list_status='loaded' WHERE contract_id=? AND plan_id=?",
                      (fid, key[0], key[1]))
-    # carrier-built lists stay only for plans CMS did not cover (e.g. a carrier missing from the file)
+    # A drug list CMS published replaces the carrier-built one completely (Oct 15, 2026 fix: the old rule
+    # kept carrier rows under the same list ID, so drugs NOT on the 2027 list still looked covered).
+    # Carrier-built lists stay only for plans CMS did not cover (e.g. a carrier missing from the file).
+    conn.executemany("DELETE FROM formulary WHERE source='carrier' AND formulary_id=?", [(f,) for f in wanted_f])
     conn.execute("""DELETE FROM formulary WHERE source='carrier' AND formulary_id NOT IN
         (SELECT formulary_id FROM plans WHERE formulary_id IS NOT NULL)""")
     conn.commit()
@@ -432,6 +435,8 @@ def step_cms(conn, zip_path, year="2027"):
     # 3. tier costs (replaces the PBP-derived table)
     bc = []
     for idx, p in _rows(zip_path, "beneficiary cost"):
+        if "COVERAGE_LEVEL" not in idx:          # the insulin cost file also matches "beneficiary cost"
+            continue
         key = (_get(idx, p, "CONTRACT_ID"), _get(idx, p, "PLAN_ID").zfill(3))
         if key in ours:
             f = lambda c, cast=float: cast(_num(_get(idx, p, c)))
@@ -450,6 +455,24 @@ def step_cms(conn, zip_path, year="2027"):
         conn.executemany("INSERT OR REPLACE INTO beneficiary_cost VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", bc)
         conn.commit()
     print(f"beneficiary_cost: {len(bc):,} CMS rows")
+    # 3b. insulin cost per tier (plans may charge less than the $35 federal cap; the engine still caps at $35)
+    ins = []
+    for idx, p in _rows(zip_path, "insulin beneficiary cost"):
+        key = (_get(idx, p, "CONTRACT_ID"), _get(idx, p, "PLAN_ID").zfill(3))
+        if key in ours:
+            val = lambda c: (_num(_get(idx, p, c)) if _get(idx, p, c) not in ("", ".") else None)
+            ins.append((key[0], key[1], _get(idx, p, "SEGMENT_ID"), _get(idx, p, "TIER"), int(_num(_get(idx, p, "DAYS_SUPPLY"))),
+                        val("COPAY_AMT_PREF_INSLN"), val("COPAY_AMT_NONPREF_INSLN"), val("COPAY_AMT_MAIL_PREF_INSLN"),
+                        val("COPAY_AMT_MAIL_NONPREF_INSLN"), val("COIN_AMT_PREF_INSLN"), val("COIN_AMT_NONPREF_INSLN"),
+                        val("COIN_AMT_MAIL_PREF_INSLN"), val("COIN_AMT_MAIL_NONPREF_INSLN")))
+    if ins:
+        conn.execute("DROP TABLE IF EXISTS insulin_cost")
+        conn.execute("""CREATE TABLE insulin_cost (contract_id TEXT, plan_id TEXT, segment_id TEXT, tier TEXT,
+            days_supply INTEGER, copay_pref REAL, copay_nonpref REAL, copay_mail_pref REAL, copay_mail_nonpref REAL,
+            coins_pref REAL, coins_nonpref REAL, coins_mail_pref REAL, coins_mail_nonpref REAL)""")
+        conn.executemany("INSERT INTO insulin_cost VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", ins)
+        conn.commit()
+    print(f"insulin_cost: {len(ins):,} CMS rows")
     # 4. pharmacy networks, Minnesota pharmacies only
     net = _load_networks(conn, zip_path, ours)
     print(f"pharmacy_network: {net:,} plan-pharmacy rows")
@@ -659,6 +682,48 @@ def step_reference(conn):
                                    for t in ("pharmacy_names", "zip_coords")))
 
 
+CHAIN_WORDS = ("cvs", "walgreens", "walmart", "target", "cub ", "hy-vee", "hyvee", "costco", "sam's", "sams club",
+               "thrifty white", "kowalski", "lunds", "coborn", "fairview", "allina", "essentia", "sanford", "mayo",
+               "healthpartners", "north memorial", "shopko", "marcus daly", "family fare")
+
+
+def step_pharmacy_names(conn):
+    """Name + address for network pharmacies the name list doesn't have yet (new 2027 pharmacies), from
+    CMS's public NPI Registry (https://npiregistry.cms.hhs.gov - no key). Needs internet: run it on the PC.
+    Location = the pharmacy's ZIP centre (the engine marks those distances as approximate)."""
+    import json as _json
+    import urllib.request
+    missing = [n for (n,) in conn.execute("""SELECT DISTINCT npi FROM pharmacy_network
+        WHERE npi NOT IN (SELECT npi FROM pharmacy_names)""")]
+    print(f"{len(missing)} network pharmacies have no name yet")
+    added, failed = 0, []
+    for i, npi in enumerate(missing, 1):
+        try:
+            url = f"https://npiregistry.cms.hhs.gov/api/?version=2.1&number={npi}"
+            with urllib.request.urlopen(url, timeout=20) as r:
+                res = (_json.load(r).get("results") or [None])[0]
+        except Exception as e:                      # network hiccup: skip, rerun later picks it up
+            failed.append(f"{npi} ({e})")
+            continue
+        if not res:
+            failed.append(f"{npi} (not in the NPI Registry)")
+            continue
+        basic = res.get("basic", {})
+        name = basic.get("organization_name") or " ".join(x for x in (basic.get("first_name"), basic.get("last_name")) if x)
+        loc = next((a for a in res.get("addresses", []) if a.get("address_purpose") == "LOCATION"), {})
+        z = (loc.get("postal_code") or "")[:5]
+        chain = 1 if any(w in (name or "").lower() + " " for w in CHAIN_WORDS) else 0
+        conn.execute("INSERT OR REPLACE INTO pharmacy_names VALUES (?,?,?,?,?,?,?,?,?)",
+                     (npi, (name or "").title(), (loc.get("address_1") or "").upper(), (loc.get("city") or "").upper(),
+                      loc.get("state") or "", z, None, None, chain))
+        added += 1
+        if i % 25 == 0:
+            conn.commit()
+            print(f"  {i}/{len(missing)}")
+    conn.commit()
+    print(f"pharmacy_names: added {added}; could not look up {len(failed)}" + (": " + "; ".join(failed[:10]) if failed else ""))
+
+
 def step_place_county(conn):
     """City -> county(ies), for ZIPs that cross county lines (Census 2020 place-by-county file in this folder).
     A city that itself spans two counties keeps both rows; the engine only uses a city when it names
@@ -685,7 +750,8 @@ def step_place_county(conn):
 STEPS = {"zip_county": step_zip_county, "service_area": step_service_area, "plans": step_plans, "costs": step_costs,
          "meta": step_meta, "cms": step_cms, "carrier_formularies": step_carrier_formularies,
          "estimates": step_estimates, "reference": step_reference, "place_county": step_place_county,
-         "estimate_prices": lambda conn, z: step_estimates(conn, z, with_networks=False)}
+         "estimate_prices": lambda conn, z: step_estimates(conn, z, with_networks=False),
+         "pharmacy_names": step_pharmacy_names}
 
 if __name__ == "__main__":
     # python build_2027_db.py                      -> the base steps (zip_county service_area plans costs meta)

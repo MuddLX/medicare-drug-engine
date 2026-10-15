@@ -980,13 +980,12 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 dist_approximate = True
             # Determine preferred status
             # Only mark as non-preferred if the plan actually distinguishes preferred/non-preferred
+            # 2026-10-15: each pharmacy's own preferred flag from the CMS network file. (The old rule guessed
+            # "chain = preferred" in ZIPs with both kinds; on the Oct 2026 file that mislabeled 2,829
+            # plan-pharmacy pairs, e.g. Walgreens as preferred on Allina/Aetna. The per-pharmacy flag
+            # matched Medicare.gov on all 634 saved pharmacy checks.)
             plan_has_pref = info.get("plan_has_any_preferred", False)
-            if not plan_has_pref:
-                is_preferred = True
-            elif info.get("has_preferred") and info.get("has_nonpreferred"):
-                is_preferred = bool(is_chain)
-            else:
-                is_preferred = pref_retail == "Y"
+            is_preferred = True if not plan_has_pref else pref_retail == "Y"
 
             candidates.append({
                 "npi": npi,

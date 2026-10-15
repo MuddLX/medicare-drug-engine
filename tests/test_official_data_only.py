@@ -44,12 +44,13 @@ def test_cost_share_is_the_cms_2027_plan_file(use27):
 
 @needs27
 def test_nothing_estimated_is_shown_before_official_prices(use27):
-    """Today's 2027 database carries 2026 prices as estimates -> no drug-cost dollar figure anywhere."""
-    assert not AV.prices_official(DB27) and not AV.networks_official(DB27)
+    """Today's 2027 database carries 2026 prices as estimates -> no drug-cost dollar figure anywhere.
+    (2026-10-15: the 2027 pharmacy networks are CMS's own now, so they count as official.)"""
+    assert not AV.prices_official(DB27) and AV.networks_official(DB27)
     j = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS}).get_json()
     av = j["availability"]
     assert av["prices"] is False and av["prices_note"] == AV.PRICES_NOTE
-    assert av["networks"] is False and av["stars"] is False
+    assert av["networks"] is True and av["stars"] is False
     for p in j["plans"]:
         assert p["prices_available"] is False
         assert p["est_drug_cost_year"] is None and p["est_total_year"] is None
@@ -64,7 +65,16 @@ def test_nothing_estimated_is_shown_before_official_prices(use27):
 
 
 @needs27
-def test_carrier_pdf_lists_never_say_not_covered(use27):
+def test_cms_lists_are_official_now(use27):
+    """2026-10-15: every plan's 2027 drug list comes from CMS's October file."""
+    j = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS}).get_json()
+    assert all(p["drug_list_official"] for p in j["plans"] if p["drug_list_loaded"])
+    assert "not_on_list" not in {c["status"] for p in j["plans"] for c in p["drugs"]}
+
+
+@needs27
+def test_carrier_pdf_lists_never_say_not_covered(use27, monkeypatch):
+    monkeypatch.setattr(AV, "list_official", lambda *a, **k: False)     # a carrier-PDF list (pre-Oct 15 state)
     j = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS}).get_json()
     statuses = {c["status"] for p in j["plans"] for c in p["drugs"]}
     assert "not_covered" not in statuses and "not_on_list" in statuses
@@ -106,7 +116,8 @@ def test_stars_need_a_matching_stars_year(tmp_path):
 
 
 @needs27
-def test_client_sheet_payload_holds_back_estimates_and_carrier_list_gaps(use27):
+def test_client_sheet_payload_holds_back_estimates_and_carrier_list_gaps(use27, monkeypatch):
+    monkeypatch.setattr(AV, "list_official", lambda *a, **k: False)     # a carrier-PDF list (pre-Oct 15 state)
     out = M.compute_drug_costs(DRUGS, "55443", "01/01/2027", plans_override=[
         {"contract_id": "H5959", "plan_id": "023", "carrier": "Blue Cross Essential", "type": "MA"}])
     sel = CC.agent_selection(out["plan_summaries"], ["Blue Cross Essential"])

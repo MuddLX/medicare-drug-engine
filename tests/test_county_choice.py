@@ -27,6 +27,25 @@ def db27(tmp_path_factory):
     return p
 
 
+def pending_copy(src, dest):
+    """A copy of the database where Humana's drug-only plans (S5884) have no drug list yet - the state
+    before CMS's Oct 15, 2026 file. Keeps the "drug list not out yet" path tested after every list loaded."""
+    shutil.copy(src, dest)
+    c = sqlite3.connect(dest)
+    c.execute("UPDATE plans SET formulary_id=NULL, drug_list_status='not published yet' WHERE contract_id='S5884'")
+    c.commit(); c.close()
+    return dest
+
+
+@pytest.fixture
+def use27_pending(db27, tmp_path, monkeypatch):
+    p = pending_copy(db27, str(tmp_path / "m27_pending.db"))
+    monkeypatch.setattr(DM, "DB_PATH", p)
+    monkeypatch.setattr(M, "DB_PATH", p)
+    monkeypatch.setattr(M, "county_from_address", lambda *a, **k: None)
+    return p
+
+
 @pytest.fixture
 def use27(db27, monkeypatch):
     monkeypatch.setattr(DM, "DB_PATH", db27)
@@ -100,9 +119,9 @@ def test_agent_can_pick_a_plan_from_the_other_county(use27):
     assert err is None and county == "Dakota"
 
 
-def test_plans_without_a_drug_list_still_show_marked(use27):
-    # 2026-10-08: Medica's 2027 lists are loaded now; Humana's drug-only plans (S5884) are the ones still
-    # unpublished, so they carry this check (same rule, different example).
+def test_plans_without_a_drug_list_still_show_marked(use27_pending):
+    # 2026-10-15: every 2027 list is loaded from CMS's October file; the copy un-publishes Humana's
+    # drug-only plans (S5884) so this rule stays tested.
     j = M.app.test_client().get("/plans-for-zip?zip=55447").get_json()
     humana = [p for p in j["plans"] if p["contract_id"] == "S5884"]
     assert humana and all(p["drug_list_loaded"] is False for p in humana)
@@ -110,9 +129,10 @@ def test_plans_without_a_drug_list_still_show_marked(use27):
     assert all(p["drug_list_loaded"] for p in j["plans"] if p["contract_id"] == "H3219")
 
 
-def test_report_for_a_plan_without_a_drug_list_says_so(use27, monkeypatch):
+def test_report_for_a_plan_without_a_drug_list_says_so(use27_pending, monkeypatch):
     conn = M.get_db()
     rx = conn.execute("SELECT rxcui FROM formulary WHERE formulary_id='00027015' AND tier=1 LIMIT 1").fetchone()[0]
+    assert conn.execute("SELECT formulary_id FROM plans WHERE contract_id='S5884'").fetchone()[0] is None
     monkeypatch.setattr(M, "normalize_drugs", lambda d: [{"original": "x", "normalized": "testgeneric",
                                                           "dosage": "10mg", "confidence": 1.0}])
     monkeypatch.setattr(M, "lookup_rxcuis", lambda n, d: [rx])
