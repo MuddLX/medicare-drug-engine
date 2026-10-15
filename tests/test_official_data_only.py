@@ -151,3 +151,14 @@ def test_internal_report_holds_back_costs_and_still_fits_one_page(monkeypatch):
     txt = T.text_of(pdf)
     assert "Available January" in txt and "$900" not in txt and "$1,000" not in txt
     assert "Costs are estimates" not in txt and "official 2027 amount per fill" in txt
+
+
+@needs27
+def test_plans_page_wording_comes_from_the_engine(use27):
+    """2026-10-15 (Roundabout Phase 44): the app shows these texts when sent, so they must always be sent and
+    never mention the Oct 15 load or the carrier's list (every list is CMS's own now)."""
+    av = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS[:1]}).get_json()["availability"]
+    assert av["prices_banner"] == AV.PRICES_BANNER and av["estimates_banner"] == AV.ESTIMATES_BANNER
+    assert av["month_caption"] == AV.MONTH_CAPTION
+    assert all(av[k].strip() for k in ("prices_banner", "estimates_banner", "month_caption"))
+    assert "Oct 15" not in av["prices_banner"] and "carrier's list" not in av["prices_banner"]

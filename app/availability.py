@@ -27,10 +27,17 @@ from app import data_meta
 PRICES_NOTE = "2027 drug prices available January"
 PRICES_NOTE_LONG = ("2027 drug prices aren't published yet (CMS releases them in January). Costs per fill "
                     "below are the plans' official 2027 copays and coinsurance.")
-NETWORK_NOTE = "2027 pharmacy networks load Oct 15"
+NETWORK_NOTE = "2027 pharmacy networks not loaded yet"
 STARS_NOTE = "2027 ratings not out yet"
+# 2026-10-15 (Roundabout Phase 44): the app shows these Plans-page texts when the engine sends them, so
+# wording can change here without a new app release. Same words as the app's own fallbacks today.
+PRICES_BANNER = ("2027 drug prices come out in January. Until then each plan shows its official 2027 copays and "
+                 "coinsurance — no estimated dollar totals.")
+ESTIMATES_BANNER = ("2027 drug costs are estimates (2026 prices until January). Totals marked * leave out a drug the "
+                    "plan doesn't cover, so they aren't comparable and are never marked lowest.")
+MONTH_CAPTION = "Estimates use 2026 prices."
 NOT_ON_LIST = "Not on carrier's list"
-NOT_ON_LIST_DETAIL = "verify — official list Oct 15"
+NOT_ON_LIST_DETAIL = "verify with the carrier"
 
 PBP_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pbp_benefits.db")
 
