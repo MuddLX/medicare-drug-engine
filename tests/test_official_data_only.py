@@ -42,9 +42,28 @@ def test_cost_share_is_the_cms_2027_plan_file(use27):
     assert AV.cost_share(conn, "H3219", "001", None) is None
 
 
+@pytest.fixture
+def estimated_prices(monkeypatch):
+    """The pre-2026-10-18 state: the 2027 database carried 2026 prices as estimates. Since the Medicare.gov
+    Plan Finder prices were loaded (build step mpf_prices) the real database is official, so this state is
+    simulated - it must still hold every estimate back if it ever comes back."""
+    monkeypatch.setattr(DM, "prices_estimated", lambda *a, **k: True)
+
+
 @needs27
-def test_nothing_estimated_is_shown_before_official_prices(use27):
-    """Today's 2027 database carries 2026 prices as estimates -> no drug-cost dollar figure anywhere.
+def test_real_2027_prices_are_official_and_shown(use27):
+    """2026-10-18: Medicare.gov Plan Finder prices loaded -> prices are official, nothing is an estimate,
+    and dollar figures appear."""
+    assert AV.prices_official(DB27) and AV.prices_from_mpf(DB27) and AV.networks_official(DB27)
+    j = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS}).get_json()
+    assert j["availability"]["prices"] is True and j["prices_are_estimates"] is False
+    assert any(p["est_drug_cost_year"] is not None for p in j["plans"])
+    assert "Medicare.gov" in j["availability"]["month_caption"]
+
+
+@needs27
+def test_nothing_estimated_is_shown_before_official_prices(use27, estimated_prices):
+    """While prices are estimates -> no drug-cost dollar figure anywhere.
     (2026-10-15: the 2027 pharmacy networks are CMS's own now, so they count as official.)"""
     assert not AV.prices_official(DB27) and AV.networks_official(DB27)
     j = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS}).get_json()
@@ -116,7 +135,7 @@ def test_stars_need_a_matching_stars_year(tmp_path):
 
 
 @needs27
-def test_client_sheet_payload_holds_back_estimates_and_carrier_list_gaps(use27, monkeypatch):
+def test_client_sheet_payload_holds_back_estimates_and_carrier_list_gaps(use27, monkeypatch, estimated_prices):
     monkeypatch.setattr(AV, "list_official", lambda *a, **k: False)     # a carrier-PDF list (pre-Oct 15 state)
     out = M.compute_drug_costs(DRUGS, "55443", "01/01/2027", plans_override=[
         {"contract_id": "H5959", "plan_id": "023", "carrier": "Blue Cross Essential", "type": "MA"}])
@@ -159,6 +178,6 @@ def test_plans_page_wording_comes_from_the_engine(use27):
     never mention the Oct 15 load or the carrier's list (every list is CMS's own now)."""
     av = M.app.test_client().post("/compare-plans", json={"zip_code": "55443", "drugs": DRUGS[:1]}).get_json()["availability"]
     assert av["prices_banner"] == AV.PRICES_BANNER and av["estimates_banner"] == AV.ESTIMATES_BANNER
-    assert av["month_caption"] == AV.MONTH_CAPTION
+    assert av["month_caption"] == AV.price_source_note(DB27)       # 2026-10-18: says where the prices come from
     assert all(av[k].strip() for k in ("prices_banner", "estimates_banner", "month_caption"))
     assert "Oct 15" not in av["prices_banner"] and "carrier's list" not in av["prices_banner"]
