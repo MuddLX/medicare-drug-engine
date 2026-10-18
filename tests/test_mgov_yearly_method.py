@@ -81,3 +81,15 @@ def test_insulin_without_plan_row_is_35(tmp_path):
     c = _insulin_db(tmp_path, [])
     assert M.insulin_month_cost(c, "X", "1", 3, 500.0) == 35.0
     assert M.insulin_month_cost(c, "X", "1", 3, 20.0) == 20.0               # never more than the price
+
+
+def test_insulin_counts_only_what_the_client_pays():
+    """2026-10-18 blind test (Brooklyn Park client, 10 drugs incl. Lantus): on plans with deductible-free tiers,
+    insulin's payment - not its full price, and no 25% floor - counts toward the deductible and the cap.
+    With this, HealthPartners Journey Smart matched Medicare.gov within $0.14 for the year at three stores."""
+    ins = {"flat": 18.94, "price": 94.69}
+    brand = {"ded_applies": True, "price": 300.0, "fee": 0, "cost_type": 2, "cost_amt": 0.20}
+    # deductible $100: insulin's $18.94 counts, so the brand pays the remaining $81.06 then 20% of the rest
+    out = DY.simulate_year([ins, brand], 1, 100.0, cap=2400.0, gross_rule=True)
+    assert out[0] == [18.94]
+    assert out[1] == [round(81.06 + 0.20 * (300 - 81.06), 2)]

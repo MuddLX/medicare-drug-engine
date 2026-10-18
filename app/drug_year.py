@@ -126,12 +126,16 @@ def simulate_year_detail(terms_list, n_months, deductible, cap=None, gross_rule=
                 month_cost[i] = 0.0
                 continue
             cost, used = fill_cost(t, ded)
-            if gross_rule:
+            if gross_rule and flat:
+                # Insulin (2026-10-18 blind test, matched Medicare.gov to the cent on HealthPartners and
+                # Medica): only what the client pays counts - toward the deductible and toward the cap,
+                # with no 25% floor and not its full price.
+                ded = max(0.0, ded - cost) if in_ded else ded
+                add = cost
+            elif gross_rule:
                 portion = min(r, ded) if in_ded else 0.0        # full price counts toward the deductible
                 ded = max(0.0, ded - r) if in_ded else ded
-                if flat:
-                    base = cost
-                elif in_ded and subj:
+                if in_ded and subj:
                     base = cost
                 else:
                     base = _nominal_after(t, r) if price else cost
