@@ -42,6 +42,18 @@ NOT_ON_LIST_DETAIL = "verify with the carrier"
 PBP_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pbp_benefits.db")
 
 
+def prices_from_mpf(path=None):
+    return data_meta.meta(path).get("prices_source") == "mpf"
+
+
+def price_source_note(path=None):
+    """Where the dollar figures come from, for captions and report footers (2026-10-18)."""
+    m = data_meta.meta(path)
+    if m.get("prices_source") == "mpf":
+        return f"Prices: {m.get('prices_vintage') or 'Medicare.gov Plan Finder'}."
+    return MONTH_CAPTION
+
+
 def prices_official(path=None):
     return not data_meta.prices_estimated(path)
 

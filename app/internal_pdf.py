@@ -606,7 +606,9 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
     def footer_text(used_keys):
         parts = ["Tiers are plain text; only Tier 4–5, not covered, unidentified and injectable drugs, "
                  "and doctors not found are highlighted. "
-                 + ("Costs are estimates." if AV.prices_official() else
+                 + (((AV.price_source_note() + " Drugs without a captured price are marked, never $0.")
+                                     if AV.prices_from_mpf() else "Costs are estimates.")
+                                    if AV.prices_official() else
                     "Copays/coinsurance: each plan's official 2027 amount per fill. Dollar totals need 2027 "
                     "drug prices (Jan).")]          # 2026-10-15: all drug lists are CMS's own now
         phones = [CARRIER_PHONES[k] for k in ("medica", "bcbs", "hp", "humana", "uhc", "aetna") if k in used_keys]

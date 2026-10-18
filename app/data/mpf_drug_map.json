@@ -1,0 +1,1795 @@
+{
+ "_about": "Medicare.gov Plan Finder drug labels -> RxCUIs. Each match confirmed 2026-10-17 by the engine reproducing Medicare.gov's copays on every captured row (Plan jsons/_tools/verify_2026-10-17).",
+ "drugs": {
+  "Acetaminophen / codeine 300-30mg tablet": {
+   "rxcuis": [
+    "993781"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "acetaminophen 300 MG / codeine phosphate 30 MG Oral Tablet"
+   ]
+  },
+  "Acetaminophen / hydrocodone 10-325mg tablet": {
+   "rxcuis": [
+    "856999"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "acetaminophen 325 MG / hydrocodone bitartrate 10 MG Oral Tablet"
+   ]
+  },
+  "Acetaminophen / oxycodone 10-325mg tablet": {
+   "rxcuis": [
+    "1049214"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "acetaminophen 325 MG / oxycodone hydrochloride 10 MG Oral Tablet"
+   ]
+  },
+  "Acyclovir 400mg tablet": {
+   "rxcuis": [
+    "197311"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "acyclovir 400 MG Oral Tablet"
+   ]
+  },
+  "Albuterol sulfate hfa 108 (90 Base)mcg/act aerosol solution": {
+   "rxcuis": [
+    "2123076"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "NDA020983 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler"
+   ]
+  },
+  "Alendronic acid 70mg tablet": {
+   "rxcuis": [
+    "904431"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "alendronic acid 70 MG Oral Tablet"
+   ]
+  },
+  "Allopurinol 300mg tablet": {
+   "rxcuis": [
+    "197320"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "allopurinol 300 MG Oral Tablet"
+   ]
+  },
+  "Alprazolam 0.5mg tablet": {
+   "rxcuis": [
+    "308048"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "alprazolam 0.5 MG Oral Tablet"
+   ]
+  },
+  "Amiodarone hydrochloride 200mg tablet": {
+   "rxcuis": [
+    "833528"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "amiodarone hydrochloride 200 MG Oral Tablet"
+   ]
+  },
+  "Amitriptyline hydrochloride 25mg tablet": {
+   "rxcuis": [
+    "856834"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "amitriptyline hydrochloride 25 MG Oral Tablet"
+   ]
+  },
+  "Amlodipine / benazepril 10-40mg capsule": {
+   "rxcuis": [
+    "898346"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "amlodipine 10 MG / benazepril hydrochloride 40 MG Oral Capsule"
+   ]
+  },
+  "Amlodipine 5mg tablet": {
+   "rxcuis": [
+    "197361"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "amlodipine 5 MG Oral Tablet"
+   ]
+  },
+  "Ammonium lactate 12% cream": {
+   "rxcuis": [
+    "543460"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "ammonium lactate 120 MG/ML Topical Cream"
+   ]
+  },
+  "Amoxicillin / clavulanate 875-125mg tablet": {
+   "rxcuis": [
+    "562508"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "amoxicillin 875 MG / clavulanate 125 MG Oral Tablet"
+   ]
+  },
+  "Amoxicillin 500mg capsule": {
+   "rxcuis": [
+    "308191",
+    "308192"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "amoxicillin 500 MG Oral Capsule",
+    "amoxicillin 500 MG Oral Tablet"
+   ]
+  },
+  "Anastrozole 1mg tablet": {
+   "rxcuis": [
+    "199224"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "anastrozole 1 MG Oral Tablet"
+   ]
+  },
+  "Aripiprazole 5mg tablet": {
+   "rxcuis": [
+    "402131"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "aripiprazole 5 MG Oral Tablet"
+   ]
+  },
+  "Atenolol 25mg tablet": {
+   "rxcuis": [
+    "197380"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "atenolol 25 MG Oral Tablet"
+   ]
+  },
+  "Atorvastatin 40mg tablet": {
+   "rxcuis": [
+    "617311"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "atorvastatin 40 MG Oral Tablet"
+   ]
+  },
+  "Azelastine hydrochloride 137mcg/spray solution": {
+   "rxcuis": [
+    "1797867"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "azelastine hydrochloride 0.137 MG/ACTUAT Metered Dose Nasal Spray"
+   ]
+  },
+  "Azithromycin 250mg tablet": {
+   "rxcuis": [
+    "308460"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "azithromycin 250 MG Oral Tablet"
+   ]
+  },
+  "Baclofen 10mg tablet": {
+   "rxcuis": [
+    "197391"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "baclofen 10 MG Oral Tablet"
+   ]
+  },
+  "Benazepril hydrochloride 40mg tablet": {
+   "rxcuis": [
+    "898719"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "benazepril hydrochloride 40 MG Oral Tablet"
+   ]
+  },
+  "Betamethasone / clotrimazole 1-0.05% cream": {
+   "rxcuis": [
+    "308714"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "betamethasone 0.5 MG/ML / clotrimazole 10 MG/ML Topical Cream"
+   ]
+  },
+  "Betamethasone dipropionate aug 0.05% cream": {
+   "rxcuis": [
+    "848176"
+   ],
+   "rows_checked": 86,
+   "names": [
+    "betamethasone 0.5 MG/ML Topical Lotion"
+   ]
+  },
+  "Breo 100-25mcg/act aerosol powder": {
+   "rxcuis": [
+    "1539893",
+    "1424889"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "30 ACTUAT fluticasone furoate 0.1 MG/ACTUAT / vilanterol 0.025 MG/ACTUAT Dry Powder Inhaler",
+    "30 ACTUAT fluticasone furoate 0.1 MG/ACTUAT / vilanterol 0.025 MG/ACTUAT Dry Powder Inhaler [Breo]"
+   ]
+  },
+  "Brimonidine tartrate 0.2% solution": {
+   "rxcuis": [
+    "861200"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "brimonidine tartrate 2 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Bumetanide 1mg tablet": {
+   "rxcuis": [
+    "197418"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "bumetanide 1 MG Oral Tablet"
+   ]
+  },
+  "Bupropion hydrochloride 300mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "993557"
+   ],
+   "rows_checked": 272,
+   "names": [
+    "24 HR bupropion hydrochloride 300 MG Extended Release Oral Tablet"
+   ]
+  },
+  "Buspirone hydrochloride 10mg tablet": {
+   "rxcuis": [
+    "866083"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "buspirone hydrochloride 10 MG Oral Tablet"
+   ]
+  },
+  "Carbidopa / levodopa 50-200mg tablet extended release": {
+   "rxcuis": [
+    "308989"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "carbidopa 50 MG / levodopa 200 MG Extended Release Oral Tablet"
+   ]
+  },
+  "Carvedilol 12.5mg tablet": {
+   "rxcuis": [
+    "200032"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "carvedilol 12.5 MG Oral Tablet"
+   ]
+  },
+  "Cefdinir 300mg capsule": {
+   "rxcuis": [
+    "200346"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "cefdinir 300 MG Oral Capsule"
+   ]
+  },
+  "Cefuroxime 500mg tablet": {
+   "rxcuis": [
+    "309098"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "cefuroxime 500 MG Oral Tablet"
+   ]
+  },
+  "Celecoxib 200mg capsule": {
+   "rxcuis": [
+    "205323"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "celecoxib 200 MG Oral Capsule"
+   ]
+  },
+  "Cephalexin 250mg capsule": {
+   "rxcuis": [
+    "309112"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "cephalexin 250 MG Oral Capsule"
+   ]
+  },
+  "Chlorhexidine gluconate 0.12% solution": {
+   "rxcuis": [
+    "834127"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "chlorhexidine gluconate 1.2 MG/ML Mouthwash"
+   ]
+  },
+  "Chlorthalidone 25mg tablet": {
+   "rxcuis": [
+    "197499"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "chlorthalidone 25 MG Oral Tablet"
+   ]
+  },
+  "Ciprofloxacin 0.3% solution": {
+   "rxcuis": [
+    "309307"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "ciprofloxacin 3 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Citalopram 20mg tablet": {
+   "rxcuis": [
+    "200371"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "citalopram 20 MG Oral Tablet"
+   ]
+  },
+  "Clindamycin 1% solution": {
+   "rxcuis": [
+    "309333"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "clindamycin 10 MG/ML Topical Solution"
+   ]
+  },
+  "Clobetasol propionate 0.05% cream": {
+   "rxcuis": [
+    "861495"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "clobetasol propionate 0.5 MG/ML Topical Cream"
+   ]
+  },
+  "Clonazepam 0.5mg tablet": {
+   "rxcuis": [
+    "197527"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "clonazepam 0.5 MG Oral Tablet"
+   ]
+  },
+  "Clonidine hydrochloride 0.1mg tablet": {
+   "rxcuis": [
+    "884173"
+   ],
+   "rows_checked": 267,
+   "names": [
+    "clonidine hydrochloride 0.1 MG Oral Tablet"
+   ]
+  },
+  "Clopidogrel 75mg tablet": {
+   "rxcuis": [
+    "309362"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "clopidogrel 75 MG Oral Tablet"
+   ]
+  },
+  "Clotrimazole 1% cream": {
+   "rxcuis": [
+    "309367"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "clotrimazole 10 MG/ML Topical Cream"
+   ]
+  },
+  "Colchicine 0.6mg tablet": {
+   "rxcuis": [
+    "197541"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "colchicine 0.6 MG Oral Tablet"
+   ]
+  },
+  "Cyclobenzaprine hydrochloride 10mg tablet": {
+   "rxcuis": [
+    "828348"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "cyclobenzaprine hydrochloride 10 MG Oral Tablet"
+   ]
+  },
+  "Dexamethasone / neomycin / polymyxin b 3.5-10000-0.1 ointment": {
+   "rxcuis": [
+    "309679",
+    "309680"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "dexamethasone 0.001 MG/MG / neomycin 0.0035 MG/MG / polymyxin B 10 UNT/MG Ophthalmic Ointment",
+    "dexamethasone 1 MG/ML / neomycin 3.5 MG/ML / polymyxin B 10000 UNT/ML Ophthalmic Suspension"
+   ]
+  },
+  "Dexamethasone 4mg tablet": {
+   "rxcuis": [
+    "197582"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "dexamethasone 4 MG Oral Tablet"
+   ]
+  },
+  "Diazepam 5mg tablet": {
+   "rxcuis": [
+    "197591"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "diazepam 5 MG Oral Tablet"
+   ]
+  },
+  "Diclofenac sodium 75mg tablet delayed release": {
+   "rxcuis": [
+    "855926"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "diclofenac sodium 75 MG Delayed Release Oral Tablet"
+   ]
+  },
+  "Dicyclomine hydrochloride 10mg capsule": {
+   "rxcuis": [
+    "991061"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "dicyclomine hydrochloride 10 MG Oral Capsule"
+   ]
+  },
+  "Diltiazem hydrochloride 120mg capsule extended release 24 hour": {
+   "rxcuis": [
+    "1988308",
+    "830861",
+    "831215",
+    "831226"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "24 HR diltiazem hydrochloride 120 MG Extended Release Oral Capsule",
+    "24 HR diltiazem hydrochloride 120 MG Extended Release Oral Capsule [Cartia]"
+   ]
+  },
+  "Divalproex sodium 500mg tablet delayed release": {
+   "rxcuis": [
+    "1099870"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "divalproex sodium 500 MG Delayed Release Oral Tablet"
+   ]
+  },
+  "Donepezil hydrochloride 10mg tablet": {
+   "rxcuis": [
+    "997223"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "donepezil hydrochloride 10 MG Oral Tablet"
+   ]
+  },
+  "Dorzolamide hcl-timolol mal 2-0.5% solution": {
+   "rxcuis": [
+    "1923432"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "dorzolamide 20 MG/ML / timolol 5 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Doxazosin 4mg tablet": {
+   "rxcuis": [
+    "197627"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "doxazosin 4 MG Oral Tablet"
+   ]
+  },
+  "Doxycycline hyclate 100mg capsule": {
+   "rxcuis": [
+    "1649988",
+    "1650143"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "doxycycline hyclate 100 MG Oral Capsule",
+    "doxycycline hyclate 100 MG Oral Tablet"
+   ]
+  },
+  "Doxycycline monohydrate 100mg capsule": {
+   "rxcuis": [
+    "1649990"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "doxycycline monohydrate 100 MG Oral Capsule"
+   ]
+  },
+  "Duloxetine 60mg capsule delayed release particles": {
+   "rxcuis": [
+    "596934"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "duloxetine 60 MG Delayed Release Oral Capsule"
+   ]
+  },
+  "Eliquis 5mg tablet": {
+   "rxcuis": [
+    "1364447"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "apixaban 5 MG Oral Tablet [Eliquis]"
+   ]
+  },
+  "Enalapril maleate 20mg tablet": {
+   "rxcuis": [
+    "858810"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "enalapril maleate 20 MG Oral Tablet"
+   ]
+  },
+  "Entresto 24-26mg tablet": {
+   "rxcuis": [
+    "1656346"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "sacubitril 24 MG / valsartan 26 MG Oral Tablet [Entresto]"
+   ]
+  },
+  "Epinephrine 0.3mg/0.3ml solution auto injector": {
+   "rxcuis": [
+    "1870225",
+    "1870230"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "NDA020800 0.15 ML epinephrine 1 MG/ML Auto-Injector",
+    "NDA020800 0.3 ML epinephrine 1 MG/ML Auto-Injector"
+   ]
+  },
+  "Ergocalciferol 1.25 MG(50000 ut) capsule": {
+   "rxcuis": [
+    "1367410",
+    "1367416",
+    "310142"
+   ],
+   "rows_checked": 144,
+   "names": [
+    "ergocalciferol 1.25 MG Oral Capsule",
+    "ergocalciferol 1.25 MG Oral Capsule [Drisdol]"
+   ]
+  },
+  "Erythromycin 5mg/gm ointment": {
+   "rxcuis": [
+    "310149"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "erythromycin 0.005 MG/MG Ophthalmic Ointment"
+   ]
+  },
+  "Escitalopram 20mg tablet": {
+   "rxcuis": [
+    "351250"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "escitalopram 20 MG Oral Tablet"
+   ]
+  },
+  "Esomeprazole 40mg capsule delayed release": {
+   "rxcuis": [
+    "606730"
+   ],
+   "rows_checked": 86,
+   "names": [
+    "esomeprazole 40 MG Delayed Release Oral Capsule"
+   ]
+  },
+  "Estradiol 0.01% cream": {
+   "rxcuis": [
+    "310169"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "estradiol 0.1 MG/ML Vaginal Cream"
+   ]
+  },
+  "Ezetimibe 10mg tablet": {
+   "rxcuis": [
+    "349556"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "ezetimibe 10 MG Oral Tablet"
+   ]
+  },
+  "Famotidine 40mg tablet": {
+   "rxcuis": [
+    "284245"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "famotidine 40 MG Oral Tablet"
+   ]
+  },
+  "Farxiga 10mg tablet": {
+   "rxcuis": [
+    "1486977"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "dapagliflozin 10 MG Oral Tablet [Farxiga]"
+   ]
+  },
+  "Fenofibrate 160mg tablet": {
+   "rxcuis": [
+    "349287"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "fenofibrate 160 MG Oral Tablet"
+   ]
+  },
+  "Finasteride 5mg tablet": {
+   "rxcuis": [
+    "310346"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "finasteride 5 MG Oral Tablet"
+   ]
+  },
+  "Fluconazole 100mg tablet": {
+   "rxcuis": [
+    "197698"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "fluconazole 100 MG Oral Tablet"
+   ]
+  },
+  "Fluorouracil 5% cream": {
+   "rxcuis": [
+    "105583"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "fluorouracil 50 MG/ML Topical Cream"
+   ]
+  },
+  "Fluoxetine 20mg capsule": {
+   "rxcuis": [
+    "310385"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "fluoxetine 20 MG Oral Capsule"
+   ]
+  },
+  "Fluticasone / salmeterol 250-50mcg/act aerosol powder": {
+   "rxcuis": [
+    "2110513",
+    "896209"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "60 ACTUAT fluticasone propionate 0.25 MG/ACTUAT / salmeterol 0.05 MG/ACTUAT Dry Powder Inhaler",
+    "60 ACTUAT fluticasone propionate 0.25 MG/ACTUAT / salmeterol 0.05 MG/ACTUAT Dry Powder Inhaler [Wixela]"
+   ]
+  },
+  "Fluticasone propionate 50mcg/act suspension": {
+   "rxcuis": [
+    "1797907"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "fluticasone propionate 0.05 MG/ACTUAT Metered Dose Nasal Spray"
+   ]
+  },
+  "Furosemide 20mg tablet": {
+   "rxcuis": [
+    "310429"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "furosemide 20 MG Oral Tablet"
+   ]
+  },
+  "Gabapentin 300mg capsule": {
+   "rxcuis": [
+    "310431"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "gabapentin 300 MG Oral Capsule"
+   ]
+  },
+  "Gavilyte-g 236gm solution reconstituted": {
+   "rxcuis": [
+    "967012"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "polyethylene glycol 3350 236000 MG / potassium chloride 2970 MG / sodium bicarbonate 6740 MG / sodium chloride 5860 MG / sodium sulfate 22740 MG Powder for Oral Solution [Gavilyte-G]"
+   ]
+  },
+  "Glimepiride 4mg tablet": {
+   "rxcuis": [
+    "199247"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "glimepiride 4 MG Oral Tablet"
+   ]
+  },
+  "Glipizide 10mg tablet": {
+   "rxcuis": [
+    "310488"
+   ],
+   "rows_checked": 347,
+   "names": [
+    "glipizide 10 MG Oral Tablet"
+   ]
+  },
+  "Humalog kwikpen 100unit/ml solution pen injector": {
+   "rxcuis": [
+    "1652640",
+    "1926332",
+    "1652646"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "0.5 UNT Doses 3 ML insulin lispro 100 UNT/ML Pen Injector [Humalog]",
+    "3 ML insulin lispro 100 UNT/ML Cartridge [Humalog]"
+   ]
+  },
+  "Hydralazine hydrochloride 100mg tablet": {
+   "rxcuis": [
+    "905222"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "hydralazine hydrochloride 100 MG Oral Tablet"
+   ]
+  },
+  "Hydrochlorothiazide / lisinopril 20-25mg tablet": {
+   "rxcuis": [
+    "197887",
+    "310809"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "hydrochlorothiazide 25 MG / lisinopril 20 MG Oral Tablet",
+    "hydrochlorothiazide 25 MG / quinapril 20 MG Oral Tablet"
+   ]
+  },
+  "Hydrochlorothiazide / losartan 100-25mg tablet": {
+   "rxcuis": [
+    "979471"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "hydrochlorothiazide 25 MG / losartan potassium 100 MG Oral Tablet"
+   ]
+  },
+  "Hydrochlorothiazide / triamterene 37.5-25mg tablet": {
+   "rxcuis": [
+    "310812",
+    "198316"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "hydrochlorothiazide 25 MG / triamterene 37.5 MG Oral Capsule",
+    "hydrochlorothiazide 25 MG / triamterene 37.5 MG Oral Tablet"
+   ]
+  },
+  "Hydrochlorothiazide / valsartan 320-25mg tablet": {
+   "rxcuis": [
+    "636045"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "hydrochlorothiazide 25 MG / valsartan 320 MG Oral Tablet"
+   ]
+  },
+  "Hydrochlorothiazide 25mg tablet": {
+   "rxcuis": [
+    "310798"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "hydrochlorothiazide 25 MG Oral Tablet"
+   ]
+  },
+  "Hydrocortisone 2.5% cream": {
+   "rxcuis": [
+    "1790684",
+    "310891"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "hydrocortisone 25 MG/ML Topical Cream",
+    "hydrocortisone 25 MG/ML Topical Cream [Procto-Med]"
+   ]
+  },
+  "Hydroxychloroquine sulfate 200mg tablet": {
+   "rxcuis": [
+    "979092"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "hydroxychloroquine sulfate 200 MG Oral Tablet"
+   ]
+  },
+  "Hydroxyzine hydrochloride 25mg tablet": {
+   "rxcuis": [
+    "995258"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "hydroxyzine hydrochloride 25 MG Oral Tablet"
+   ]
+  },
+  "Hydroxyzine pamoate 25mg capsule": {
+   "rxcuis": [
+    "995253"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "hydroxyzine pamoate 25 MG Oral Capsule"
+   ]
+  },
+  "Ibuprofen 800mg tablet": {
+   "rxcuis": [
+    "197807",
+    "206917"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "ibuprofen 800 MG Oral Tablet",
+    "ibuprofen 800 MG Oral Tablet [Ibu]"
+   ]
+  },
+  "Ipratropium bromide 0.06% solution": {
+   "rxcuis": [
+    "1797844"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "ipratropium bromide 0.042 MG/ACTUAT Metered Dose Nasal Spray"
+   ]
+  },
+  "Irbesartan 300mg tablet": {
+   "rxcuis": [
+    "200096"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "irbesartan 300 MG Oral Tablet"
+   ]
+  },
+  "Isosorbide mononitrate 30mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "317110"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "24 HR isosorbide mononitrate 30 MG Extended Release Oral Tablet"
+   ]
+  },
+  "Januvia 100mg tablet": {
+   "rxcuis": [
+    "665036"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "sitagliptin phosphate 100 MG Oral Tablet [Januvia]"
+   ]
+  },
+  "Jardiance 10mg tablet": {
+   "rxcuis": [
+    "1545664"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "empagliflozin 10 MG Oral Tablet [Jardiance]"
+   ]
+  },
+  "Ketoconazole 2% cream": {
+   "rxcuis": [
+    "203088",
+    "106336"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "ketoconazole 20 MG/ML Medicated Shampoo",
+    "ketoconazole 20 MG/ML Topical Cream"
+   ]
+  },
+  "Ketoconazole 2% shampoo": {
+   "rxcuis": [
+    "106336"
+   ],
+   "rows_checked": 36,
+   "names": [
+    "ketoconazole 20 MG/ML Medicated Shampoo"
+   ]
+  },
+  "Ketorolac tromethamine 0.5% solution": {
+   "rxcuis": [
+    "860107"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "ketorolac tromethamine 5 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Lactulose 10gm/15ml solution": {
+   "rxcuis": [
+    "391937",
+    "544452",
+    "755470"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "lactulose 667 MG/ML Oral Solution",
+    "lactulose 667 MG/ML Oral Solution [Constulose]"
+   ]
+  },
+  "Lamotrigine 200mg tablet": {
+   "rxcuis": [
+    "198429"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "lamotrigine 200 MG Oral Tablet"
+   ]
+  },
+  "Latanoprost 0.005% solution": {
+   "rxcuis": [
+    "314072"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "latanoprost 0.05 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Levetiracetam 500mg tablet": {
+   "rxcuis": [
+    "311289"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "levetiracetam 500 MG Oral Tablet"
+   ]
+  },
+  "Levocetirizine dihydrochloride 5mg tablet": {
+   "rxcuis": [
+    "855172"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "levocetirizine dihydrochloride 5 MG Oral Tablet"
+   ]
+  },
+  "Levofloxacin 500mg tablet": {
+   "rxcuis": [
+    "199885"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "levofloxacin 500 MG Oral Tablet"
+   ]
+  },
+  "Levothyroxine sodium 50mcg tablet": {
+   "rxcuis": [
+    "966221"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "levothyroxine sodium 0.05 MG Oral Tablet"
+   ]
+  },
+  "Lidocaine 5% patch": {
+   "rxcuis": [
+    "1745091"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "lidocaine 0.05 MG/MG Medicated Patch"
+   ]
+  },
+  "Linzess 145mcg capsule": {
+   "rxcuis": [
+    "1307415"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "linaclotide 0.145 MG Oral Capsule [Linzess]"
+   ]
+  },
+  "Lisinopril 10mg tablet": {
+   "rxcuis": [
+    "314076"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "lisinopril 10 MG Oral Tablet"
+   ]
+  },
+  "Lorazepam 0.5mg tablet": {
+   "rxcuis": [
+    "197900"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "lorazepam 0.5 MG Oral Tablet"
+   ]
+  },
+  "Losartan potassium 100mg tablet": {
+   "rxcuis": [
+    "979480"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "losartan potassium 100 MG Oral Tablet"
+   ]
+  },
+  "Lovastatin 40mg tablet": {
+   "rxcuis": [
+    "197905"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "lovastatin 40 MG Oral Tablet"
+   ]
+  },
+  "Meclizine hydrochloride 25mg tablet": {
+   "rxcuis": [
+    "995666"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "meclizine hydrochloride 25 MG Oral Tablet"
+   ]
+  },
+  "Meloxicam 15mg tablet": {
+   "rxcuis": [
+    "152695"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "meloxicam 15 MG Oral Tablet"
+   ]
+  },
+  "Memantine hydrochloride 10mg tablet": {
+   "rxcuis": [
+    "996561"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "memantine hydrochloride 10 MG Oral Tablet"
+   ]
+  },
+  "Metformin hydrochloride 1000mg tablet": {
+   "rxcuis": [
+    "861004"
+   ],
+   "rows_checked": 348,
+   "names": [
+    "metformin hydrochloride 1000 MG Oral Tablet"
+   ]
+  },
+  "Methocarbamol 750mg tablet": {
+   "rxcuis": [
+    "197944"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "methocarbamol 750 MG Oral Tablet"
+   ]
+  },
+  "Methotrexate 2.5mg tablet": {
+   "rxcuis": [
+    "105585"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "methotrexate 2.5 MG Oral Tablet"
+   ]
+  },
+  "Methylprednisolone 4mg tablet": {
+   "rxcuis": [
+    "259966"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "methylprednisolone 4 MG Oral Tablet"
+   ]
+  },
+  "Metoclopramide 5mg tablet": {
+   "rxcuis": [
+    "311668"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "metoclopramide 5 MG Oral Tablet"
+   ]
+  },
+  "Metoprolol succinate 25mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "866427"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "24 HR metoprolol succinate 25 MG Extended Release Oral Tablet"
+   ]
+  },
+  "Metoprolol tartrate 25mg tablet": {
+   "rxcuis": [
+    "866924"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "metoprolol tartrate 25 MG Oral Tablet"
+   ]
+  },
+  "Metronidazole 0.75% cream": {
+   "rxcuis": [
+    "311678"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "metronidazole 7.5 MG/ML Topical Cream"
+   ]
+  },
+  "Mirtazapine 15mg tablet": {
+   "rxcuis": [
+    "311725"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "mirtazapine 15 MG Oral Tablet"
+   ]
+  },
+  "Mometasone furoate 50mcg/act suspension": {
+   "rxcuis": [
+    "1797865"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "mometasone furoate 0.05 MG/ACTUAT Metered Dose Nasal Spray"
+   ]
+  },
+  "Montelukast 10mg tablet": {
+   "rxcuis": [
+    "200224"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "montelukast 10 MG Oral Tablet"
+   ]
+  },
+  "Moxifloxacin 0.5% solution": {
+   "rxcuis": [
+    "403818"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "moxifloxacin 5 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Mupirocin 2% ointment": {
+   "rxcuis": [
+    "106346"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "mupirocin 0.02 MG/MG Topical Ointment"
+   ]
+  },
+  "Myrbetriq 50mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "1300803"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "24 HR mirabegron 50 MG Extended Release Oral Tablet [Myrbetriq]"
+   ]
+  },
+  "Naloxone hydrochloride 2mg/2ml solution prefilled syringe": {
+   "rxcuis": [
+    "1191250"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "2 ML naloxone hydrochloride 1 MG/ML Prefilled Syringe"
+   ]
+  },
+  "Naproxen 500mg tablet": {
+   "rxcuis": [
+    "198014"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "naproxen 500 MG Oral Tablet"
+   ]
+  },
+  "Nifedipine er osmotic release 30mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "1812011"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "Osmotic 24 HR nifedipine 30 MG Extended Release Oral Tablet"
+   ]
+  },
+  "Nitrofurantoin, macrocrystals / nitrofurantoin, monohydrate 100mg capsule": {
+   "rxcuis": [
+    "1648755"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "nitrofurantoin, macrocrystals 25 MG / nitrofurantoin, monohydrate 75 MG Oral Capsule"
+   ]
+  },
+  "Nitroglycerin 0.4mg tablet sublingual": {
+   "rxcuis": [
+    "198039"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "nitroglycerin 0.4 MG Sublingual Tablet"
+   ]
+  },
+  "Nystatin 100000unit/gm powder": {
+   "rxcuis": [
+    "261178",
+    "646456"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "nystatin 100 UNT/MG Topical Powder",
+    "nystatin 100 UNT/MG Topical Powder [Nystop]"
+   ]
+  },
+  "Ofloxacin 0.3% solution": {
+   "rxcuis": [
+    "312075"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "ofloxacin 3 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Olanzapine 5mg tablet": {
+   "rxcuis": [
+    "312078"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "olanzapine 5 MG Oral Tablet"
+   ]
+  },
+  "Olmesartan medoxomil 40mg tablet": {
+   "rxcuis": [
+    "349405"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "olmesartan medoxomil 40 MG Oral Tablet"
+   ]
+  },
+  "Omeprazole 40mg capsule delayed release": {
+   "rxcuis": [
+    "200329"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "omeprazole 40 MG Delayed Release Oral Capsule"
+   ]
+  },
+  "Ondansetron 4mg tablet disintegrating": {
+   "rxcuis": [
+    "104894"
+   ],
+   "rows_checked": 272,
+   "names": [
+    "ondansetron 4 MG Disintegrating Oral Tablet"
+   ]
+  },
+  "Oxybutynin chloride 10mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "863619"
+   ],
+   "rows_checked": 341,
+   "names": [
+    "24 HR oxybutynin chloride 10 MG Extended Release Oral Tablet"
+   ]
+  },
+  "Oxycodone hydrochloride 10mg tablet": {
+   "rxcuis": [
+    "1049683"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "oxycodone hydrochloride 10 MG Oral Tablet"
+   ]
+  },
+  "Ozempic 2mg/3ml solution pen injector": {
+   "rxcuis": [
+    "2398842",
+    "2599365",
+    "2619154"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "0.25 MG, 0.5 MG Dose 3 ML semaglutide 0.68 MG/ML Pen Injector [Ozempic]",
+    "3 ML semaglutide 1.34 MG/ML Pen Injector [Ozempic]"
+   ]
+  },
+  "Pantoprazole 40mg tablet delayed release": {
+   "rxcuis": [
+    "314200"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "pantoprazole 40 MG Delayed Release Oral Tablet"
+   ]
+  },
+  "Paroxetine hydrochloride 20mg tablet": {
+   "rxcuis": [
+    "1738495"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "paroxetine hydrochloride 20 MG Oral Tablet"
+   ]
+  },
+  "Paxlovid 300 mg ; 100 mg dose pack 20 x 150 MG &10 x 100mg tablet therapy pack": {
+   "rxcuis": [
+    "2587899",
+    "2599543",
+    "2704987"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "{10 (nirmatrelvir 150 MG Oral Tablet) / 10 (ritonavir 100 MG Oral Tablet) } Pack [Paxlovid 150 MG /100 MG Dose Pack]",
+    "{20 (nirmatrelvir 150 MG Oral Tablet) / 10 (ritonavir 100 MG Oral Tablet) } Pack [Paxlovid 5-Day]"
+   ]
+  },
+  "Pioglitazone 30mg tablet": {
+   "rxcuis": [
+    "312440"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "pioglitazone 30 MG Oral Tablet"
+   ]
+  },
+  "Potassium chloride crys er 20meq tablet extended release": {
+   "rxcuis": [
+    "198116"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "potassium chloride 20 MEQ Extended Release Oral Tablet"
+   ]
+  },
+  "Pravastatin sodium 40mg tablet": {
+   "rxcuis": [
+    "904475"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "pravastatin sodium 40 MG Oral Tablet"
+   ]
+  },
+  "Prednisolone acetate 1% suspension": {
+   "rxcuis": [
+    "1376336"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "prednisolone acetate 10 MG/ML Ophthalmic Suspension"
+   ]
+  },
+  "Prednisone 5mg tablet": {
+   "rxcuis": [
+    "312617"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "prednisone 5 MG Oral Tablet"
+   ]
+  },
+  "Pregabalin 75mg capsule": {
+   "rxcuis": [
+    "483450"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "pregabalin 75 MG Oral Capsule"
+   ]
+  },
+  "Promethazine hydrochloride 25mg tablet": {
+   "rxcuis": [
+    "992447"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "promethazine hydrochloride 25 MG Oral Tablet"
+   ]
+  },
+  "Propranolol hydrochloride 20mg tablet": {
+   "rxcuis": [
+    "856457"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "propranolol hydrochloride 20 MG Oral Tablet"
+   ]
+  },
+  "Quetiapine 50mg tablet": {
+   "rxcuis": [
+    "616487"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "quetiapine 50 MG Oral Tablet"
+   ]
+  },
+  "Restasis 0.05% emulsion": {
+   "rxcuis": [
+    "2572293",
+    "402092"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "0.4 ML cyclosporine 0.5 MG/ML Ophthalmic Suspension [Restasis]",
+    "cyclosporine 0.5 MG/ML Ophthalmic Suspension [Restasis]"
+   ]
+  },
+  "Risperidone 1mg tablet": {
+   "rxcuis": [
+    "312830"
+   ],
+   "rows_checked": 132,
+   "names": [
+    "risperidone 1 MG Oral Tablet"
+   ]
+  },
+  "Ropinirole 1mg tablet": {
+   "rxcuis": [
+    "314208"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "ropinirole 1 MG Oral Tablet"
+   ]
+  },
+  "Rosuvastatin calcium 10mg tablet": {
+   "rxcuis": [
+    "859747"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "rosuvastatin calcium 10 MG Oral Tablet"
+   ]
+  },
+  "Sertraline 50mg tablet": {
+   "rxcuis": [
+    "312941"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "sertraline 50 MG Oral Tablet"
+   ]
+  },
+  "Simvastatin 20mg tablet": {
+   "rxcuis": [
+    "312961"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "simvastatin 20 MG Oral Tablet"
+   ]
+  },
+  "Spironolactone 25mg tablet": {
+   "rxcuis": [
+    "313096"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "spironolactone 25 MG Oral Tablet"
+   ]
+  },
+  "Sucralfate 1gm tablet": {
+   "rxcuis": [
+    "314234"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "sucralfate 1000 MG Oral Tablet"
+   ]
+  },
+  "Sulfamethoxazole / trimethoprim 400-80mg tablet": {
+   "rxcuis": [
+    "198334"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "sulfamethoxazole 400 MG / trimethoprim 80 MG Oral Tablet"
+   ]
+  },
+  "Sumatriptan 100mg tablet": {
+   "rxcuis": [
+    "313160"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "sumatriptan 100 MG Oral Tablet"
+   ]
+  },
+  "Symbicort 160-4.5mcg/act aerosol": {
+   "rxcuis": [
+    "1246306"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "120 ACTUAT budesonide 0.16 MG/ACTUAT / formoterol fumarate 0.0045 MG/ACTUAT Metered Dose Inhaler [Symbicort]"
+   ]
+  },
+  "Synthroid 75mcg tablet": {
+   "rxcuis": [
+    "966171"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "levothyroxine sodium 0.075 MG Oral Tablet [Synthroid]"
+   ]
+  },
+  "Tamsulosin hydrochloride 0.4mg capsule": {
+   "rxcuis": [
+    "863669"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "tamsulosin hydrochloride 0.4 MG Oral Capsule"
+   ]
+  },
+  "Terbinafine 250mg tablet": {
+   "rxcuis": [
+    "313222"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "terbinafine 250 MG Oral Tablet"
+   ]
+  },
+  "Timolol maleate 0.5% solution": {
+   "rxcuis": [
+    "1992303"
+   ],
+   "rows_checked": 86,
+   "names": [
+    "12 HR timolol 5 MG/ML Ophthalmic Solution"
+   ]
+  },
+  "Tizanidine 4mg tablet": {
+   "rxcuis": [
+    "313413"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "tizanidine 4 MG Oral Tablet"
+   ]
+  },
+  "Topiramate 50mg tablet": {
+   "rxcuis": [
+    "151226"
+   ],
+   "rows_checked": 181,
+   "names": [
+    "topiramate 50 MG Oral Tablet"
+   ]
+  },
+  "Torsemide 20mg tablet": {
+   "rxcuis": [
+    "198371"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "torsemide 20 MG Oral Tablet"
+   ]
+  },
+  "Tramadol hydrochloride 50mg tablet": {
+   "rxcuis": [
+    "835603"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "tramadol hydrochloride 50 MG Oral Tablet"
+   ]
+  },
+  "Trazodone hydrochloride 50mg tablet": {
+   "rxcuis": [
+    "856377"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "trazodone hydrochloride 50 MG Oral Tablet"
+   ]
+  },
+  "Trelegy 100-62.5-25mcg/act aerosol powder": {
+   "rxcuis": [
+    "1945048"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "30 ACTUAT fluticasone furoate 0.1 MG/ACTUAT / umeclidinium 0.0625 MG/ACTUAT / vilanterol 0.025 MG/ACTUAT Dry Powder Inhaler [Trelegy]"
+   ]
+  },
+  "Triamcinolone acetonide 0.1% cream": {
+   "rxcuis": [
+    "1014314"
+   ],
+   "rows_checked": 188,
+   "names": [
+    "triamcinolone acetonide 1 MG/ML Topical Cream"
+   ]
+  },
+  "Trulicity 1.5mg/0.5ml solution auto injector": {
+   "rxcuis": [
+    "1551300",
+    "1551306"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "0.5 ML dulaglutide 1.5 MG/ML Auto-Injector [Trulicity]",
+    "0.5 ML dulaglutide 3 MG/ML Auto-Injector [Trulicity]"
+   ]
+  },
+  "Valacyclovir 500mg tablet": {
+   "rxcuis": [
+    "313565"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "valacyclovir 500 MG Oral Tablet"
+   ]
+  },
+  "Valsartan 160mg tablet": {
+   "rxcuis": [
+    "349201"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "valsartan 160 MG Oral Tablet"
+   ]
+  },
+  "Venlafaxine 150mg capsule extended release 24 hour": {
+   "rxcuis": [
+    "313581"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "24 HR venlafaxine 150 MG Extended Release Oral Capsule"
+   ]
+  },
+  "Ventolin 108 (90 Base)mcg/act aerosol solution": {
+   "rxcuis": [
+    "859088"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "NDA020983 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [Ventolin]"
+   ]
+  },
+  "Warfarin sodium 5mg tablet": {
+   "rxcuis": [
+    "855332",
+    "855336"
+   ],
+   "rows_checked": 187,
+   "names": [
+    "warfarin sodium 5 MG Oral Tablet",
+    "warfarin sodium 5 MG Oral Tablet [Jantoven]"
+   ]
+  },
+  "Xarelto 20mg tablet": {
+   "rxcuis": [
+    "1232088"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "rivaroxaban 20 MG Oral Tablet [Xarelto]"
+   ]
+  },
+  "Zolpidem tartrate 10mg tablet": {
+   "rxcuis": [
+    "854873"
+   ],
+   "rows_checked": 148,
+   "names": [
+    "zolpidem tartrate 10 MG Oral Tablet"
+   ]
+  },
+  "Lantus 100unit/ml solution pen injector": {
+   "rxcuis": [
+    "847232"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "3 ML insulin glargine 100 UNT/ML Pen Injector [Lantus]"
+   ],
+   "note": "4 rows on H2001-118 differ only by that plan's all-tier insulin rule (25%), handled by the engine"
+  },
+  "Novolog 100unit/ml solution pen injector": {
+   "rxcuis": [
+    "1653204",
+    "1653198"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "3 ML insulin aspart, human 100 UNT/ML Cartridge [NovoLog]",
+    "3 ML insulin aspart, human 100 UNT/ML Pen Injector [NovoLog]"
+   ],
+   "note": "4 rows on H2001-118 differ only by that plan's all-tier insulin rule (25%), handled by the engine"
+  }
+ }
+}

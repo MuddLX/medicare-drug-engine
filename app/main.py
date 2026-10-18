@@ -748,6 +748,72 @@ def get_mfp(drug_name):
     table = data_meta.negotiated_prices(DB_PATH)
     return (table if table is not None else MFP_2026).get(drug_name.lower().strip())
 
+def mpf_mode():
+    """True once real 2027 prices from Medicare.gov Plan Finder are loaded (build step mpf_prices).
+    Those prices already include Medicare-negotiated prices and are per pharmacy chain."""
+    return data_meta.meta(DB_PATH).get("prices_source") == "mpf"
+
+
+MPF_CHAINS = ["cub", "cvs", "walgreens", "costco", "walmart", "hy-vee", "hyvee", "target", "thrifty white",
+              "sam's", "kowalski", "lunds", "coborn", "fairview", "mayo", "essentia", "sanford", "shopko"]
+
+
+def chain_of(name):
+    """'CVS Pharmacy #07110' -> 'cvs'. Same rule as Plan jsons/_tools/mpf_consolidate.py."""
+    n = (name or "").lower()
+    if "mail" in n:
+        return "mail order"
+    for c in MPF_CHAINS:
+        if c in n:
+            return "hy-vee" if c == "hyvee" else c
+    return n.strip()
+
+
+def mpf_chain_price(conn, contract_id, plan_id, ndc, chain):
+    """Medicare.gov's captured monthly price for this drug package at this chain, or None."""
+    if not ndc or not chain:
+        return None
+    row = conn.execute("""
+        SELECT m.retail FROM mpf_price m
+        JOIN plans p ON p.contract_id = m.contract_id AND p.plan_id = m.plan_id
+        JOIN formulary f ON f.formulary_id = p.formulary_id AND f.rxcui = m.rxcui
+        WHERE m.contract_id = ? AND m.plan_id = ? AND f.ndc = ? AND m.chain = ? LIMIT 1
+    """, (contract_id, plan_id.zfill(3), ndc, chain)).fetchone()
+    return float(row[0]) if row else None
+
+
+def mpf_chains_for_plan(conn, contract_id, plan_id):
+    return {r[0] for r in conn.execute("SELECT DISTINCT chain FROM mpf_price WHERE contract_id = ? AND plan_id = ?",
+                                       (contract_id, plan_id.zfill(3)))}
+
+
+def insulin_month_cost(conn, contract_id, plan_id, tier, price, preferred=True, mail=False):
+    """A month of insulin on this plan: the lower of $35 and the plan's own insulin copay/coinsurance
+    (CMS insulin file; tier '.' = all tiers), never more than the price (2026-10-17: Medicare.gov shows
+    e.g. 25% of a $94.69 Lantus = $23.67, not $35)."""
+    v = 35.0
+    try:
+        r = conn.execute("""SELECT copay_pref, copay_nonpref, copay_mail_pref, copay_mail_nonpref,
+                                   coins_pref, coins_nonpref, coins_mail_pref, coins_mail_nonpref
+                            FROM insulin_cost WHERE contract_id = ? AND plan_id = ? AND tier IN (?, '.')
+                              AND days_supply = 1 ORDER BY tier = '.' LIMIT 1""",
+                         (contract_id, plan_id.zfill(3), str(tier))).fetchone()
+    except sqlite3.OperationalError:
+        r = None
+    if r:
+        cp = [r[2], r[3]] if mail else ([r[0], r[1]] if preferred else [r[1], r[0]])
+        co = [r[6], r[7]] if mail else ([r[4], r[5]] if preferred else [r[5], r[4]])
+        cp = next((x for x in cp if x is not None), None)
+        co = next((x for x in co if x is not None), None)
+        if cp is not None:
+            v = min(v, float(cp))
+        if co is not None and price:
+            v = min(v, float(co) * float(price))
+    if price:
+        v = min(v, float(price))
+    return round(v, 2)
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1068,7 +1134,7 @@ def retail_cost_share(pref_type, pref_amt, std_type, std_amt, preferred=True):
     return 0, 0.0
 
 
-def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, drug_name="", use_mfp=True):
+def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, drug_name="", use_mfp=True, ndc=None):
     """Price terms for one drug at one pharmacy (see app/drug_year.py). Same rules as
     get_drug_cost_at_pharmacy: preferred/non-preferred rates, brand vs generic dispensing fee,
     insulin $35, MFP drugs at 25% of the negotiated price."""
@@ -1077,7 +1143,17 @@ def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, d
     generic_fee = float(pharmacy.get("generic_fee", 0) or 0)
     brand_fee = float(pharmacy.get("brand_fee", 0) or 0)
     drug_name_base = drug_name.split()[0] if drug_name else ""
+    mpf = mpf_mode()
+    if mpf:
+        # Real prices: this chain's own Medicare.gov price (None = not captured -> price not on file).
+        chain_price = mpf_chain_price(conn, contract_id, plan_id, ndc, chain_of(pharmacy.get("name")))
+        # Not captured at this chain for this drug: use the plan-level (Cub) price rather than $0.
+        unit_cost = chain_price if chain_price is not None else unit_cost
+        generic_fee = brand_fee = 0.0      # Medicare.gov's retail price already includes dispensing
     if is_insulin(drug_name) or is_insulin(drug_name_base):
+        if mpf:
+            return {"flat": insulin_month_cost(conn, contract_id, plan_id, tier, unit_cost, is_preferred),
+                    "price": unit_cost}
         return {"flat": 35.0}
     cost_row = conn.execute("""
         SELECT cost_type_pref, cost_amt_pref,
@@ -1091,7 +1167,7 @@ def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, d
         return {"flat": 0.0}
     cost_type, cost_amt = retail_cost_share(cost_row[0], cost_row[1], cost_row[2], cost_row[3], is_preferred)
     disp_fee = (brand_fee if brand_fee > 0 else generic_fee) if (tier and tier >= 3) else generic_fee
-    mfp = (get_mfp(drug_name_base) or get_mfp(drug_name)) if use_mfp else None
+    mfp = (get_mfp(drug_name_base) or get_mfp(drug_name)) if (use_mfp and not mpf) else None
     if mfp is not None:
         unit_cost = mfp      # negotiated price; the plan's own tier cost-sharing still applies (2026-10-06)
         disp_fee = brand_fee if brand_fee > 0 else generic_fee
@@ -1539,23 +1615,25 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     # Check for insulin $35 cap (IRA 2022 - applies to all Medicare Part D insulins)
     drug_name_base = drug_name.split()[0] if drug_name else ""
     if is_insulin(drug_name) or is_insulin(drug_name_base):
-        # Insulin: flat $35/month cap, no deductible applies
+        # Insulin: no deductible; at most $35/month (the plan's own insulin cost when real prices are loaded)
+        ins = insulin_month_cost(conn, contract_id, plan_id_padded, tier, unit_cost) if mpf_mode() else 35.0
         monthly_costs = []
         for month_num in months_remaining:
             month_name = calendar_month(month_num)
-            monthly_costs.append({"month": month_name, "cost": 35.00})
+            monthly_costs.append({"month": month_name, "cost": ins})
         return {
             "tier": tier, "covered": True, "ndc": ndc,
             "monthly_costs": monthly_costs,
-            "annual_total": round(35.00 * len(months_remaining), 2),
-            "steady_state_copay": 35.00,
+            "annual_total": round(ins * len(months_remaining), 2),
+            "steady_state_copay": ins,
             "insulin_cap": True,
-            "_terms": {"flat": 35.0},
+            "_terms": {"flat": ins, "price": unit_cost},
         }
 
     # Medicare-negotiated drugs: the negotiated price replaces the plan's price; the plan's own tier
     # cost-sharing still applies (2026-10-06 - it used to be forced to 25% on every plan).
-    mfp = (get_mfp(drug_name_base) or get_mfp(drug_name)) if use_mfp else None   # not for the generic
+    # Medicare.gov prices (mpf mode) already include the negotiated price - don't swap it in again.
+    mfp = (get_mfp(drug_name_base) or get_mfp(drug_name)) if (use_mfp and not mpf_mode()) else None
     if mfp is not None:
         unit_cost = mfp
 
@@ -1644,6 +1722,11 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 "contract_id": plan["contract_id"], "plan_id": plan["plan_id"],
                 "premium": float(premium), "deductible": float(deductible),
                 "premium_monthly": float(premium),
+                # Plans with deductible-free tiers follow Medicare.gov's yearly method (drug_year.py)
+                "gross_rule": bool(conn.execute(
+                    "SELECT 1 FROM beneficiary_cost WHERE contract_id = ? AND plan_id = ? AND days_supply = 1 "
+                    "AND coverage_level = '1' AND ded_applies = 'N' LIMIT 1",
+                    (plan["contract_id"], plan["plan_id"].zfill(3))).fetchone()),
             }
 
     # Normalize drug names via Claude
@@ -1669,6 +1752,11 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             client_coords=client_coords,
             zip_coords=zip_coords,
         )
+        if mpf_mode():
+            # Real prices exist per chain: only show stores whose chain was captured for this plan,
+            # so no store's cost is a guess.
+            have = mpf_chains_for_plan(conn, plan["contract_id"], plan["plan_id"])
+            nearby = [ph for ph in nearby if chain_of(ph.get("name")) in have]
         pharmacy_map[carrier] = nearby
 
     for item in normalized:
@@ -1802,12 +1890,13 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     # cap) by drug_year.apply_shared_year() at the end of this function.
                     pharm_monthly = []
                     pharm_terms = None
-                    if drug_is_insulin:
+                    if drug_is_insulin and not mpf_mode():
                         pharm_terms = {"flat": 35.0}
-                    elif cost_row:
+                    elif cost_row or drug_is_insulin:
                         pharm_terms = pharmacy_fill_terms(
                             conn, plan["contract_id"], plan["plan_id"], tier, unit_cost,
-                            pharmacy, drug_name=drug_name, use_mfp=not plan_cost.get("as_generic"))
+                            pharmacy, drug_name=drug_name, use_mfp=not plan_cost.get("as_generic"),
+                            ndc=plan_cost.get("ndc"))
                     if pharm_terms is not None:
                         pharm_monthly = [{"month": mn, "cost": 0.0} for mn in month_names]
 
@@ -1845,11 +1934,20 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     # (it used to skip the deductible, which made fake "saves $X/yr" lines).
                     # Costs are per month; a 90-day copay is divided by 3.
                     mail_ded = (mail_cost_row[2] != "N") if mail_cost_row else True
+                    mpf_mail = None
+                    if mpf_mode():
+                        m90 = mpf_chain_price(conn, plan["contract_id"], plan["plan_id"], plan_cost.get("ndc"), "mail order")
+                        mpf_mail = round(m90 / 3, 2) if m90 else None      # Medicare.gov mail price is a 90-day fill
                     if drug_is_insulin:
-                        mail_terms = {"flat": 35.0}
+                        mail_terms = ({"flat": insulin_month_cost(conn, plan["contract_id"], plan["plan_id"],
+                                                                   plan_cost.get("tier"), mpf_mail, mail=True),
+                                       "price": mpf_mail} if mpf_mode() else {"flat": 35.0})
                     elif mail_offered:
                         mt, ma = mail_cost_row[0], float(mail_cost_row[1] or 0)
-                        mail_price = mfp_value if (is_mfp_drug_flag and not plan_cost.get("as_generic")) else unit_cost
+                        if mpf_mode():
+                            mail_price = mpf_mail
+                        else:
+                            mail_price = mfp_value if (is_mfp_drug_flag and not plan_cost.get("as_generic")) else unit_cost
                         if mt == 2:
                             mail_terms = {"ded_applies": mail_ded, "price": mail_price, "fee": 0.0,
                                           "cost_type": 2, "cost_amt": ma}

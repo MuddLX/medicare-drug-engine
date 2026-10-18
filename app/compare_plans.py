@@ -252,7 +252,7 @@ def compare(data):
             "not_on_list_label": AV.NOT_ON_LIST, "not_on_list_detail": AV.NOT_ON_LIST_DETAIL,
             # Wording the app shows (Roundabout Phase 44); which banner applies is decided by `prices` and
             # `prices_are_estimates`, the text by these.
-            "prices_banner": AV.PRICES_BANNER, "estimates_banner": AV.ESTIMATES_BANNER, "month_caption": AV.MONTH_CAPTION,
+            "prices_banner": AV.PRICES_BANNER, "estimates_banner": AV.ESTIMATES_BANNER, "month_caption": AV.price_source_note(M.DB_PATH),
         },
         "months": months,
         "drugs": [{"written": d.get("original_name") or "", "read_as": d.get("drug_name") or "",

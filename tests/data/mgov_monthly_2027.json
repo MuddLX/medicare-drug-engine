@@ -1,0 +1,2840 @@
+{
+ "_about": "Medicare.gov Plan Finder month-by-month drug costs captured 2026-10-17 (42-drug list), with each drug's price and cost-share. drug_year must reproduce these.",
+ "cases": [
+  {
+   "plan": "H2001-116-0",
+   "pharmacy": "CUB PHARMACY",
+   "deductible": 685.0,
+   "medicare_gov_months": [
+    360.53,
+    122.53,
+    122.53,
+    122.53,
+    122.53,
+    122.53,
+    122.53,
+    122.53,
+    122.53,
+    122.53,
+    56.72,
+    0.0
+   ],
+   "drugs": [
+    {
+     "name": "Amlodipine 5mg tablet",
+     "retail": 3.32,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.32,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Amoxicillin 500mg capsule",
+     "retail": 8.77,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 8.77,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Atorvastatin 40mg tablet",
+     "retail": 3.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Azithromycin 250mg tablet",
+     "retail": 12.44,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 12.44,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Carvedilol 12.5mg tablet",
+     "retail": 3.5,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cephalexin 250mg capsule",
+     "retail": 3.81,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.81,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Clopidogrel 75mg tablet",
+     "retail": 3.53,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.53,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cyclobenzaprine hydrochloride 10mg tablet",
+     "retail": 23.36,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 23.36,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Diclofenac sodium 75mg tablet delayed release",
+     "retail": 17.92,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 17.92,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Doxycycline hyclate 100mg capsule",
+     "retail": 11.82,
+     "before_deductible": 11.82,
+     "after_deductible": 2.36,
+     "terms": {
+      "ded_applies": true,
+      "price": 11.82,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.199662
+     }
+    },
+    {
+     "name": "Duloxetine 60mg capsule delayed release particles",
+     "retail": 13.68,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 13.68,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Eliquis 5mg tablet",
+     "retail": 256.18,
+     "before_deductible": 256.18,
+     "after_deductible": 51.24,
+     "terms": {
+      "ded_applies": true,
+      "price": 256.18,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.200016
+     }
+    },
+    {
+     "name": "Escitalopram 20mg tablet",
+     "retail": 3.47,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.47,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Famotidine 40mg tablet",
+     "retail": 5.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Fluticasone propionate 50mcg/act suspension",
+     "retail": 8.28,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 8.28,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Furosemide 20mg tablet",
+     "retail": 3.26,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.26,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Gabapentin 300mg capsule",
+     "retail": 35.89,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 35.89,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Hydrochlorothiazide 25mg tablet",
+     "retail": 2.28,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.28,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Ibuprofen 800mg tablet",
+     "retail": 6.69,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.69,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Latanoprost 0.005% solution",
+     "retail": 5.08,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.08,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Levothyroxine sodium 50mcg tablet",
+     "retail": 3.52,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.52,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Lisinopril 10mg tablet",
+     "retail": 5.9,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.9,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Losartan potassium 100mg tablet",
+     "retail": 3.47,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.47,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Meloxicam 15mg tablet",
+     "retail": 3.53,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.53,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metformin hydrochloride 1000mg tablet",
+     "retail": 5.03,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.03,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Methylprednisolone 4mg tablet",
+     "retail": 45.62,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 45.62,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Metoprolol succinate 25mg tablet extended release 24 hour",
+     "retail": 3.34,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.34,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol tartrate 25mg tablet",
+     "retail": 4.02,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.02,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Montelukast 10mg tablet",
+     "retail": 3.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Mupirocin 2% ointment",
+     "retail": 15.62,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 15.62,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Omeprazole 40mg capsule delayed release",
+     "retail": 5.64,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.64,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Oxycodone hydrochloride 10mg tablet",
+     "retail": 29.5,
+     "before_deductible": 29.5,
+     "after_deductible": 5.9,
+     "terms": {
+      "ded_applies": true,
+      "price": 29.5,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.2
+     }
+    },
+    {
+     "name": "Pantoprazole 40mg tablet delayed release",
+     "retail": 3.14,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.14,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Potassium chloride crys er 20meq tablet extended release",
+     "retail": 9.33,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 9.33,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Prednisone 5mg tablet",
+     "retail": 5.37,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.37,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Rosuvastatin calcium 10mg tablet",
+     "retail": 3.5,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Sertraline 50mg tablet",
+     "retail": 3.35,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.35,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Simvastatin 20mg tablet",
+     "retail": 3.47,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.47,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tamsulosin hydrochloride 0.4mg capsule",
+     "retail": 5.3,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.3,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tramadol hydrochloride 50mg tablet",
+     "retail": 36.25,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 36.25,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Trazodone hydrochloride 50mg tablet",
+     "retail": 3.07,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.07,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Triamcinolone acetonide 0.1% cream",
+     "retail": 7.03,
+     "before_deductible": 7.03,
+     "after_deductible": 7.03,
+     "terms": {
+      "ded_applies": false,
+      "price": 7.03,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    }
+   ]
+  },
+  {
+   "plan": "H2001-116-0",
+   "pharmacy": "CVS PHARMACY #07110",
+   "deductible": 685.0,
+   "medicare_gov_months": [
+    315.14,
+    122.3,
+    122.3,
+    122.3,
+    122.3,
+    122.3,
+    122.3,
+    122.3,
+    122.3,
+    6.89,
+    0.0,
+    0.0
+   ],
+   "drugs": [
+    {
+     "name": "Amlodipine 5mg tablet",
+     "retail": 5.78,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.78,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Amoxicillin 500mg capsule",
+     "retail": 16.79,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 16.79,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Atorvastatin 40mg tablet",
+     "retail": 6.13,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.13,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Azithromycin 250mg tablet",
+     "retail": 24.22,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 24.22,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Carvedilol 12.5mg tablet",
+     "retail": 6.15,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.15,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cephalexin 250mg capsule",
+     "retail": 6.78,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.78,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Clopidogrel 75mg tablet",
+     "retail": 6.22,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.22,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cyclobenzaprine hydrochloride 10mg tablet",
+     "retail": 23.21,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 23.21,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Diclofenac sodium 75mg tablet delayed release",
+     "retail": 18.68,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 18.68,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Doxycycline hyclate 100mg capsule",
+     "retail": 11.67,
+     "before_deductible": 11.67,
+     "after_deductible": 2.33,
+     "terms": {
+      "ded_applies": true,
+      "price": 11.67,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.199657
+     }
+    },
+    {
+     "name": "Duloxetine 60mg capsule delayed release particles",
+     "retail": 14.21,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 14.21,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Eliquis 5mg tablet",
+     "retail": 256.03,
+     "before_deductible": 256.03,
+     "after_deductible": 51.21,
+     "terms": {
+      "ded_applies": true,
+      "price": 256.03,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.200016
+     }
+    },
+    {
+     "name": "Escitalopram 20mg tablet",
+     "retail": 6.09,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.09,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Famotidine 40mg tablet",
+     "retail": 9.98,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 9.98,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Fluticasone propionate 50mcg/act suspension",
+     "retail": 6.77,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.77,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Furosemide 20mg tablet",
+     "retail": 4.43,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.43,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Gabapentin 300mg capsule",
+     "retail": 37.48,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 37.48,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Hydrochlorothiazide 25mg tablet",
+     "retail": 2.13,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.13,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Ibuprofen 800mg tablet",
+     "retail": 10.0,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 10.0,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Latanoprost 0.005% solution",
+     "retail": 6.1,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Levothyroxine sodium 50mcg tablet",
+     "retail": 6.19,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.19,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Lisinopril 10mg tablet",
+     "retail": 11.01,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 11.01,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Losartan potassium 100mg tablet",
+     "retail": 6.09,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.09,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Meloxicam 15mg tablet",
+     "retail": 6.21,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.21,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metformin hydrochloride 1000mg tablet",
+     "retail": 9.23,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 9.23,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Methylprednisolone 4mg tablet",
+     "retail": 47.85,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 47.85,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Metoprolol succinate 25mg tablet extended release 24 hour",
+     "retail": 5.83,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.83,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol tartrate 25mg tablet",
+     "retail": 7.2,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 7.2,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Montelukast 10mg tablet",
+     "retail": 6.14,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.14,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Mupirocin 2% ointment",
+     "retail": 16.26,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 16.26,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Omeprazole 40mg capsule delayed release",
+     "retail": 10.48,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 10.48,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Oxycodone hydrochloride 10mg tablet",
+     "retail": 29.35,
+     "before_deductible": 29.35,
+     "after_deductible": 5.87,
+     "terms": {
+      "ded_applies": true,
+      "price": 29.35,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.2
+     }
+    },
+    {
+     "name": "Pantoprazole 40mg tablet delayed release",
+     "retail": 5.43,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.43,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Potassium chloride crys er 20meq tablet extended release",
+     "retail": 8.78,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 8.78,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Prednisone 5mg tablet",
+     "retail": 9.96,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 9.96,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Rosuvastatin calcium 10mg tablet",
+     "retail": 6.14,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.14,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Sertraline 50mg tablet",
+     "retail": 5.84,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.84,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Simvastatin 20mg tablet",
+     "retail": 6.1,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tamsulosin hydrochloride 0.4mg capsule",
+     "retail": 9.79,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 9.79,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tramadol hydrochloride 50mg tablet",
+     "retail": 36.1,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 36.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Trazodone hydrochloride 50mg tablet",
+     "retail": 5.28,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.28,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Triamcinolone acetonide 0.1% cream",
+     "retail": 6.89,
+     "before_deductible": 6.89,
+     "after_deductible": 6.89,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.89,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    }
+   ]
+  },
+  {
+   "plan": "H2001-116-0",
+   "pharmacy": "WALGREENS #11832",
+   "deductible": 685.0,
+   "medicare_gov_months": [
+    361.54,
+    124.0,
+    122.94,
+    122.94,
+    122.94,
+    122.94,
+    122.94,
+    122.94,
+    122.94,
+    122.94,
+    122.94,
+    50.36
+   ],
+   "drugs": [
+    {
+     "name": "Amlodipine 5mg tablet",
+     "retail": 2.31,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.31,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Amoxicillin 500mg capsule",
+     "retail": 5.07,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 5.07,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Atorvastatin 40mg tablet",
+     "retail": 2.39,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.39,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Azithromycin 250mg tablet",
+     "retail": 6.93,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 6.93,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Carvedilol 12.5mg tablet",
+     "retail": 2.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cephalexin 250mg capsule",
+     "retail": 2.55,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.55,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Clopidogrel 75mg tablet",
+     "retail": 2.41,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.41,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cyclobenzaprine hydrochloride 10mg tablet",
+     "retail": 23.61,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 23.61,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Diclofenac sodium 75mg tablet delayed release",
+     "retail": 18.59,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 18.59,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Doxycycline hyclate 100mg capsule",
+     "retail": 12.07,
+     "before_deductible": 12.07,
+     "after_deductible": 2.41,
+     "terms": {
+      "ded_applies": true,
+      "price": 12.07,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.199669
+     }
+    },
+    {
+     "name": "Duloxetine 60mg capsule delayed release particles",
+     "retail": 14.25,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 14.25,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Eliquis 5mg tablet",
+     "retail": 256.43,
+     "before_deductible": 256.43,
+     "after_deductible": 51.29,
+     "terms": {
+      "ded_applies": true,
+      "price": 256.43,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.200016
+     }
+    },
+    {
+     "name": "Escitalopram 20mg tablet",
+     "retail": 2.38,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.38,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Famotidine 40mg tablet",
+     "retail": 3.36,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.36,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Fluticasone propionate 50mcg/act suspension",
+     "retail": 2.55,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.55,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Furosemide 20mg tablet",
+     "retail": 2.27,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.27,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Gabapentin 300mg capsule",
+     "retail": 37.0,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 37.0,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Hydrochlorothiazide 25mg tablet",
+     "retail": 2.38,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.38,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Ibuprofen 800mg tablet",
+     "retail": 3.37,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.37,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Latanoprost 0.005% solution",
+     "retail": 2.38,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.38,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Levothyroxine sodium 50mcg tablet",
+     "retail": 2.41,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.41,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Lisinopril 10mg tablet",
+     "retail": 3.62,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.62,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Losartan potassium 100mg tablet",
+     "retail": 2.38,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.38,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Meloxicam 15mg tablet",
+     "retail": 2.41,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.41,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metformin hydrochloride 1000mg tablet",
+     "retail": 3.18,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.18,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Methylprednisolone 4mg tablet",
+     "retail": 46.97,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 46.97,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Metoprolol succinate 25mg tablet extended release 24 hour",
+     "retail": 2.32,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.32,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol tartrate 25mg tablet",
+     "retail": 2.66,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.66,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Montelukast 10mg tablet",
+     "retail": 2.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Mupirocin 2% ointment",
+     "retail": 16.24,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 16.24,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Omeprazole 40mg capsule delayed release",
+     "retail": 3.48,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.48,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Oxycodone hydrochloride 10mg tablet",
+     "retail": 29.75,
+     "before_deductible": 29.75,
+     "after_deductible": 5.95,
+     "terms": {
+      "ded_applies": true,
+      "price": 29.75,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.2
+     }
+    },
+    {
+     "name": "Pantoprazole 40mg tablet delayed release",
+     "retail": 2.22,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.22,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Potassium chloride crys er 20meq tablet extended release",
+     "retail": 3.06,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.06,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Prednisone 5mg tablet",
+     "retail": 3.36,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.36,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Rosuvastatin calcium 10mg tablet",
+     "retail": 2.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Sertraline 50mg tablet",
+     "retail": 2.32,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.32,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Simvastatin 20mg tablet",
+     "retail": 2.38,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.38,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tamsulosin hydrochloride 0.4mg capsule",
+     "retail": 3.32,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.32,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tramadol hydrochloride 50mg tablet",
+     "retail": 36.5,
+     "before_deductible": 8.0,
+     "after_deductible": 8.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 36.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    },
+    {
+     "name": "Trazodone hydrochloride 50mg tablet",
+     "retail": 2.18,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 2.18,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Triamcinolone acetonide 0.1% cream",
+     "retail": 7.29,
+     "before_deductible": 7.29,
+     "after_deductible": 7.29,
+     "terms": {
+      "ded_applies": false,
+      "price": 7.29,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 8.0
+     }
+    }
+   ]
+  },
+  {
+   "plan": "H3219-001-0",
+   "pharmacy": "CUB PHARMACY",
+   "deductible": 400.0,
+   "medicare_gov_months": [
+    331.56,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42,
+    44.42
+   ],
+   "drugs": [
+    {
+     "name": "Amlodipine 5mg tablet",
+     "retail": 1.46,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.46,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Amoxicillin 500mg capsule",
+     "retail": 0.29,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.29,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Atorvastatin 40mg tablet",
+     "retail": 1.01,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.01,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Azithromycin 250mg tablet",
+     "retail": 0.5,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Carvedilol 12.5mg tablet",
+     "retail": 3.2,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.2,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cephalexin 250mg capsule",
+     "retail": 0.33,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.33,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Clopidogrel 75mg tablet",
+     "retail": 0.2,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.2,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cyclobenzaprine hydrochloride 10mg tablet",
+     "retail": 4.92,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.92,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Diclofenac sodium 75mg tablet delayed release",
+     "retail": 0.5,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Doxycycline hyclate 100mg capsule",
+     "retail": 0.67,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.67,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Duloxetine 60mg capsule delayed release particles",
+     "retail": 0.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Eliquis 5mg tablet",
+     "retail": 255.43,
+     "before_deductible": 255.43,
+     "after_deductible": 33.21,
+     "terms": {
+      "ded_applies": true,
+      "price": 255.43,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.130016
+     }
+    },
+    {
+     "name": "Escitalopram 20mg tablet",
+     "retail": 0.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Famotidine 40mg tablet",
+     "retail": 3.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Fluticasone propionate 50mcg/act suspension",
+     "retail": 0.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Furosemide 20mg tablet",
+     "retail": 1.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Gabapentin 300mg capsule",
+     "retail": 30.01,
+     "before_deductible": 30.01,
+     "after_deductible": 3.9,
+     "terms": {
+      "ded_applies": true,
+      "price": 30.01,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.129957
+     }
+    },
+    {
+     "name": "Hydrochlorothiazide 25mg tablet",
+     "retail": 1.55,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.55,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Ibuprofen 800mg tablet",
+     "retail": 4.7,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.7,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Latanoprost 0.005% solution",
+     "retail": 0.1,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Levothyroxine sodium 50mcg tablet",
+     "retail": 1.63,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.63,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Lisinopril 10mg tablet",
+     "retail": 3.08,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.08,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Losartan potassium 100mg tablet",
+     "retail": 0.1,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Meloxicam 15mg tablet",
+     "retail": 1.54,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.54,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metformin hydrochloride 1000mg tablet",
+     "retail": 4.05,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.05,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Methylprednisolone 4mg tablet",
+     "retail": 1.87,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.87,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol succinate 25mg tablet extended release 24 hour",
+     "retail": 0.33,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.33,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol tartrate 25mg tablet",
+     "retail": 3.06,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.06,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Montelukast 10mg tablet",
+     "retail": 1.59,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.59,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Mupirocin 2% ointment",
+     "retail": 0.46,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.46,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Omeprazole 40mg capsule delayed release",
+     "retail": 1.42,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.42,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Oxycodone hydrochloride 10mg tablet",
+     "retail": 56.26,
+     "before_deductible": 56.26,
+     "after_deductible": 7.31,
+     "terms": {
+      "ded_applies": true,
+      "price": 56.26,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.129932
+     }
+    },
+    {
+     "name": "Pantoprazole 40mg tablet delayed release",
+     "retail": 1.43,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.43,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Potassium chloride crys er 20meq tablet extended release",
+     "retail": 0.67,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.67,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Prednisone 5mg tablet",
+     "retail": 3.29,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.29,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Rosuvastatin calcium 10mg tablet",
+     "retail": 1.46,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.46,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Sertraline 50mg tablet",
+     "retail": 1.55,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.55,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Simvastatin 20mg tablet",
+     "retail": 0.15,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.15,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tamsulosin hydrochloride 0.4mg capsule",
+     "retail": 3.44,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.44,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tramadol hydrochloride 50mg tablet",
+     "retail": 7.52,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 7.52,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Trazodone hydrochloride 50mg tablet",
+     "retail": 1.64,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.64,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Triamcinolone acetonide 0.1% cream",
+     "retail": 3.97,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.97,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    }
+   ]
+  },
+  {
+   "plan": "H3219-001-0",
+   "pharmacy": "CVS PHARMACY #07110",
+   "deductible": 400.0,
+   "medicare_gov_months": [
+    333.32,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18,
+    46.18
+   ],
+   "drugs": [
+    {
+     "name": "Amlodipine 5mg tablet",
+     "retail": 1.46,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.46,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Amoxicillin 500mg capsule",
+     "retail": 0.29,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.29,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Atorvastatin 40mg tablet",
+     "retail": 1.01,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.01,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Azithromycin 250mg tablet",
+     "retail": 0.5,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Carvedilol 12.5mg tablet",
+     "retail": 3.2,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.2,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cephalexin 250mg capsule",
+     "retail": 0.33,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.33,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Clopidogrel 75mg tablet",
+     "retail": 0.2,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.2,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Cyclobenzaprine hydrochloride 10mg tablet",
+     "retail": 4.92,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.92,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Diclofenac sodium 75mg tablet delayed release",
+     "retail": 0.5,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.5,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Doxycycline hyclate 100mg capsule",
+     "retail": 0.67,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.67,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Duloxetine 60mg capsule delayed release particles",
+     "retail": 0.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Eliquis 5mg tablet",
+     "retail": 255.43,
+     "before_deductible": 255.43,
+     "after_deductible": 33.21,
+     "terms": {
+      "ded_applies": true,
+      "price": 255.43,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.130016
+     }
+    },
+    {
+     "name": "Escitalopram 20mg tablet",
+     "retail": 0.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Famotidine 40mg tablet",
+     "retail": 3.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Fluticasone propionate 50mcg/act suspension",
+     "retail": 0.4,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.4,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Furosemide 20mg tablet",
+     "retail": 1.49,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.49,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Gabapentin 300mg capsule",
+     "retail": 43.51,
+     "before_deductible": 43.51,
+     "after_deductible": 5.66,
+     "terms": {
+      "ded_applies": true,
+      "price": 43.51,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.130085
+     }
+    },
+    {
+     "name": "Hydrochlorothiazide 25mg tablet",
+     "retail": 1.55,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.55,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Ibuprofen 800mg tablet",
+     "retail": 4.7,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.7,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Latanoprost 0.005% solution",
+     "retail": 0.1,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Levothyroxine sodium 50mcg tablet",
+     "retail": 1.63,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.63,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Lisinopril 10mg tablet",
+     "retail": 3.08,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.08,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Losartan potassium 100mg tablet",
+     "retail": 0.1,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.1,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Meloxicam 15mg tablet",
+     "retail": 1.54,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.54,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metformin hydrochloride 1000mg tablet",
+     "retail": 4.05,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 4.05,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Methylprednisolone 4mg tablet",
+     "retail": 1.87,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.87,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol succinate 25mg tablet extended release 24 hour",
+     "retail": 0.33,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.33,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Metoprolol tartrate 25mg tablet",
+     "retail": 3.06,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.06,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Montelukast 10mg tablet",
+     "retail": 1.59,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.59,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Mupirocin 2% ointment",
+     "retail": 0.46,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.46,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Omeprazole 40mg capsule delayed release",
+     "retail": 1.42,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.42,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Oxycodone hydrochloride 10mg tablet",
+     "retail": 56.26,
+     "before_deductible": 56.26,
+     "after_deductible": 7.31,
+     "terms": {
+      "ded_applies": true,
+      "price": 56.26,
+      "fee": 0,
+      "cost_type": 2,
+      "cost_amt": 0.129932
+     }
+    },
+    {
+     "name": "Pantoprazole 40mg tablet delayed release",
+     "retail": 1.43,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.43,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Potassium chloride crys er 20meq tablet extended release",
+     "retail": 0.67,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.67,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Prednisone 5mg tablet",
+     "retail": 3.29,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.29,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Rosuvastatin calcium 10mg tablet",
+     "retail": 1.46,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.46,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Sertraline 50mg tablet",
+     "retail": 1.55,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.55,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Simvastatin 20mg tablet",
+     "retail": 0.15,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 0.15,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tamsulosin hydrochloride 0.4mg capsule",
+     "retail": 3.44,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.44,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Tramadol hydrochloride 50mg tablet",
+     "retail": 7.52,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 7.52,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Trazodone hydrochloride 50mg tablet",
+     "retail": 1.64,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 1.64,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    },
+    {
+     "name": "Triamcinolone acetonide 0.1% cream",
+     "retail": 3.97,
+     "before_deductible": 0.0,
+     "after_deductible": 0.0,
+     "terms": {
+      "ded_applies": false,
+      "price": 3.97,
+      "fee": 0,
+      "cost_type": 1,
+      "cost_amt": 0.0
+     }
+    }
+   ]
+  }
+ ]
+}

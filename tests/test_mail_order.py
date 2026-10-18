@@ -30,8 +30,15 @@ def test_regular_drug_gets_90_day_mail_copay(monkeypatch):
     rx = _rxcuis("H4882", "009", 2, 1)
     out = _run(monkeypatch, HP, rx, ["testgenerica"])
     mail = out["drug_detail"][0]["plans"]["HealthPartners Journey Pace"]["mail_order_costs"]
-    # Tier 2 by mail: $16 for 90 days, no deductible -> $5.33 a month, every month
-    assert [round(m["cost"], 2) for m in mail["monthly_costs"]] == [5.33] * 12
+    # Tier 2 by mail: $16 for 90 days, no deductible -> $5.33 a month, every month - but never more
+    # than the drug's own monthly price (2026-10-17: a copay is capped at the price, as on Medicare.gov)
+    cell = out["drug_detail"][0]["plans"]["HealthPartners Journey Pace"]
+    conn = M.get_db()
+    price = conn.execute("SELECT unit_cost FROM pricing WHERE contract_id = 'H4882' AND plan_id = '009' "
+                         "AND ndc = ? AND days_supply = 30", (cell["ndc"],)).fetchone()[0]
+    conn.close()
+    expected = round(min(16 / 3, price), 2)
+    assert [round(m["cost"], 2) for m in mail["monthly_costs"]] == [expected] * 12
 
 
 def test_every_covered_drug_has_mail_cost(monkeypatch):

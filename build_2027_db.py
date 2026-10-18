@@ -747,11 +747,98 @@ def step_place_county(conn):
     print(f"place_county: {len(rows)} city-county rows, {len({p for p, _ in rows})} cities ({multi} span 2+ counties)")
 
 
+CHAIN_ORDER = ["cub", "walgreens", "cvs", "walmart", "costco", "hy-vee"]   # plan-level price = first one captured
+
+
+def step_mpf_prices(conn, mpf_db=None):
+    """Real 2027 drug prices from Medicare.gov Plan Finder captures (2026-10-18), replacing the 2026 estimates.
+
+    Source: Plan jsons/_consolidated/mpf_prices_2027.db (built by _tools/mpf_consolidate.py from the saved
+    Plan Finder pages). Only drugs in app/data/mpf_drug_map.json are loaded - each label's RxCUI match was
+    confirmed by the engine reproducing Medicare.gov's copays on every captured row.
+
+    Tables:
+      mpf_price  - per plan x RxCUI x pharmacy chain: Medicare.gov's monthly retail price (mail order: 90-day)
+      pricing    - rebuilt: per plan x NDC, the plan-level monthly price = the captured price at the first
+                   in-network chain in CHAIN_ORDER. Drugs with no capture get NO row (shown as
+                   'price not on file', never estimated).
+    """
+    import json as _json
+    t0 = time.time()
+    mpf_db = mpf_db or os.path.join(os.path.expanduser("~"), "Desktop", "Plan jsons", "_consolidated", "mpf_prices_2027.db")
+    if not os.path.exists(mpf_db):
+        sys.exit(f"Capture database not found: {mpf_db}")
+    dmap = _json.load(open(os.path.join(HERE, "app", "data", "mpf_drug_map.json"), encoding="utf-8"))["drugs"]
+    src = sqlite3.connect(mpf_db)
+    plan_fid = {(c, p): f for c, p, f in conn.execute("SELECT contract_id, plan_id, formulary_id FROM plans")}
+    fid_rx_ndc = defaultdict(lambda: defaultdict(list))
+    for fid, rx, ndc in conn.execute("SELECT formulary_id, rxcui, ndc FROM formulary"):
+        fid_rx_ndc[fid][rx].append(ndc)
+
+    # newest capture wins per plan x drug x chain (segments -1/-2 of one plan share the plan's prices)
+    best = {}
+    skipped_plans, skipped_labels = set(), set()
+    for pid, drug, chain, inn, cov, retail, qty, cap_at in src.execute(
+            "SELECT plan_id, drug, chain, in_network, covered, retail, quantity, captured_at FROM drug_prices"):
+        c, p = pid.split("-")[0], pid.split("-")[1].zfill(3)
+        if (c, p) not in plan_fid:
+            skipped_plans.add(pid); continue
+        if drug not in dmap:
+            skipped_labels.add(drug); continue
+        if not retail or not cov or (chain != "mail order" and not inn):
+            continue
+        key = (c, p, drug, chain)
+        if key not in best or (cap_at or "") > best[key][2]:
+            best[key] = (float(retail), qty, cap_at or "")
+    src.close()
+
+    conn.execute("DROP TABLE IF EXISTS mpf_price")
+    conn.execute("""CREATE TABLE mpf_price (contract_id TEXT, plan_id TEXT, rxcui TEXT, chain TEXT, retail REAL,
+        label TEXT, quantity TEXT, captured_at TEXT, PRIMARY KEY (contract_id, plan_id, rxcui, chain))""")
+    for (c, p, drug, chain), (retail, qty, cap_at) in best.items():
+        for rx in dmap[drug]["rxcuis"]:
+            conn.execute("INSERT OR REPLACE INTO mpf_price VALUES (?,?,?,?,?,?,?,?)", (c, p, rx, chain, retail, drug, qty, cap_at))
+
+    conn.execute("DROP TABLE IF EXISTS pricing")
+    conn.execute("""CREATE TABLE pricing (contract_id TEXT, plan_id TEXT, segment_id TEXT, ndc TEXT, days_supply INTEGER,
+        unit_cost REAL, estimated INTEGER DEFAULT 0, PRIMARY KEY (contract_id, plan_id, segment_id, ndc, days_supply))""")
+    by_plan_drug = defaultdict(dict)
+    for (c, p, drug, chain), v in best.items():
+        by_plan_drug[(c, p, drug)][chain] = v[0]
+    n_rows, n_pairs, chains_used = 0, 0, defaultdict(int)
+    for (c, p, drug), chains in by_plan_drug.items():
+        chain = next((ch for ch in CHAIN_ORDER if ch in chains), None)
+        if chain is None:
+            continue                       # only mail order captured: no retail plan-level price
+        price = chains[chain]
+        fid = plan_fid[(c, p)]
+        ndcs = [n for rx in dmap[drug]["rxcuis"] for n in fid_rx_ndc[fid].get(rx, [])]
+        if not ndcs:
+            continue
+        n_pairs += 1
+        chains_used[chain] += 1
+        for ndc in ndcs:
+            conn.execute("INSERT OR IGNORE INTO pricing VALUES (?,?,?,?,?,?,0)", (c, p, "000", ndc, 30, price))
+            n_rows += 1
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_price ON pricing(contract_id, plan_id, ndc)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mpf ON mpf_price(contract_id, plan_id, rxcui)")
+    conn.commit()
+    _set_meta(conn, prices_estimated=0, prices_source="mpf",
+              prices_vintage="Medicare.gov Plan Finder, Oct 2026")
+    n_plans = len({(c, p) for (c, p, _d) in by_plan_drug})
+    print(f"mpf_price: {len(best):,} plan x drug x chain prices  |  pricing: {n_pairs:,} plan x drug "
+          f"({n_rows:,} NDC rows) on {n_plans} plans  |  plan-level chain: {dict(chains_used)}  [{time.time() - t0:.0f}s]")
+    if skipped_plans:
+        print(f"  captured plans not in this database (skipped): {sorted(skipped_plans)}")
+    if skipped_labels:
+        print(f"  captured drug labels without a confirmed match (left out): {sorted(skipped_labels)}")
+
+
 STEPS = {"zip_county": step_zip_county, "service_area": step_service_area, "plans": step_plans, "costs": step_costs,
          "meta": step_meta, "cms": step_cms, "carrier_formularies": step_carrier_formularies,
          "estimates": step_estimates, "reference": step_reference, "place_county": step_place_county,
          "estimate_prices": lambda conn, z: step_estimates(conn, z, with_networks=False),
-         "pharmacy_names": step_pharmacy_names}
+         "pharmacy_names": step_pharmacy_names, "mpf_prices": step_mpf_prices}
 
 if __name__ == "__main__":
     # python build_2027_db.py                      -> the base steps (zip_county service_area plans costs meta)
