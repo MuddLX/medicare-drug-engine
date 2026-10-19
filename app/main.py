@@ -926,7 +926,7 @@ def load_zip_coords(conn):
 
 def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30,
                           client_address=None, client_city=None, client_state=None,
-                          client_coords=None, zip_coords=None, only=None):
+                          client_coords=None, zip_coords=None, only=None, same_store=None):
     """
     Find closest preferred retail pharmacies to client location.
     Uses real street address geocoding when available for precise distances.
@@ -1093,7 +1093,9 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
     # Deduplicate by base name, keep closest
     seen = {}
     for p in candidates:
-        base = p["name"].split("#")[0].strip().upper()
+        # same_store (2026-10-19, real prices): one store per price - two Costcos (Coon Rapids + Otsego) show the
+        # same chain price, so the second one would only push Cub or Walgreens off the list.
+        base = same_store(p) if same_store else p["name"].split("#")[0].strip().upper()
         if base not in seen or p["distance_miles"] < seen[base]["distance_miles"]:
             seen[base] = p
 
@@ -1771,6 +1773,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             zip_coords=zip_coords,
             # Real prices: only stores whose prices were captured for this plan (chain or the store itself)
             only=(lambda ph, have=have: mpf_price_key(ph, have) is not None) if have is not None else None,
+            same_store=(lambda ph, have=have: mpf_price_key(ph, have)) if have is not None else None,
         )
         if have is not None:
             for ph in nearby:

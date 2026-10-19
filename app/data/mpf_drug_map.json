@@ -808,14 +808,13 @@
   },
   "Hydrochlorothiazide / lisinopril 20-25mg tablet": {
    "rxcuis": [
-    "197887",
-    "310809"
+    "197887"
    ],
    "rows_checked": 112,
    "names": [
-    "hydrochlorothiazide 25 MG / lisinopril 20 MG Oral Tablet",
-    "hydrochlorothiazide 25 MG / quinapril 20 MG Oral Tablet"
-   ]
+    "hydrochlorothiazide 25 MG / lisinopril 20 MG Oral Tablet"
+   ],
+   "note": "2026-10-19: quinapril/HCTZ (310809) removed - a different drug that shared the tier"
   },
   "Hydrochlorothiazide / losartan 100-25mg tablet": {
    "rxcuis": [
@@ -998,6 +997,16 @@
    "names": [
     "lamotrigine 200 MG Oral Tablet"
    ]
+  },
+  "Lantus 100unit/ml solution pen injector": {
+   "rxcuis": [
+    "847232"
+   ],
+   "rows_checked": 112,
+   "names": [
+    "3 ML insulin glargine 100 UNT/ML Pen Injector [Lantus]"
+   ],
+   "note": "4 rows on H2001-118 differ only by that plan's all-tier insulin rule (25%), handled by the engine"
   },
   "Latanoprost 0.005% solution": {
    "rxcuis": [
@@ -1296,6 +1305,18 @@
     "nitroglycerin 0.4 MG Sublingual Tablet"
    ]
   },
+  "Novolog 100unit/ml solution pen injector": {
+   "rxcuis": [
+    "1653204",
+    "1653198"
+   ],
+   "rows_checked": 160,
+   "names": [
+    "3 ML insulin aspart, human 100 UNT/ML Cartridge [NovoLog]",
+    "3 ML insulin aspart, human 100 UNT/ML Pen Injector [NovoLog]"
+   ],
+   "note": "4 rows on H2001-118 differ only by that plan's all-tier insulin rule (25%), handled by the engine"
+  },
   "Nystatin 100000unit/gm powder": {
    "rxcuis": [
     "261178",
@@ -1420,6 +1441,18 @@
    "names": [
     "pioglitazone 30 MG Oral Tablet"
    ]
+  },
+  "Polyethylene glycol 3350 / potassium chloride / sodium bicarbonate / sodium chloride / sodium sulfate 236gm solution reconstituted": {
+   "rxcuis": [
+    "966920",
+    "967023"
+   ],
+   "rows_checked": 36,
+   "names": [
+    "polyethylene glycol 3350 236000 MG / potassium chloride 2970 MG / sodium bicarbonate 6740 MG / sodium chloride 5860 MG / sodium sulfate 22740 MG Powder for Oral Solution",
+    "polyethylene glycol 3350 240000 MG / potassium chloride 2980 MG / sodium bicarbonate 6720 MG / sodium chloride 5840 MG / sodium sulfate 22720 MG Powder for Oral Solution [GaviLyte-C]"
+   ],
+   "added": "2026-10-19"
   },
   "Potassium chloride crys er 20meq tablet extended release": {
    "rxcuis": [
@@ -1768,28 +1801,6 @@
    "names": [
     "zolpidem tartrate 10 MG Oral Tablet"
    ]
-  },
-  "Lantus 100unit/ml solution pen injector": {
-   "rxcuis": [
-    "847232"
-   ],
-   "rows_checked": 112,
-   "names": [
-    "3 ML insulin glargine 100 UNT/ML Pen Injector [Lantus]"
-   ],
-   "note": "4 rows on H2001-118 differ only by that plan's all-tier insulin rule (25%), handled by the engine"
-  },
-  "Novolog 100unit/ml solution pen injector": {
-   "rxcuis": [
-    "1653204",
-    "1653198"
-   ],
-   "rows_checked": 160,
-   "names": [
-    "3 ML insulin aspart, human 100 UNT/ML Cartridge [NovoLog]",
-    "3 ML insulin aspart, human 100 UNT/ML Pen Injector [NovoLog]"
-   ],
-   "note": "4 rows on H2001-118 differ only by that plan's all-tier insulin rule (25%), handled by the engine"
   }
  }
 }

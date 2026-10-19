@@ -50,6 +50,20 @@ def ingr(name):
     return re.split(r"\s\d", name.lower())[0].replace("[", "").strip()
 
 
+_UNITS = {"mg", "ml", "mcg", "unt", "meq", "hr", "actuat", "g", "gm", "mg/ml", "unt/ml", "day", "pack", "pk", "doses",
+          "dose", "tablet", "capsule", "solution", "cream", "ointment", "suspension", "unit", "units", "aug"}
+_FORMS = r"\b(?:oral|topical|ophthalmic|otic|nasal|injectable|injection|inhal\w*|transdermal|rectal|vaginal|" \
+         r"extended|delayed|chewable|disintegrating|pen|auto-injector|prefilled|powder|cartridge|dry|metered|" \
+         r"medicated|enteric|sublingual|buccal|\d+\s*day)\b"
+
+
+def ingredients(name):
+    """'polyethylene glycol 3350 236000 MG / potassium chloride 2970 MG / ... Powder for Oral Solution'
+    -> frozenset of ingredient words (numbers, units, dose forms and [Brand] dropped)."""
+    head = re.split(_FORMS, re.sub(r"\[.*?\]", "", name.lower()))[0]
+    return frozenset(w for w in re.findall(r"[a-z][a-z-]*", head) if w not in _UNITS)
+
+
 class Matcher:
     """Same rule that confirmed the first 193 labels (Plan jsons/_tools/verify_2026-10-17/verify2.py step 1)."""
 
@@ -120,7 +134,19 @@ class Matcher:
         top = [rx for rx in cands if score[rx] == best and best > 0]
         of = seen[top[0]] if top else len(rows)
         ok = bool(top) and best == of and of >= 2 and covered_hits[top[0]] >= 1
-        return {"ok": ok, "rxcuis": top, "agree": best, "of": of,
+        # Tied products must contain the same ingredients (pen/vial/brand may differ). Different products
+        # tying (2026-10-19: GoLYTELY and NuLYTELY - NuLYTELY has no sodium sulfate - same tier) -> review.
+        # A product whose ingredients are exactly the label's wins over look-alikes (lisinopril/HCTZ, not quinapril/HCTZ)
+        sets = {x: ingredients(self.byid[x]["name"]) for x in top if x in self.byid}
+        known = frozenset().union(*sets.values()) if sets else frozenset()
+        want = frozenset(re.findall(r"[a-z][a-z-]*", label.lower())) & known
+        exact = [x for x, st in sets.items() if st == want]
+        if exact:
+            top = exact
+        keys = {ingredients(self.byid[x]["name"]) for x in top if x in self.byid}
+        if len(keys) > 1:
+            ok = False
+        return {"ok": ok, "rxcuis": top, "agree": best, "of": of, "products_tied": len(keys),
                 "names": sorted({self.byid[x]["name"] for x in top if x in self.byid})[:4]}
 
 
