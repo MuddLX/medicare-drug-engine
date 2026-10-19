@@ -748,6 +748,42 @@ def step_place_county(conn):
 
 
 CHAIN_ORDER = ["cub", "walgreens", "cvs", "walmart", "costco", "hy-vee"]   # plan-level price = first one captured
+# Chains whose price is the same at every store (confirmed on the metro captures). Any other store's price is
+# loaded for THAT store only, keyed "npi:<NPI>" (2026-10-19: small-town captures - Coborn's, independents).
+VERIFIED_CHAINS = set(CHAIN_ORDER) | {"mail order"}
+_ADDR_WORDS = {"STREET": "ST", "AVENUE": "AVE", "DRIVE": "DR", "ROAD": "RD", "BOULEVARD": "BLVD", "LANE": "LN",
+               "HIGHWAY": "HWY", "PARKWAY": "PKWY", "COURT": "CT", "PLACE": "PL", "NORTH": "N", "SOUTH": "S",
+               "EAST": "E", "WEST": "W", "NORTHWEST": "NW", "NORTHEAST": "NE", "SOUTHWEST": "SW", "SOUTHEAST": "SE",
+               "HIGHWAYS": "HWY", "US": "US", "STATE": "STATE"}
+_NAME_SKIP = {"PHARMACY", "PHARMACIES", "DRUG", "DRUGS", "INC", "LLC", "CO", "THE", "AND", "OF", "RX", "STORE", "CORP"}
+
+
+def _street_key(street):
+    """'1106 8th St Sw' / '1106 8TH STREET SW STE 2' -> '1106 8TH ST SW' (suite/unit dropped)."""
+    t = re.sub(r"[.,#]", " ", (street or "").upper())
+    t = re.split(r"\b(?:STE|SUITE|UNIT|APT|BLDG|RM|ROOM)\b", t)[0]
+    return " ".join(_ADDR_WORDS.get(w, w) for w in t.split())
+
+
+def _name_words(name):
+    t = re.sub(r"[^A-Z ]", " ", (name or "").upper().replace("&", " AND "))
+    return {w for w in t.split() if len(w) > 2 and w not in _NAME_SKIP}
+
+
+def store_npis(conn, contract_id, plan_id, store_name, address):
+    """The NPI(s) of a captured store: same street address + ZIP among this plan's network pharmacies.
+    Medicare.gov's address looks like '1106 8th St Sw, Pipestone, MN 56164'. When several pharmacies share the
+    address, the ones sharing a name word win (e.g. 'Coborn's Pharmacy #2034' -> "Coborn's Pharmacy")."""
+    m = re.match(r"\s*(.+?),\s*[^,]+,\s*[A-Z]{2}\s+(\d{5})", address or "")
+    if not m:
+        return []
+    street, z = _street_key(m.group(1)), m.group(2)
+    rows = conn.execute("""SELECT DISTINCT pn.npi, pn.name, pn.address FROM pharmacy_names pn
+        JOIN pharmacy_network net ON net.npi = pn.npi
+        WHERE pn.zip = ? AND net.contract_id = ? AND net.plan_id = ?""", (z, contract_id, plan_id)).fetchall()
+    hits = [(n, nm) for n, nm, a in rows if _street_key(a) == street]
+    named = [(n, nm) for n, nm in hits if _name_words(nm) & _name_words(store_name)]
+    return sorted(n for n, _ in (named or hits))
 
 
 def step_mpf_prices(conn, mpf_db=None):
@@ -777,9 +813,12 @@ def step_mpf_prices(conn, mpf_db=None):
 
     # newest capture wins per plan x drug x chain (segments -1/-2 of one plan share the plan's prices)
     best = {}
-    skipped_plans, skipped_labels = set(), set()
-    for pid, drug, chain, inn, cov, retail, qty, cap_at in src.execute(
-            "SELECT plan_id, drug, chain, in_network, covered, retail, quantity, captured_at FROM drug_prices"):
+    skipped_plans, skipped_labels, unmatched_stores = set(), set(), defaultdict(int)
+    has_addr = "address" in [r[1] for r in src.execute("PRAGMA table_info(drug_prices)")]
+    npi_cache = {}
+    for pid, drug, chain, inn, cov, retail, qty, cap_at, store, addr in src.execute(
+            "SELECT plan_id, drug, chain, in_network, covered, retail, quantity, captured_at, store, "
+            + ("address" if has_addr else "''") + " FROM drug_prices"):
         c, p = pid.split("-")[0], pid.split("-")[1].zfill(3)
         if (c, p) not in plan_fid:
             skipped_plans.add(pid); continue
@@ -787,9 +826,19 @@ def step_mpf_prices(conn, mpf_db=None):
             skipped_labels.add(drug); continue
         if not retail or not cov or (chain != "mail order" and not inn):
             continue
-        key = (c, p, drug, chain)
-        if key not in best or (cap_at or "") > best[key][2]:
-            best[key] = (float(retail), qty, cap_at or "")
+        keys = [chain]
+        if chain not in VERIFIED_CHAINS:
+            ck = (c, p, store, addr)
+            if ck not in npi_cache:
+                npi_cache[ck] = store_npis(conn, c, p, store, addr)
+            keys = ["npi:" + n for n in npi_cache[ck]]
+            if not keys:
+                unmatched_stores[f"{store} ({addr or 'no address'})"] += 1
+                continue
+        for k in keys:
+            key = (c, p, drug, k)
+            if key not in best or (cap_at or "") > best[key][2]:
+                best[key] = (float(retail), qty, cap_at or "")
     src.close()
 
     conn.execute("DROP TABLE IF EXISTS mpf_price")
@@ -809,7 +858,13 @@ def step_mpf_prices(conn, mpf_db=None):
     for (c, p, drug), chains in by_plan_drug.items():
         chain = next((ch for ch in CHAIN_ORDER if ch in chains), None)
         if chain is None:
-            continue                       # only mail order captured: no retail plan-level price
+            # A plan sold only in small towns: no metro chain captured. Plan-level price = the price most of
+            # its captured stores show (ties: the lower one). Each store still shows its own price.
+            local = [v for k, v in chains.items() if k.startswith("npi:")]
+            if not local:
+                continue                   # only mail order captured: no retail plan-level price
+            chain = "local"
+            chains = {"local": min(set(local), key=lambda v: (-local.count(v), v))}
         price = chains[chain]
         fid = plan_fid[(c, p)]
         ndcs = [n for rx in dmap[drug]["rxcuis"] for n in fid_rx_ndc[fid].get(rx, [])]
@@ -832,6 +887,10 @@ def step_mpf_prices(conn, mpf_db=None):
         print(f"  captured plans not in this database (skipped): {sorted(skipped_plans)}")
     if skipped_labels:
         print(f"  captured drug labels without a confirmed match (left out): {sorted(skipped_labels)}")
+    if unmatched_stores:
+        print(f"  {len(unmatched_stores)} small-town store(s) not matched to a network pharmacy by address (left out):")
+        for k, n in sorted(unmatched_stores.items()):
+            print(f"    {k}: {n} prices")
 
 
 STEPS = {"zip_county": step_zip_county, "service_area": step_service_area, "plans": step_plans, "costs": step_costs,

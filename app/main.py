@@ -783,8 +783,20 @@ def mpf_chain_price(conn, contract_id, plan_id, ndc, chain):
 
 
 def mpf_chains_for_plan(conn, contract_id, plan_id):
+    """Price keys captured for this plan: chain names ('cub', 'mail order', ...) and, for stores priced one
+    by one (small chains, independents - build_2027_db VERIFIED_CHAINS), 'npi:<NPI>'."""
     return {r[0] for r in conn.execute("SELECT DISTINCT chain FROM mpf_price WHERE contract_id = ? AND plan_id = ?",
                                        (contract_id, plan_id.zfill(3)))}
+
+
+def mpf_price_key(pharmacy, have):
+    """Which captured prices belong to this pharmacy: its chain's (verified chains) or its own (by NPI).
+    None = nothing captured for it on this plan, so it isn't shown (no store's cost is a guess)."""
+    ch = chain_of(pharmacy.get("name"))
+    if ch in have:
+        return ch
+    k = f"npi:{pharmacy.get('npi')}"
+    return k if k in have else None
 
 
 def insulin_month_cost(conn, contract_id, plan_id, tier, price, preferred=True, mail=False):
@@ -914,7 +926,7 @@ def load_zip_coords(conn):
 
 def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4, max_miles=30,
                           client_address=None, client_city=None, client_state=None,
-                          client_coords=None, zip_coords=None):
+                          client_coords=None, zip_coords=None, only=None):
     """
     Find closest preferred retail pharmacies to client location.
     Uses real street address geocoding when available for precise distances.
@@ -1071,6 +1083,10 @@ def get_nearby_pharmacies(conn, contract_id, plan_id, client_zip, max_results=4,
                 "_lon": pharm_lon,
             })
 
+    if only is not None:
+        # 2026-10-19: filter BEFORE choosing the nearest few, so a store with no captured price doesn't take
+        # one of the slots (in small towns that left 0-1 stores).
+        candidates = [p for p in candidates if only(p)]
     if not candidates:
         return []
 
@@ -1146,7 +1162,8 @@ def pharmacy_fill_terms(conn, contract_id, plan_id, tier, unit_cost, pharmacy, d
     mpf = mpf_mode()
     if mpf:
         # Real prices: this chain's own Medicare.gov price (None = not captured -> price not on file).
-        chain_price = mpf_chain_price(conn, contract_id, plan_id, ndc, chain_of(pharmacy.get("name")))
+        chain_price = mpf_chain_price(conn, contract_id, plan_id, ndc,
+                                      pharmacy.get("price_key") or chain_of(pharmacy.get("name")))
         # Not captured at this chain for this drug: use the plan-level (Cub) price rather than $0.
         unit_cost = chain_price if chain_price is not None else unit_cost
         generic_fee = brand_fee = 0.0      # Medicare.gov's retail price already includes dispensing
@@ -1743,6 +1760,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                                       state=client_state) if plan_details else None
     zip_coords = load_zip_coords(conn) if plan_details else None
     for carrier, plan in plan_details.items():
+        have = mpf_chains_for_plan(conn, plan["contract_id"], plan["plan_id"]) if mpf_mode() else None
         nearby = get_nearby_pharmacies(
             conn, plan["contract_id"], plan["plan_id"], zip_code,
             max_results=4, max_miles=30,
@@ -1751,12 +1769,12 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             client_state=client_state,
             client_coords=client_coords,
             zip_coords=zip_coords,
+            # Real prices: only stores whose prices were captured for this plan (chain or the store itself)
+            only=(lambda ph, have=have: mpf_price_key(ph, have) is not None) if have is not None else None,
         )
-        if mpf_mode():
-            # Real prices exist per chain: only show stores whose chain was captured for this plan,
-            # so no store's cost is a guess.
-            have = mpf_chains_for_plan(conn, plan["contract_id"], plan["plan_id"])
-            nearby = [ph for ph in nearby if chain_of(ph.get("name")) in have]
+        if have is not None:
+            for ph in nearby:
+                ph["price_key"] = mpf_price_key(ph, have)
         pharmacy_map[carrier] = nearby
 
     for item in normalized:
