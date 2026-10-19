@@ -781,9 +781,18 @@ def store_npis(conn, contract_id, plan_id, store_name, address):
     rows = conn.execute("""SELECT DISTINCT pn.npi, pn.name, pn.address FROM pharmacy_names pn
         JOIN pharmacy_network net ON net.npi = pn.npi
         WHERE pn.zip = ? AND net.contract_id = ? AND net.plan_id = ?""", (z, contract_id, plan_id)).fetchall()
-    hits = [(n, nm) for n, nm, a in rows if _street_key(a) == street]
-    named = [(n, nm) for n, nm in hits if _name_words(nm) & _name_words(store_name)]
-    return sorted(n for n, _ in (named or hits))
+    hits = [(n, nm, a) for n, nm, a in rows if _street_key(a) == street]
+    named = [h for h in hits if _name_words(h[1]) & _name_words(store_name)] or hits
+    # same building, different suites (Sanford, Bemidji: STE B and STE C) -> the suite Medicare.gov shows
+    suite = _suite(m.group(1))
+    if suite and any(_suite(a) == suite for _, _, a in named):
+        named = [h for h in named if _suite(h[2]) == suite]
+    return sorted(n for n, _, _ in named)
+
+
+def _suite(street):
+    mm = re.search(r"\b(?:STE|SUITE|UNIT|RM|ROOM)\s*#?\s*([A-Z0-9]+)", (street or "").upper())
+    return mm.group(1) if mm else ""
 
 
 def step_mpf_prices(conn, mpf_db=None):
