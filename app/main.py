@@ -1850,9 +1850,16 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                     if alt.get("covered"):
                         alt["as_generic"] = True
                         plan_cost = alt
+            # Real prices (mpf) exist only for the captured strength. A strength that doesn't exist / wasn't
+            # found must not borrow another strength's price (2026-10-19: atorvastatin 250 mg showed the 40 mg price).
+            if (mpf_mode() and plan_cost.get("covered") and not plan_cost.get("insulin_cap")
+                    and resolved and dosage and not resolved.strength_matched):
+                plan_cost["price_unknown"] = True
+                plan_cost["strength_not_found"] = True
             if plan_cost.get("price_unknown"):
+                why = "strength not found" if plan_cost.get("strength_not_found") else "no price on file"
                 warnings.append({"drug": original_name or drug_name, "normalized_to": "",
-                                 "flag": f"no price on file for {carrier} - its cost is left out, verify"})
+                                 "flag": f"{why} for {carrier} - its cost is left out, verify"})
             
             # Add pharmacy-specific costs if we found nearby pharmacies
             nearby_pharmacies = pharmacy_map.get(carrier, [])
@@ -1962,6 +1969,11 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                         "_terms": mail_terms,
                     }
             
+            if mpf_mode() and plan_cost.get("covered") and plan_cost.get("price_unknown"):
+                # No real price: the drug is LEFT OUT of every total (plan, pharmacy, mail) and marked - never
+                # counted as $0 (2026-10-19: Wellcare's total looked cheapest because 7 drugs counted $0).
+                plan_cost.update(_terms=None, annual_total=None, monthly_costs=[], pharmacy_costs=[])
+                plan_cost.pop("mail_order_costs", None)
             drug_result["plans"][carrier] = plan_cost
         results.append(drug_result)
 

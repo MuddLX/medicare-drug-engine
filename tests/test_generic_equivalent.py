@@ -62,8 +62,13 @@ def test_generic_is_not_priced_at_the_brands_negotiated_price(run):
 
 
 def test_summary_counts_the_drug_as_covered(run):
+    """Covered as its generic - never "not covered". Since 2026-10-19 a covered drug with no captured price is left
+    out of the total (all_drugs_covered False) and flagged price_unknown, so the total can't pass for complete."""
     out, _ = run()
-    assert all(s["all_drugs_covered"] for s in out["plan_summaries"].values())
+    for carrier, s in out["plan_summaries"].items():
+        cell = out["drug_detail"][0]["plans"][carrier]
+        assert cell["covered"]
+        assert s["all_drugs_covered"] or cell.get("price_unknown")
 
 
 def test_drug_without_a_price_is_flagged_never_free(monkeypatch):

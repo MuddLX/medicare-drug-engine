@@ -93,3 +93,35 @@ def test_insulin_counts_only_what_the_client_pays():
     out = DY.simulate_year([ins, brand], 1, 100.0, cap=2400.0, gross_rule=True)
     assert out[0] == [18.94]
     assert out[1] == [round(81.06 + 0.20 * (300 - 81.06), 2)]
+
+
+def test_missing_strength_never_borrows_another_strengths_price(monkeypatch):
+    """2026-10-19 fake-client test: 'atorvastatin 250 mg' (no such strength) was priced with the captured 40 mg price.
+    With real prices loaded, a strength that isn't found is left out of the totals and flagged, never guessed."""
+    from app import data_meta as DM
+    db = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "medicare_mn_2027.db")
+    if not os.path.exists(db):
+        pytest.skip("needs medicare_mn_2027.db")
+    monkeypatch.setattr(DM, "DB_PATH", db)
+    monkeypatch.setattr(M, "DB_PATH", db)
+    if not M.mpf_mode():
+        pytest.skip("database has no Medicare.gov prices")
+    monkeypatch.setattr(M, "geocode_address_live", lambda *a, **k: (None, None, None))
+    monkeypatch.setattr(M, "normalize_drugs", lambda d: [
+        {"original": x["name"], "normalized": x["name"], "dosage": x["dosage"], "confidence": 1.0} for x in d])
+    plans = [{"contract_id": "H2001", "plan_id": "116", "carrier": "UHC", "type": "MA"}]
+    out = M.compute_drug_costs([{"name": "atorvastatin", "dosage": "250 mg"}, {"name": "atorvastatin", "dosage": "40 mg"}],
+                               "55303", "01/01/2027", plans_override=plans)
+    bad, good = (d["plans"]["UHC"] for d in out["drug_detail"])
+    assert bad["covered"] and bad["price_unknown"] and bad["annual_total"] is None and bad["pharmacy_costs"] == []
+    assert good["covered"] and not good["price_unknown"] and good["annual_total"] is not None
+    assert out["plan_summaries"]["UHC"]["all_drugs_covered"] is False
+    assert any("strength not found" in w["flag"] for w in out["warnings"])
+
+
+def test_brand_read_at_wrong_strength_falls_back_to_its_ingredient():
+    """2026-10-19 fake-client test: 'Micro-K 10 mEq' was read as a potassium 80 mg OTC tablet and shown 'Not covered'
+    on every plan. The sheet's ingredient name (potassium chloride) matches the strength, so it wins."""
+    from app import drug_resolver as R
+    r = R.resolve("Micro-K", "10 mEq", alternates=["potassium chloride (MICRO-K) 10 mEq", "potassium chloride"])
+    assert r.strength_matched and "312504" in r.rxcuis           # potassium chloride 10 MEQ ER oral capsule

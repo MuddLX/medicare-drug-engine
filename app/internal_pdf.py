@@ -440,6 +440,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         excluded = [(d.get("original_name") or d.get("drug_name") or "").strip() for d in (drug_detail or [])
                     if d.get("error") or d.get("is_injectable")]
         excluded = [e for e in excluded if e]
+        # Per plan: covered drugs with no price (left out of that plan's total) - 2026-10-19
+        no_price = {l: [(d.get("drug_name") or d.get("original_name") or "").strip() for d in (drug_detail or [])
+                        if (d.get("plans", {}).get(l) or {}).get("covered") and (d.get("plans", {}).get(l) or {}).get("price_unknown")]
+                    for l in cols}
         total_label = "Est. yearly total" if full_year else f"Est. total ({period})"
         for title, fn, bold in (
             ("Monthly premium", lambda s: _money(s.get("premium_monthly")), False),
@@ -459,6 +463,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                 if title in (drug_cost_label, total_label) and not prices_ok:
                     row.append(C("Available January", "2027 drug prices", cell))
                     continue
+                if title in (drug_cost_label, total_label) and no_price.get(l):
+                    n = len(no_price[l])
+                    note = f"excl. {n} drug{'s' if n > 1 else ''} without a price"
+                    extra = f"{extra} · {note}" if extra else note
                 row.append(C(fn(s), extra, cell_b if bold else cell))
             rows.append(row)
 

@@ -330,13 +330,18 @@ def resolve(name, dosage="", alternates=()):
     index, _ = _load()
     text = _prepare(name, dosage)
     found = _exact(index, text)
-    if found:
+    if found and found.strength_matched:
         return found
+    # The name read without its strength (or not at all): try the other names for the drug, and prefer one
+    # that DOES match the strength (2026-10-19: "Micro-K 10 mEq" read as a potassium 80 mg OTC tablet -> "not
+    # covered" everywhere; its ingredient "potassium chloride 10 mEq" is the real, covered drug).
     for alt in alternates or ():
         if alt and alt.strip() and alt.strip().lower() != (name or "").strip().lower():
-            found = _exact(index, _prepare(alt, dosage))
-            if found:
-                return found
+            alt_found = _exact(index, _prepare(alt, dosage))
+            if alt_found and (alt_found.strength_matched or not found):
+                return alt_found
+    if found:
+        return found
     return _by_spelling(index, text) or Resolution()
 
 
