@@ -100,6 +100,26 @@
     "amlodipine 10 MG / benazepril hydrochloride 40 MG Oral Capsule"
    ]
   },
+  "Amlodipine 10mg tablet": {
+   "rxcuis": [
+    "308135"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "amlodipine 10 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Amlodipine 2.5mg tablet": {
+   "rxcuis": [
+    "308136"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "amlodipine 2.5 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Amlodipine 5mg tablet": {
    "rxcuis": [
     "197361"
@@ -165,6 +185,26 @@
     "atenolol 25 MG Oral Tablet"
    ]
   },
+  "Atorvastatin 10mg tablet": {
+   "rxcuis": [
+    "617312"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "atorvastatin 10 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Atorvastatin 20mg tablet": {
+   "rxcuis": [
+    "617310"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "atorvastatin 20 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Atorvastatin 40mg tablet": {
    "rxcuis": [
     "617311"
@@ -173,6 +213,16 @@
    "names": [
     "atorvastatin 40 MG Oral Tablet"
    ]
+  },
+  "Atorvastatin 80mg tablet": {
+   "rxcuis": [
+    "259255"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "atorvastatin 80 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Azelastine hydrochloride 137mcg/spray solution": {
    "rxcuis": [
@@ -292,6 +342,26 @@
    "names": [
     "carvedilol 12.5 MG Oral Tablet"
    ]
+  },
+  "Carvedilol 25mg tablet": {
+   "rxcuis": [
+    "200033"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "carvedilol 25 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Carvedilol 6.25mg tablet": {
+   "rxcuis": [
+    "200031"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "carvedilol 6.25 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Cefdinir 300mg capsule": {
    "rxcuis": [
@@ -562,6 +632,16 @@
     "duloxetine 60 MG Delayed Release Oral Capsule"
    ]
   },
+  "Eliquis 2.5mg tablet": {
+   "rxcuis": [
+    "1364441"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "apixaban 2.5 MG Oral Tablet [Eliquis]"
+   ],
+   "added": "2026-10-20"
+  },
   "Eliquis 5mg tablet": {
    "rxcuis": [
     "1364447"
@@ -621,6 +701,16 @@
     "erythromycin 0.005 MG/MG Ophthalmic Ointment"
    ]
   },
+  "Escitalopram 10mg tablet": {
+   "rxcuis": [
+    "349332"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "escitalopram 10 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Escitalopram 20mg tablet": {
    "rxcuis": [
     "351250"
@@ -674,6 +764,16 @@
    "names": [
     "dapagliflozin 10 MG Oral Tablet [Farxiga]"
    ]
+  },
+  "Farxiga 5mg tablet": {
+   "rxcuis": [
+    "1486981"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "dapagliflozin 5 MG Oral Tablet [Farxiga]"
+   ],
+   "added": "2026-10-20"
   },
   "Fenofibrate 160mg tablet": {
    "rxcuis": [
@@ -749,6 +849,26 @@
     "furosemide 20 MG Oral Tablet"
    ]
   },
+  "Furosemide 40mg tablet": {
+   "rxcuis": [
+    "313988"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "furosemide 40 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Gabapentin 100mg capsule": {
+   "rxcuis": [
+    "310430"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "gabapentin 100 MG Oral Capsule"
+   ],
+   "added": "2026-10-20"
+  },
   "Gabapentin 300mg capsule": {
    "rxcuis": [
     "310431"
@@ -757,6 +877,16 @@
    "names": [
     "gabapentin 300 MG Oral Capsule"
    ]
+  },
+  "Gabapentin 600mg tablet": {
+   "rxcuis": [
+    "310433"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "gabapentin 600 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Gavilyte-g 236gm solution reconstituted": {
    "rxcuis": [
@@ -844,6 +974,18 @@
    "names": [
     "hydrochlorothiazide 25 MG / valsartan 320 MG Oral Tablet"
    ]
+  },
+  "Hydrochlorothiazide 12.5mg capsule": {
+   "rxcuis": [
+    "199903",
+    "429503"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "hydrochlorothiazide 12.5 MG Oral Capsule",
+    "hydrochlorothiazide 12.5 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Hydrochlorothiazide 25mg tablet": {
    "rxcuis": [
@@ -948,6 +1090,16 @@
     "empagliflozin 10 MG Oral Tablet [Jardiance]"
    ]
   },
+  "Jardiance 25mg tablet": {
+   "rxcuis": [
+    "1545668"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "empagliflozin 25 MG Oral Tablet [Jardiance]"
+   ],
+   "added": "2026-10-20"
+  },
   "Ketoconazole 2% cream": {
    "rxcuis": [
     "203088",
@@ -1044,6 +1196,46 @@
     "levofloxacin 500 MG Oral Tablet"
    ]
   },
+  "Levothyroxine sodium 100mcg tablet": {
+   "rxcuis": [
+    "892246"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "levothyroxine sodium 0.1 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Levothyroxine sodium 112mcg tablet": {
+   "rxcuis": [
+    "966248"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "levothyroxine sodium 0.112 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Levothyroxine sodium 125mcg tablet": {
+   "rxcuis": [
+    "966224"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "levothyroxine sodium 0.125 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Levothyroxine sodium 25mcg tablet": {
+   "rxcuis": [
+    "966220"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "levothyroxine sodium 0.025 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Levothyroxine sodium 50mcg tablet": {
    "rxcuis": [
     "966221"
@@ -1052,6 +1244,26 @@
    "names": [
     "levothyroxine sodium 0.05 MG Oral Tablet"
    ]
+  },
+  "Levothyroxine sodium 75mcg tablet": {
+   "rxcuis": [
+    "966222"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "levothyroxine sodium 0.075 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Levothyroxine sodium 88mcg tablet": {
+   "rxcuis": [
+    "966253"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "levothyroxine sodium 0.088 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Lidocaine 5% patch": {
    "rxcuis": [
@@ -1080,6 +1292,36 @@
     "lisinopril 10 MG Oral Tablet"
    ]
   },
+  "Lisinopril 20mg tablet": {
+   "rxcuis": [
+    "314077"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "lisinopril 20 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Lisinopril 40mg tablet": {
+   "rxcuis": [
+    "197884"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "lisinopril 40 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Lisinopril 5mg tablet": {
+   "rxcuis": [
+    "311354"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "lisinopril 5 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Lorazepam 0.5mg tablet": {
    "rxcuis": [
     "197900"
@@ -1089,6 +1331,16 @@
     "lorazepam 0.5 MG Oral Tablet"
    ]
   },
+  "Lorazepam 1mg tablet": {
+   "rxcuis": [
+    "197901"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "lorazepam 1 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Losartan potassium 100mg tablet": {
    "rxcuis": [
     "979480"
@@ -1097,6 +1349,26 @@
    "names": [
     "losartan potassium 100 MG Oral Tablet"
    ]
+  },
+  "Losartan potassium 25mg tablet": {
+   "rxcuis": [
+    "979485"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "losartan potassium 25 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Losartan potassium 50mg tablet": {
+   "rxcuis": [
+    "979492"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "losartan potassium 50 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Lovastatin 40mg tablet": {
    "rxcuis": [
@@ -1143,6 +1415,26 @@
     "metformin hydrochloride 1000 MG Oral Tablet"
    ]
   },
+  "Metformin hydrochloride 500mg tablet": {
+   "rxcuis": [
+    "861007"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "metformin hydrochloride 500 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Metformin hydrochloride 850mg tablet": {
+   "rxcuis": [
+    "861010"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "metformin hydrochloride 850 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Methocarbamol 750mg tablet": {
    "rxcuis": [
     "197944"
@@ -1179,6 +1471,16 @@
     "metoclopramide 5 MG Oral Tablet"
    ]
   },
+  "Metoprolol succinate 100mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "866412"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "24 HR metoprolol succinate 100 MG Extended Release Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Metoprolol succinate 25mg tablet extended release 24 hour": {
    "rxcuis": [
     "866427"
@@ -1188,6 +1490,16 @@
     "24 HR metoprolol succinate 25 MG Extended Release Oral Tablet"
    ]
   },
+  "Metoprolol succinate 50mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "866436"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "24 HR metoprolol succinate 50 MG Extended Release Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Metoprolol tartrate 25mg tablet": {
    "rxcuis": [
     "866924"
@@ -1196,6 +1508,16 @@
    "names": [
     "metoprolol tartrate 25 MG Oral Tablet"
    ]
+  },
+  "Metoprolol tartrate 50mg tablet": {
+   "rxcuis": [
+    "866514"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "metoprolol tartrate 50 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Metronidazole 0.75% cream": {
    "rxcuis": [
@@ -1355,6 +1677,16 @@
     "olmesartan medoxomil 40 MG Oral Tablet"
    ]
   },
+  "Omeprazole 20mg capsule delayed release": {
+   "rxcuis": [
+    "198051"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "omeprazole 20 MG Delayed Release Oral Capsule"
+   ],
+   "added": "2026-10-20"
+  },
   "Omeprazole 40mg capsule delayed release": {
    "rxcuis": [
     "200329"
@@ -1402,6 +1734,16 @@
     "0.25 MG, 0.5 MG Dose 3 ML semaglutide 0.68 MG/ML Pen Injector [Ozempic]",
     "3 ML semaglutide 1.34 MG/ML Pen Injector [Ozempic]"
    ]
+  },
+  "Pantoprazole 20mg tablet delayed release": {
+   "rxcuis": [
+    "251872"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "pantoprazole 20 MG Delayed Release Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Pantoprazole 40mg tablet delayed release": {
    "rxcuis": [
@@ -1480,6 +1822,26 @@
    "names": [
     "prednisolone acetate 10 MG/ML Ophthalmic Suspension"
    ]
+  },
+  "Prednisone 10mg tablet": {
+   "rxcuis": [
+    "198145"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "prednisone 10 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Prednisone 20mg tablet": {
+   "rxcuis": [
+    "312615"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "prednisone 20 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Prednisone 5mg tablet": {
    "rxcuis": [
@@ -1564,6 +1926,56 @@
     "rosuvastatin calcium 10 MG Oral Tablet"
    ]
   },
+  "Rosuvastatin calcium 20mg tablet": {
+   "rxcuis": [
+    "859751"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "rosuvastatin calcium 20 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Rosuvastatin calcium 40mg tablet": {
+   "rxcuis": [
+    "859419"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "rosuvastatin calcium 40 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Rosuvastatin calcium 5mg tablet": {
+   "rxcuis": [
+    "859424"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "rosuvastatin calcium 5 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Sertraline 100mg tablet": {
+   "rxcuis": [
+    "312938"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "sertraline 100 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
+  "Sertraline 25mg tablet": {
+   "rxcuis": [
+    "312940"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "sertraline 25 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Sertraline 50mg tablet": {
    "rxcuis": [
     "312941"
@@ -1573,6 +1985,16 @@
     "sertraline 50 MG Oral Tablet"
    ]
   },
+  "Simvastatin 10mg tablet": {
+   "rxcuis": [
+    "314231"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "simvastatin 10 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
+  },
   "Simvastatin 20mg tablet": {
    "rxcuis": [
     "312961"
@@ -1581,6 +2003,16 @@
    "names": [
     "simvastatin 20 MG Oral Tablet"
    ]
+  },
+  "Simvastatin 40mg tablet": {
+   "rxcuis": [
+    "198211"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "simvastatin 40 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Spironolactone 25mg tablet": {
    "rxcuis": [
@@ -1698,6 +2130,16 @@
    "names": [
     "tramadol hydrochloride 50 MG Oral Tablet"
    ]
+  },
+  "Trazodone hydrochloride 100mg tablet": {
+   "rxcuis": [
+    "856373"
+   ],
+   "rows_checked": 97,
+   "names": [
+    "trazodone hydrochloride 100 MG Oral Tablet"
+   ],
+   "added": "2026-10-20"
   },
   "Trazodone hydrochloride 50mg tablet": {
    "rxcuis": [

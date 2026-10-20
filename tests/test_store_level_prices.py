@@ -101,3 +101,23 @@ def test_chain_name_alone_never_borrows_a_small_town_price(small_town_db):
     have = M.mpf_chains_for_plan(sqlite3.connect(small_town_db), *PLAN)
     assert M.mpf_price_key({"name": "Coborn's Pharmacy", "npi": "9999999999"}, have) is None
     assert M.mpf_price_key({"name": "Coborn's Pharmacy", "npi": "1982968640"}, have) == "npi:1982968640"
+
+def test_one_amount_per_drug(tmp_path):
+    """2026-10-20: Medicare.gov's default amount changed between searches (alprazolam 60 vs 90 tablets). A price at
+    another amount is a different price: it is left out, never mixed in or scaled."""
+    db = tmp_path / "eng.db"
+    shutil.copyfile(DB, db)
+    src = tmp_path / "mpf.db"
+    s = sqlite3.connect(src)
+    s.execute("""CREATE TABLE drug_prices (plan_id TEXT, batch TEXT, drug TEXT, quantity TEXT, frequency TEXT,
+        chain TEXT, store TEXT, in_network INT, covered INT, retail REAL, deductible_phase REAL, initial_phase REAL,
+        catastrophic REAL, captured_at TEXT, source_file TEXT, address TEXT)""")
+    rows = [("H2001-116-0", "60", 5.0), ("H2001-117-0", "60", 5.1), ("H2001-118-0", "90", 7.5)]
+    for pid, q, price in rows:
+        s.execute("INSERT INTO drug_prices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (pid, "X", LABEL, q, "", "cub", "Cub Pharmacy", 1, 1, price, price, price, 0, "2026-10-20", "x", ""))
+    s.commit(); s.close()
+    conn = sqlite3.connect(db)
+    _build().step_mpf_prices(conn, str(src))
+    got = {p: r for p, r in conn.execute("SELECT plan_id, retail FROM mpf_price WHERE contract_id='H2001'")}
+    assert got == {"116": 5.0, "117": 5.1}          # the 90-tablet price is not used

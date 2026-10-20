@@ -825,6 +825,16 @@ def step_mpf_prices(conn, mpf_db=None):
     skipped_plans, skipped_labels, unmatched_stores = set(), set(), defaultdict(int)
     has_addr = "address" in [r[1] for r in src.execute("PRAGMA table_info(drug_prices)")]
     npi_cache = {}
+    # One amount per drug (2026-10-20): Medicare.gov's default amount isn't always the same between searches
+    # (alprazolam 0.5 mg: 60 or 90 tablets). Prices at another amount are a different price, not scaled - left out.
+    q_count = defaultdict(lambda: defaultdict(lambda: [0, ""]))
+    for drug, qty, cap_at in src.execute("SELECT drug, quantity, captured_at FROM drug_prices"):
+        if qty:
+            e = q_count[drug][str(qty)]
+            e[0] += 1
+            e[1] = max(e[1], cap_at or "")
+    canon_qty = {d: max(v.items(), key=lambda kv: (kv[1][0], kv[1][1]))[0] for d, v in q_count.items()}
+    other_qty = defaultdict(int)
     for pid, drug, chain, inn, cov, retail, qty, cap_at, store, addr in src.execute(
             "SELECT plan_id, drug, chain, in_network, covered, retail, quantity, captured_at, store, "
             + ("address" if has_addr else "''") + " FROM drug_prices"):
@@ -834,6 +844,9 @@ def step_mpf_prices(conn, mpf_db=None):
         if drug not in dmap:
             skipped_labels.add(drug); continue
         if not retail or not cov or (chain != "mail order" and not inn):
+            continue
+        if qty and drug in canon_qty and str(qty) != canon_qty[drug]:
+            other_qty[(drug, str(qty))] += 1
             continue
         keys = [chain]
         if chain not in VERIFIED_CHAINS:
@@ -896,6 +909,9 @@ def step_mpf_prices(conn, mpf_db=None):
         print(f"  captured plans not in this database (skipped): {sorted(skipped_plans)}")
     if skipped_labels:
         print(f"  captured drug labels without a confirmed match (left out): {sorted(skipped_labels)}")
+    if other_qty:
+        print(f"  prices at a different amount than the drug's usual one (left out): "
+              + "; ".join(f"{d} x{q} (usual {canon_qty[d]}): {n}" for (d, q), n in sorted(other_qty.items())))
     if unmatched_stores:
         print(f"  {len(unmatched_stores)} small-town store(s) not matched to a network pharmacy by address (left out):")
         for k, n in sorted(unmatched_stores.items()):

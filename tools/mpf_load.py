@@ -64,6 +64,13 @@ def ingredients(name):
     return frozenset(w for w in re.findall(r"[a-z][a-z-]*", head) if w not in _UNITS)
 
 
+def release(name):
+    """(extended release?, delayed release?) - '24 HR metformin ... Extended Release Oral Tablet' -> (True, False)."""
+    t = name.lower()
+    return ("extended" in t or bool(re.search(r"\b(er|xl|xr|sr|cr|la)\b", t)),
+            "delayed" in t or bool(re.search(r"\b(dr|ec)\b", t)))
+
+
 class Matcher:
     """Same rule that confirmed the first 193 labels (Plan jsons/_tools/verify_2026-10-17/verify2.py step 1)."""
 
@@ -136,6 +143,13 @@ class Matcher:
         ok = bool(top) and best == of and of >= 2 and covered_hits[top[0]] >= 1
         # Tied products must contain the same ingredients (pen/vial/brand may differ). Different products
         # tying (2026-10-19: GoLYTELY and NuLYTELY - NuLYTELY has no sodium sulfate - same tier) -> review.
+        # Release type must agree with the label (2026-10-20: 'Metformin hydrochloride 500mg tablet' tied with
+        # the 24-hour extended-release tablet on the same tier). No product with the label's type -> review.
+        same_rel = [x for x in top if x in self.byid and release(self.byid[x]["name"]) == release(label)]
+        if top and not same_rel:
+            return {"ok": False, "rxcuis": top, "agree": best, "of": of, "names":
+                    sorted({self.byid[x]["name"] for x in top if x in self.byid})[:4], "why": "release type differs"}
+        top = same_rel or top
         # A product whose ingredients are exactly the label's wins over look-alikes (lisinopril/HCTZ, not quinapril/HCTZ)
         sets = {x: ingredients(self.byid[x]["name"]) for x in top if x in self.byid}
         known = frozenset().union(*sets.values()) if sets else frozenset()
