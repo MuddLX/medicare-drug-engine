@@ -2914,6 +2914,42 @@ def build_pdf_v1(client_name, dob, zip_code, soa_date, plan_summaries, drug_deta
     return buffer.getvalue()
 
 
+
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}\b)")
+
+
+def request_drugs(data):
+    """([{"name", "dosage"}], note) from a report request (2026-10-24).
+
+    Preferred: `drugs` = [{"name", "dosage"}, ...] - one entry per drug, so commas inside a name or a dose can't
+    shift anything. Older callers send `drug_names` / `drug_dosages` as comma-joined strings; there a comma
+    INSIDE an entry ("100,000 unit/gram", "artificial tears, peg 400 (Systane)") used to shift every dose
+    after it onto the wrong drug (Saralee test: Lipitor got calcium citrate's 250 mg). Thousands commas are
+    protected; if the two lists still don't line up, NO dose is used (never a neighbour's) and `note` says so."""
+    raw = data.get("drugs")
+    if isinstance(raw, list) and raw:
+        out = []
+        for d in raw:
+            if isinstance(d, dict):
+                name, dose = str(d.get("name") or "").strip(), str(d.get("dosage") or "").strip()
+            else:
+                name, dose = str(d or "").strip(), ""
+            if name:
+                out.append({"name": name, "dosage": dose})
+        return out, ""
+    drug_names, drug_dosages = data.get("drug_names", "") or "", data.get("drug_dosages", "") or ""
+    names = [n.strip() for n in _THOUSANDS.sub("\x00", drug_names).split(",")]
+    dosages = [d.strip() for d in _THOUSANDS.sub("\x00", drug_dosages).split(",")] if drug_dosages else []
+    names = [n.replace("\x00", ",") for n in names]
+    dosages = [d.replace("\x00", ",") for d in dosages]
+    note = ""
+    if dosages and len(dosages) != len(names):
+        note = ("The medication list and its doses didn't line up (a comma inside a name or dose), so doses "
+                "were left off - check each strength on the sheet.")
+        dosages = []
+    pairs = [(n, dosages[i] if i < len(dosages) else "") for i, n in enumerate(names)]
+    return [{"name": n, "dosage": d} for n, d in pairs if n], note
+
 @app.route("/health", methods=["GET"])
 def health():
     conn = get_db()
@@ -3006,10 +3042,7 @@ def debug_costs():
     zip_code = data.get("zip_code", "55309")
     soa_date = data.get("soa_date", "02/05/2026")
     
-    names = [n.strip() for n in drug_names.split(",") if n.strip()]
-    dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
-    drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
-             for i in range(len(names))]
+    drugs, list_note = request_drugs(data)
     
     result = compute_drug_costs(drugs, zip_code, soa_date)
     
@@ -3222,10 +3255,7 @@ def process_soa():
     except Exception:
         confidence = None
 
-    names = [n.strip() for n in drug_names.split(",") if n.strip()]
-    dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
-    drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
-             for i in range(len(names))]
+    drugs, list_note = request_drugs(data)
 
     if not drugs:
         return jsonify({"error": "No drugs provided"}), 400
@@ -3296,6 +3326,8 @@ def process_soa():
             text = str(f).strip()
         if text:
             extraction_warnings.append({"drug": text, "normalized_to": "", "flag": ""})
+    if list_note:
+        extraction_warnings.insert(0, {"drug": "Medication list: " + list_note, "normalized_to": "", "flag": ""})
     merged_warnings = list(result.get("warnings", [])) + extraction_warnings
 
     # Header facts for the one-table report (2026-10-02)
@@ -3387,10 +3419,7 @@ def client_comparison_route():
             providers_raw = []
     num_providers = len(providers_raw) if isinstance(providers_raw, list) else 0
 
-    names = [n.strip() for n in drug_names.split(",") if n.strip()]
-    dosages = [d.strip() for d in drug_dosages.split(",")] if drug_dosages else []
-    drugs = [{"name": names[i], "dosage": dosages[i] if i < len(dosages) else ""}
-             for i in range(len(names))]
+    drugs, list_note = request_drugs(data)
     if not drugs:
         return jsonify({"error": "No drugs provided"}), 400
 

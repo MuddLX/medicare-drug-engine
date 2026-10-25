@@ -84,8 +84,10 @@ def test_typical_report_is_one_page_with_everything():
 
 
 def test_ten_plan_worst_case_still_one_page():
+    """2026-10-24: the pharmacy section got one more labelled row (readability, Jordon's request), so the 10-plan
+    worst case fits one page with 7 drugs instead of 8; an 8th drug continues on page 2 with the header repeated."""
     s = summaries(7, 3)
-    assert pages(render(s, drugs(list(s), 8), doctors(3))) == 1
+    assert pages(render(s, drugs(list(s), 7), doctors(3))) == 1
 
 
 def test_overflow_continues_on_page_two_with_header_repeated():
@@ -200,3 +202,24 @@ def test_contract_number_dropped_from_plan_name():
     from app.client_comparison import display_plan_name
     assert display_plan_name("Medica Advantage Solution H6154-001 (HMO-POS)", "x") == \
         display_plan_name("Medica Advantage Solution (HMO-POS)", "x")
+
+
+def test_left_out_warnings_are_said_once_per_drug():
+    """2026-10-24: 'strength not found for <plan>' came once per plan and filled the box."""
+    s = summaries(3, 1)
+    w = [{"drug": "Furosemide (LASIX) 300 mg", "normalized_to": "", "flag": f"strength not found for {l} - its cost is left out, verify"}
+         for l in s]
+    groups = dict(R.group_warnings(w, drugs(list(s), 2)))
+    assert groups["Medications to verify"] == ["Furosemide (LASIX) 300 mg — strength not found on all 4 plans; left out of the cost, verify"]
+
+
+def test_cost_rows_are_full_sentences():
+    sm = {"all_same": False, "name": "Cub", "distance": "1.3 mi", "annual": 980.0, "steady": 58.78,
+          "ramp": [("Jan", 203.0), ("Feb", 189.0)], "ded_met": "February", "cap_reached": None,
+          "mail_annual": 957.0, "mail_saves": 23.0, "mail_partial": False}
+    rows = R.cost_rows(sm)
+    assert rows["year"] == ("$980", "Cub · 1.3 mi")
+    assert rows["first"] == ("Jan $203 · Feb $189", "deductible met February")
+    assert rows["after"] == ("$58.78 a month", None)
+    assert rows["mail"] == ("$957", "saves $23")
+    assert [k for k, _, _ in R.COST_ROWS] == ["year", "first", "after", "cap", "mail"]

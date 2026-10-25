@@ -107,6 +107,7 @@ def compare(data):
     from app import data_meta
     from app import availability as AV
     from app.internal_pdf import pharmacy_summary, _written_name
+    from app import internal_pdf as IP
 
     started = time.perf_counter()
     m = _ZIP.fullmatch(str(data.get("zip_code") or "").strip())
@@ -227,6 +228,11 @@ def compare(data):
                     "typical_month": _money(pharm["steady"]),
                     "mail_order_year": _money(pharm["mail_annual"]),
                     "mail_order_saves": _money(pharm["mail_saves"]) if pharm["mail_annual"] is not None else None},
+                # Costs & pharmacy section (2026-10-24): the same labelled rows as the internal PDF, already worded,
+                # in COST_ROWS order (labels in the top-level "cost_section"). Blank when there are no real prices.
+                "cost_rows": ([{"key": key, "value": v, "detail": d or ""}
+                               for key, (v, d) in ((kk, IP.cost_rows(pharm)[kk]) for kk, _, _ in IP.COST_ROWS)]
+                              if pharm else []),
                 "star_rating": benefits.get("star_rating") if stars_ok else None,
                 "benefits": {k2: v for k2, v in benefits.items() if k2 != "star_rating"} or None,
                 "doctors": [{"name": _written_name(doc), "system": doc.get("system") or "",
@@ -237,8 +243,37 @@ def compare(data):
     finally:
         conn.close()
 
+    # "Not counted" (2026-10-24): what's left out of each plan's estimate. Drugs left out of EVERY priced plan are
+    # said once ("not_counted_all"); each plan's note names only the rest, so the plan cards stay short.
+    priced_plans = [p for p in out_plans if p["prices_available"]]
+
+    def left_out(p):
+        items = []
+        for c in p["drugs"]:
+            name = (c["written"] or c["drug"]).strip()
+            why = {"not_covered": "not covered", "not_on_list": "not on carrier's list",
+                   "verify_injectable": "verify", "not_identified": "not identified"}.get(c["status"])
+            if why is None and c.get("price_unknown"):
+                why = "price not on file"
+            if why:
+                items.append((name, why))
+        return items
+    lists = {id(p): left_out(p) for p in priced_plans}
+    shared = [it for it in (lists[id(priced_plans[0])] if priced_plans else [])
+              if len(priced_plans) > 1 and all(it in lists[id(p)] for p in priced_plans)]
+    for p in out_plans:
+        extra = [it for it in lists.get(id(p), []) if it not in shared]
+        p["not_counted"] = [{"drug": n, "why": w} for n, w in lists.get(id(p), [])]
+        p["not_counted_note"] = (("also not counted: " if shared else "not counted: ")
+                                 + ", ".join(f"{n} ({w})" for n, w in extra)) if extra else ""
+
     return {
         "zip_code": zip_code,
+        "cost_section": {"title": "Costs & pharmacy",
+                         "rows": [{"key": k, "label": lab, "sub": sub} for k, lab, sub in IP.COST_ROWS],
+                         "note": "Cheapest in-network pharmacy near the client, using Medicare.gov prices."},
+        "not_counted_all": [{"drug": n, "why": w} for n, w in shared],
+        "not_counted_all_note": ("Not counted on any plan: " + ", ".join(f"{n} ({w})" for n, w in shared)) if shared else "",
         "county": choice["county"], "county_exact": bool(choice["exact"]),
         "county_method": choice["method"], "counties": choice["counties"], "county_note": choice["note"],
         "plan_year": plan_year,

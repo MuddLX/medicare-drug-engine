@@ -50,6 +50,7 @@ _FIELD_WORDS = {"zip_code": "ZIP", "phone_number": "Phone", "date_of_birth": "Da
                 "city": "City", "custom_plans": "Plan requests"}
 
 # A name the reader could only partly read ("Sch...dt", "Eliqu?s") can't be trusted for a directory match.
+_LEFT_OUT = re.compile(r"^(strength not found|no price on file) for (.+?) - its cost is left out, verify$")
 _ILLEGIBLE = re.compile(r"\.\.\.|…|\?")
 
 
@@ -80,7 +81,21 @@ def group_warnings(warnings, drug_detail):
         return any(n in low for n in names)
 
     med, form, plan = [], [], []
+    # "strength not found for <plan> - its cost is left out, verify" comes once per plan; say it once per drug,
+    # naming the plans (or "all N plans") - 2026-10-24, the box had become a wall of repeats.
+    n_plans = len({c for d in drug_detail or [] for c in (d.get("plans") or {})})
+    left_out, rest = {}, []
     for w in warnings or []:
+        mm = _LEFT_OUT.match((w.get("flag") or "").strip())
+        if mm:
+            left_out.setdefault(((w.get("drug") or "").strip(), mm.group(1)), []).append(mm.group(2))
+        else:
+            rest.append(w)
+    for (drug, why), plans in left_out.items():
+        plans = list(dict.fromkeys(plans))
+        where = f"all {n_plans} plans" if n_plans > 1 and len(plans) >= n_plans else ", ".join(plans)
+        med.append(f"{drug} — {why} on {where}; left out of the cost, verify")
+    for w in rest:
         drug = (w.get("drug") or "").strip()
         normalized = (w.get("normalized_to") or "").strip()
         flag = (w.get("flag") or "").strip()
@@ -193,6 +208,44 @@ def pharmacy_summary(label, drug_detail, months):
         "ded_met": _cheapest_field(label, drug_detail, cheapest, "ded_met"),
         "cap_reached": _cheapest_field(label, drug_detail, cheapest, "cap_reached"),
     }
+
+
+COST_ROWS = [  # (key, label, sub) - the same rows on the PDF and the Roundabout Plans page (2026-10-24)
+    ("year", "Drug cost for the year", "cheapest pharmacy nearby"),
+    ("first", "While paying the deductible", "first months"),
+    ("after", "After the deductible", "most months"),
+    ("cap", "$2,400 drug cap", "yearly limit"),
+    ("mail", "Mail order instead", "per year"),
+]
+
+
+def cost_rows(sm):
+    """{key: (value, detail)} for COST_ROWS from pharmacy_summary(); full-size values, short details."""
+    if not sm:
+        return {k: ("—", None) for k, _, _ in COST_ROWS}
+    out = {}
+    out["year"] = (_money(sm["annual"], cents=False),
+                   "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}")
+    ramp = sm.get("ramp") or []
+    met = f"deductible met {sm['ded_met']}" if sm.get("ded_met") else "deductible not met this year"
+    if ramp:
+        txt = " · ".join(f"{m} {_money(c, cents=False)}" for m, c in ramp[:3]) + (" …" if len(ramp) > 3 else "")
+        out["first"] = (txt, met)
+    else:
+        out["first"] = ("Same every month", met)
+    out["after"] = (f"{_money(sm['steady'])} a month", None)
+    out["cap"] = ((f"Reached {sm['cap_reached']}", "$0 for covered drugs after") if sm.get("cap_reached")
+                  else ("Not reached", None))
+    if sm.get("mail_annual") is not None:
+        diff = sm["mail_saves"]
+        detail = (f"saves {_money(diff, cents=False)}" if diff > 1 else
+                  f"costs {_money(-diff, cents=False)} more" if diff < -1 else "about the same")
+        out["mail"] = (_money(sm["mail_annual"], cents=False), detail)
+    elif sm.get("mail_partial"):
+        out["mail"] = ("—", "no mail order" if sm.get("mail_none") else "not all drugs by mail")
+    else:
+        out["mail"] = ("—", None)
+    return out
 
 
 def _cheapest_field(label, drug_detail, pharmacy_name, key):
@@ -527,36 +580,19 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             where = f"{client_address}, {client_city}" if (client_address and client_city) else f"ZIP {zip_code}"
             group(f"PHARMACY — NEAREST IN-NETWORK TO {where.upper()}")
             summaries = {l: pharmacy_summary(l, drug_detail, months) for l in cols}
-            # Lacey (2026-10-03): yearly cost first, monthly is the least important number; and
-            # say WHEN the deductible is met and WHEN the yearly drug cap is reached.
-            r_cheap = [[Paragraph("Cheapest nearby", lab), Paragraph("per year", lab_sub)]]
-            r_mail = [[Paragraph("Mail order", lab), Paragraph("per year", lab_sub)]]
-            r_ded = [[Paragraph("Deductible met", lab), Paragraph("cheapest pharmacy", lab_sub)]]
-            r_cap = [[Paragraph("Drug cap reached", lab), Paragraph(f"{_money(DY.oop_cap(), cents=False)} yearly limit", lab_sub)]]
-            for l in cols:
-                sm = summaries[l]
-                if not sm:
-                    for r_ in (r_cheap, r_mail, r_ded, r_cap):
-                        r_.append(C("—"))
-                    r_cheap[-1] = C("No data")
-                    continue
-                where = "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}"
-                r_cheap.append(C(f"{_money(sm['annual'], cents=False)}/yr", f"{where} · {_money(sm['steady'])}/mo"))
-                if sm.get("mail_annual") is not None:
-                    mail_sub = (f"saves {_money(sm['mail_saves'], cents=False)}/yr" if sm["mail_saves"] > 1
-                                else f"{_money(sm['mail_monthly'])}/mo")
-                    r_mail.append(C(f"{_money(sm['mail_annual'], cents=False)}/yr", mail_sub))
-                elif sm.get("mail_partial"):
-                    r_mail.append(C("—", "no mail order" if sm.get("mail_none") else "not all drugs by mail"))
-                else:
-                    r_mail.append(C("—"))
-                ramp = sm.get("ramp") or []
-                ramp_txt = (" · ".join(f"{m} {_money(c, cents=False)}" for m, c in ramp[:3])
-                            + f" · then {_money(sm['steady'])}/mo") if ramp else None
-                r_ded.append(C(sm.get("ded_met") or "Not met this year", ramp_txt))
-                r_cap.append(C(sm.get("cap_reached") or "Not reached",
-                               "$0 for covered drugs after" if sm.get("cap_reached") else None))
-            rows += [r_cheap, r_mail, r_ded, r_cap]
+            # Lacey (2026-10-03): yearly cost first, and WHEN the deductible is met / the cap is reached.
+            # 2026-10-24: one labelled full-size row per fact (the month detail used to be tiny grey text).
+            per_plan = {l: cost_rows(summaries[l]) for l in cols}
+            for key, label_txt, sub_txt in COST_ROWS:
+                if key == "cap":
+                    label_txt = f"{_money(DY.oop_cap(), cents=False)} drug cap"
+                row = [[Paragraph(label_txt, lab)] + ([Paragraph(sub_txt, lab_sub)] if sub_txt else [])]
+                for l in cols:
+                    value, detail = per_plan[l][key]
+                    if key == "year" and not summaries[l]:
+                        value = "No data"
+                    row.append(C(value, detail, cell_b if key == "year" else None))
+                rows.append(row)
 
         # doctors
         used_keys = set()
