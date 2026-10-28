@@ -246,6 +246,17 @@ def plan_premium_deductible(conn, cid, pid, row):
     return premium, deductible
 
 
+# Carriers the agency doesn't sell (Jordon, 2026-10-27): left out of every plan list, the plan picker and the
+# reports. Quartz (Gundersen) and Align. Change without a code push: Railway variable HIDDEN_CONTRACTS
+# (comma-separated contract numbers; set it to "none" to show every carrier again).
+_HIDDEN_DEFAULT = "H9834,H3186"
+
+
+def hidden_contracts():
+    raw = os.environ.get("HIDDEN_CONTRACTS", _HIDDEN_DEFAULT).strip()
+    return set() if raw.lower() in ("", "none") else {c.strip().upper() for c in raw.split(",") if c.strip()}
+
+
 def eligible_plan_rows(conn, county):
     """(ma_rows, pd_rows) every plan a client in this county may be shown. The ONE eligibility
     rule shared by the automatic report path, the plan picker and agent-chosen plans, so the
@@ -287,6 +298,10 @@ def eligible_plan_rows(conn, county):
         GROUP BY sa.contract_id, sa.plan_id
         ORDER BY MIN(sa.premium_total) ASC
     """.format(pending=pending), (county,)).fetchall()
+    hidden = hidden_contracts()
+    if hidden:
+        ma_rows = [r for r in ma_rows if r[0] not in hidden]
+        pd_rows = [r for r in pd_rows if r[0] not in hidden]
     return ma_rows, pd_rows
 
 
