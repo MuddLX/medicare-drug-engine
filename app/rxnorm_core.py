@@ -30,7 +30,7 @@ adult tube kwikpen flexpen solostar flextouch tempo pen-injector auto-injector p
 BRAND_GENERIC_SPLIT = re.compile(r"\s+-\s+")
 
 NUM_UNIT = re.compile(r"(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)*)\s*(mg|mcg|gm|g|ml|unit|units|unt|meq|mmol|iu|%|"
-                      r"million|billion)?(?:\s*/\s*(\d+(?:\.\d+)?)?\s*(ml|mg|gm|g|act|actuat|hr|day|spray|dose)?)?", re.I)
+                      r"million|billion)?(?:\s*/\s*(\d+(?:\.\d+)?)?\s*(ml|mg|grams|gram|gm|g|act|actuat|hr|day|spray|dose)?)?", re.I)
 
 
 def words(text):
@@ -82,6 +82,9 @@ def form_of(text):
     for sub in ("cream", "ointment", "gel", "lotion", "foam", "shampoo"):
         if has(rf"\b{sub}\b") or (sub == "ointment" and has(r"\boint\b")) or (sub == "cream" and has(r"\bcrm\b")):
             return "topical", sub
+    # 2026-10-27: "nystatin 100,000 unit/g powder" (topical) was read as the oral suspension
+    if has(r"\bpowder\b") and not has(r"\b(oral|solution|suspension|packet|reconstitut\w*|injection|for)\b"):
+        return "topical", "powder"
     if has(r"\b(external|topical|medicated pad|swab)\b"): return "topical", "other"
     if has(r"\bfilm\b"): return "film", ""
     if has(r"\b(tab|tabs|tablet|tablets|caplet)\b"):
@@ -118,7 +121,7 @@ def numbers(text):
             if unit == "%":
                 out.add(n * 10)                      # 1% = 10 MG/ML (or MG/G)
                 out.add(n / 100)                     # 1% = 0.01 MG/MG
-            if not per_n and per_u in ("g", "gm"):
+            if not per_n and per_u in ("g", "gm", "gram", "grams"):
                 out.add(n / 1000)                    # 100000 unit/gm = 100 UNT/MG
             if per_n and per_n != 0:
                 out.add(n / per_n)

@@ -112,6 +112,7 @@ def _sound(word):
 
 def _prepare(name, dosage):
     t = f"{name or ''} {dosage or ''}".lower()
+    t = re.sub(r"(?<=\d),(?=\d{3}\b)", "", t)                          # "100,000 unit/g" -> "100000 unit/g" (2026-10-27)
     t = re.sub(r"(?<![\d.])\.(\d)", r"0.\1", t)                        # ".075 mg" -> "0.075 mg"
     t = re.sub(r"(\d)\s*(mg|mcg|meq|units?)\b", r"\1 \2", t)              # "40mg" -> "40 mg"
 
@@ -148,10 +149,13 @@ def _narrow(products, text):
         if hit:
             # Every number written must be one of the product's strengths too, when that's possible:
             # Vytorin 10/40 is not the 10/10 tablet. (Soft: "1 tab" is a number but not a strength.)
-            groups = [numbers(g) for g in re.findall(r"\d+(?:\.\d+)?\s*(?:mg|mcg|g|meq|units?|%)?", text)]
+            groups = [numbers(g) for g in re.findall(r"\d+(?:\.\d+)?\s*(?:mg|mcg|g|meq|units?|%)?"
+                                                     r"(?:\s*/\s*(?:grams?|gm|g|ml)\b)?", text)]   # "100000 unit/g" = 100/mg too
             both = [p for p in hit if all(any(close(v, p["strengths"]) for v in g) for g in groups if g)]
             out = both or hit
-            pct = {float(x) * 10 for x in re.findall(r"(\d+(?:\.\d+)?)\s*%", text)}   # 1% = 10 mg/mL
+            # 1% = 10 mg/mL for liquids and creams, = 0.01 MG/MG for ointments (2026-10-27: clobetasol 0.05%
+            # ointment is "0.0005 MG/MG"; keeping only the mg/mL reading dropped the ointment for a shampoo/foam)
+            pct = {v for x in re.findall(r"(\d+(?:\.\d+)?)\s*%", text) for v in (float(x) * 10, float(x) / 100)}
             if pct:
                 out = [p for p in out if any(close(s, pct) for s in p["strengths"])] or out
         else:
