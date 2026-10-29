@@ -649,6 +649,16 @@
     "colchicine 0.6 MG Oral Tablet"
    ]
   },
+  "Combigan 0.2-0.5% solution": {
+   "rxcuis": [
+    "861637"
+   ],
+   "rows_checked": 120,
+   "names": [
+    "brimonidine tartrate 2 MG/ML / timolol 5 MG/ML Ophthalmic Solution [Combigan]"
+   ],
+   "added": "2026-10-29"
+  },
   "Cyclobenzaprine hydrochloride 10mg tablet": {
    "rxcuis": [
     "828348"
@@ -1361,6 +1371,16 @@
    "names": [
     "hydroxyzine pamoate 25 MG Oral Capsule"
    ]
+  },
+  "Ibandronic acid 150mg tablet": {
+   "rxcuis": [
+    "904932"
+   ],
+   "rows_checked": 89,
+   "names": [
+    "ibandronic acid 150 MG Oral Tablet"
+   ],
+   "added": "2026-10-29"
   },
   "Ibuprofen 800mg tablet": {
    "rxcuis": [
@@ -2337,6 +2357,17 @@
    ],
    "added": "2026-10-28"
   },
+  "Phenytoin sodium 100mg capsule": {
+   "rxcuis": [
+    "855671"
+   ],
+   "rows_checked": 61,
+   "names": [
+    "phenytoin sodium 100 MG Extended Release Oral Capsule"
+   ],
+   "added": "2026-10-28",
+   "note": "added by hand: Medicare.gov's label leaves out 'extended release', but phenytoin sodium 100 mg capsules only come extended-release; 61/61 rows matched"
+  },
   "Pioglitazone 30mg tablet": {
    "rxcuis": [
     "312440"
@@ -2577,6 +2608,16 @@
    "rows_checked": 61,
    "names": [
     "24 HR rivastigmine 0.192 MG/HR Transdermal System"
+   ],
+   "added": "2026-10-29"
+  },
+  "Rizatriptan 10mg tablet": {
+   "rxcuis": [
+    "314209"
+   ],
+   "rows_checked": 89,
+   "names": [
+    "rizatriptan 10 MG Oral Tablet"
    ],
    "added": "2026-10-29"
   },
@@ -2963,6 +3004,16 @@
     "30 ACTUAT fluticasone furoate 0.1 MG/ACTUAT / umeclidinium 0.0625 MG/ACTUAT / vilanterol 0.025 MG/ACTUAT Dry Powder Inhaler [Trelegy]"
    ]
   },
+  "Tresiba 100unit/ml solution pen injector": {
+   "rxcuis": [
+    "1670016"
+   ],
+   "rows_checked": 120,
+   "names": [
+    "3 ML insulin degludec 100 UNT/ML Pen Injector [Tresiba]"
+   ],
+   "added": "2026-10-29"
+  },
   "Triamcinolone acetonide 0.1% cream": {
    "rxcuis": [
     "1014314"
@@ -3089,17 +3140,6 @@
    "names": [
     "zolpidem tartrate 10 MG Oral Tablet"
    ]
-  },
-  "Phenytoin sodium 100mg capsule": {
-   "rxcuis": [
-    "855671"
-   ],
-   "rows_checked": 61,
-   "names": [
-    "phenytoin sodium 100 MG Extended Release Oral Capsule"
-   ],
-   "added": "2026-10-28",
-   "note": "added by hand: Medicare.gov's label leaves out 'extended release', but phenytoin sodium 100 mg capsules only come extended-release; 61/61 rows matched"
   }
  }
 }
