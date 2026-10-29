@@ -60,6 +60,20 @@ def _money(v, cents=True):
     return f"${v:,.2f}" if cents else f"${v:,.0f}"
 
 
+# Drugs everyone writes in micrograms: 0.075 mg levothyroxine is "75 mcg" on the bottle (2026-10-29).
+MCG_DRUGS = ("levothyroxine", "synthroid", "levoxyl", "unithroid", "euthyrox", "tirosint", "liothyronine",
+             "cytomel", "misoprostol", "cytotec")
+
+
+def display_dose(name, dose):
+    """The dose the way the bottle says it: "0.075 mg" levothyroxine -> "75 mcg". Anything else unchanged."""
+    m = re.fullmatch(r"\s*(0?\.\d+)\s*mg\s*", dose or "", re.I)
+    if not m or not any(w in (name or "").lower() for w in MCG_DRUGS):
+        return dose
+    mcg = round(float(m.group(1)) * 1000, 3)
+    return f"{mcg:g} mcg"
+
+
 def _short_pharmacy(name):
     n = (name or "").split("#")[0].replace(" Pharmacy", "").replace(" Pharm", "").strip()
     return n[:22]
@@ -173,6 +187,14 @@ def pharmacy_summary(label, drug_detail, months):
     first_typical = next((i for i, v in enumerate(monthly) if abs(v - steady) <= 0.005), len(monthly))
     ramp = [(m, v) for (m, v) in transitions
             if months and [x[:3] for x in months].index(m) < first_typical]
+    # each deductible-phase amount with the months it covers: Jan-Feb $284, Mar $170 (2026-10-29: "Jan $284 ·
+    # Mar $170" read as if February were missing)
+    short = [x[:3] for x in months or []]
+    starts = [short.index(m) for m, _ in transitions]
+    ramp_spans = []
+    for k, (m, v) in enumerate(ramp):
+        end = (starts[k + 1] if k + 1 < len(starts) else len(short)) - 1
+        ramp_spans.append((m if end <= starts[k] else f"{m}–{short[end]}", v))
     cap_from = None
     if monthly and monthly[-1] <= 0.005 and c["annual"] > 0:
         i = len(monthly)
@@ -199,6 +221,7 @@ def pharmacy_summary(label, drug_detail, months):
         "all_same": len({round(v["annual"]) for v in totals.values()}) <= 1,
         "transitions": transitions,
         "ramp": ramp,
+        "ramp_spans": ramp_spans,
         "cap_from": cap_from,
         "mail_monthly": _typical_month(mail_series) if mail_annual is not None else None,
         "mail_annual": mail_annual,
@@ -211,7 +234,8 @@ def pharmacy_summary(label, drug_detail, months):
 
 
 COST_ROWS = [  # (key, label, sub) - the same rows on the PDF and the Roundabout Plans page (2026-10-24)
-    ("year", "Drug cost for the year", "cheapest pharmacy nearby"),
+    # 2026-10-29: no "Drug cost for the year" row - the Cost section's "Est. yearly drug cost" IS that number
+    # (cheapest nearby pharmacy, named under it); showing it twice was noise.
     ("first", "While paying the deductible", "first months"),
     ("after", "After the deductible", "most months"),
     ("cap", "$2,400 drug cap", "yearly limit"),
@@ -224,12 +248,12 @@ def cost_rows(sm):
     if not sm:
         return {k: ("—", None) for k, _, _ in COST_ROWS}
     out = {}
-    out["year"] = (_money(sm["annual"], cents=False),
-                   "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}")
-    ramp = sm.get("ramp") or []
+    out["year"] = (_money(sm["annual"], cents=False), pharmacy_where(sm))     # kept for callers; not a row
+    ramp = sm.get("ramp_spans") or sm.get("ramp") or []
     met = f"deductible met {sm['ded_met']}" if sm.get("ded_met") else "deductible not met this year"
     if ramp:
-        txt = " · ".join(f"{m} {_money(c, cents=False)}" for m, c in ramp[:3]) + (" …" if len(ramp) > 3 else "")
+        txt = " · ".join(f"{m} {_money(c, cents=False)}{'/mo' if '–' in m else ''}" for m, c in ramp[:3]) \
+              + (" …" if len(ramp) > 3 else "")
         out["first"] = (txt, met)
     else:
         out["first"] = ("Same every month", met)
@@ -246,6 +270,13 @@ def cost_rows(sm):
     else:
         out["mail"] = ("—", None)
     return out
+
+
+def pharmacy_where(sm):
+    """Where the yearly drug cost is bought: "Cub · 1.5 mi", or "same at all nearby"."""
+    if not sm:
+        return None
+    return "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}"
 
 
 def _cheapest_field(label, drug_detail, pharmacy_name, key):
@@ -495,8 +526,13 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         excluded = [e for e in excluded if e]
         # Per plan: covered drugs with no price (left out of that plan's total) - 2026-10-19
         no_price = {l: [(d.get("drug_name") or d.get("original_name") or "").strip() for d in (drug_detail or [])
-                        if (d.get("plans", {}).get(l) or {}).get("covered") and (d.get("plans", {}).get(l) or {}).get("price_unknown")]
+                        if ((d.get("plans", {}).get(l) or {}).get("covered") and (d.get("plans", {}).get(l) or {}).get("price_unknown"))
+                        or (d.get("strength_not_found") and not d.get("error") and not d.get("is_injectable")
+                            and not (d.get("plans", {}).get(l) or {}).get("drug_list_missing"))]
                     for l in cols}
+        # The cost row names the pharmacy it was priced at (it used to be repeated as "Drug cost for the year")
+        where = {l: pharmacy_where(pharmacy_summary(l, drug_detail, months)) if (drug_detail and prices_ok) else None
+                 for l in cols}
         total_label = "Est. yearly total" if full_year else f"Est. total ({period})"
         for title, fn, bold in (
             ("Monthly premium", lambda s: _money(s.get("premium_monthly")), False),
@@ -516,6 +552,8 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                 if title in (drug_cost_label, total_label) and not prices_ok:
                     row.append(C("Available January", "2027 drug prices", cell))
                     continue
+                if title == drug_cost_label and where.get(l):
+                    extra = where[l]
                 if title in (drug_cost_label, total_label) and no_price.get(l):
                     n = len(no_price[l])
                     note = f"excl. {n} drug{'s' if n > 1 else ''} without a price"
@@ -530,6 +568,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                 name = (d.get("drug_name") or "").strip()
                 dose = (d.get("dosage") or "").strip()
                 original = (d.get("original_name") or "").strip()
+                dose = display_dose(f"{name} {original}", dose)
                 lab_parts = [Paragraph(escape(f"{name} {dose}".strip() or original or "Medication"), lab)]
                 if original and name and original.split()[0].lower() != name.split()[0].lower():
                     lab_parts.append(Paragraph(escape(f"written: {original}"), lab_sub))
@@ -547,6 +586,11 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         tint(r, ci, AMBER_BG)
                     elif pcost.get("injectable") or d.get("is_injectable"):
                         row.append(C("Verify coverage", "injectable"))
+                        tint(r, ci, AMBER_BG)
+                    elif d.get("strength_not_found"):
+                        # 2026-10-29: a strength that isn't made can't be looked up - never "Not covered" / a tier
+                        # for some other strength
+                        row.append(C("Strength not found", "verify the dose"))
                         tint(r, ci, AMBER_BG)
                     elif not pcost.get("covered", False) and not list_ok.get(l):
                         row.append(C(AV.NOT_ON_LIST, AV.NOT_ON_LIST_DETAIL))     # our reading of a carrier PDF
@@ -596,7 +640,20 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
 
         # doctors
         used_keys = set()
-        if provider_results:
+        # No 2027 directory answer for ANY doctor on ANY plan: one row naming them, not a row each (2026-10-29)
+        none_checked = bool(provider_results) and all(
+            ((pr.get("plans") or {}).get(l) or {"status": "not_checked"}).get("status") in (None, "not_checked")
+            for pr in provider_results for l in cols if l not in pd)
+        if provider_results and none_checked:
+            group("DOCTORS — NETWORK STATUS (2027 SOURCES; VERIFY WITH CARRIER)")
+            n = len(provider_results)
+            names = ", ".join(_written_name(pr) for pr in provider_results)
+            row = [[Paragraph(escape(f"{n} doctor{'s' if n > 1 else ''} listed"), lab),
+                    Paragraph(escape(names), lab_sub)]]
+            for l in cols:
+                row.append(C("—", "drug plan") if l in pd else C("Not checked", "no 2027 source yet"))
+            rows.append(row)
+        elif provider_results:
             group("DOCTORS — NETWORK STATUS (2027 SOURCES; VERIFY WITH CARRIER)")
             for pr in provider_results:
                 spec = (pr.get("specialty") or "").strip()

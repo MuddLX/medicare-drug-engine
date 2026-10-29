@@ -1711,6 +1711,26 @@ def get_drug_cost_for_plan(conn, formulary_id, contract_id, plan_id, rxcuis, ded
     }
 
 
+def cheapest_pharmacy_year(results, carrier):
+    """Yearly cost of all priced drugs at the cheapest nearby pharmacy for this plan, or None.
+    Only pharmacies with EVERY priced drug count, so a store can't look cheap by missing one.
+    Ties go to the nearer store - the same pick as internal_pdf.pharmacy_summary."""
+    priced = [dr for dr in results if (dr.get("plans", {}).get(carrier) or {}).get("annual_total") is not None]
+    if not priced:
+        return None
+    totals = {}
+    for dr in priced:
+        for pc in (dr["plans"][carrier].get("pharmacy_costs") or []):
+            t = totals.setdefault(pc["name"], {"annual": 0.0, "n": 0, "distance": pc.get("distance_miles", 99)})
+            t["annual"] += pc.get("annual_total") or 0
+            t["n"] += 1
+    full = [t for t in totals.values() if t["n"] == len(priced)]
+    if not full:
+        return None
+    best = min(full, key=lambda t: (round(t["annual"], 2), t["distance"]))
+    return round(best["annual"], 2)
+
+
 def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_city=None, client_state=None, custom_plans_str=None, plans_override=None):
     """
     drugs: list of {"name": str, "dosage": str}
@@ -1840,10 +1860,14 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             rxcuis = resolved.rxcuis
             generic_rx = resolved.generic        # a brand's generic twins ([] for a generic name)
             drug_result["read_as"] = resolved.matched
+            read_as = (f"{resolved.combo} {resolved.combo_dose}".strip() if resolved.combo else resolved.matched)
             if resolved.flag:
                 drug_result["resolver_flag"] = resolved.flag
-                warnings.append({"drug": original_name or drug_name, "normalized_to": resolved.matched,
+                warnings.append({"drug": original_name or drug_name, "normalized_to": read_as,
                                  "flag": resolved.flag})
+            if resolved.combo and resolved.flag == "check spelling":     # misspelled AND read as a combination
+                warnings.append({"drug": original_name or drug_name, "normalized_to": read_as,
+                                 "flag": "only made as a combination at that strength - confirm"})
         else:
             rxcuis = lookup_rxcuis(drug_name, dosage)
             generic_rx = None      # generic equivalents, looked up (RxNav) only if a plan lacks the brand
@@ -2011,6 +2035,13 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 plan_cost.update(_terms=None, annual_total=None, monthly_costs=[], pharmacy_costs=[])
                 plan_cost.pop("mail_order_costs", None)
             drug_result["plans"][carrier] = plan_cost
+        if resolved and resolved.combo:
+            # Shown as what was priced (2026-10-29): "Triamterene 37.5 mg" is the triamterene/HCTZ pill.
+            drug_result["drug_name"] = resolved.combo
+            drug_result["dosage"] = resolved.combo_dose or dosage
+            drug_result["original_name"] = original_name or drug_name
+        if resolved and dosage and not resolved.strength_matched:
+            drug_result["strength_not_found"] = True      # this strength isn't made: no plan's answer is reliable
         results.append(drug_result)
 
     from app.drug_year import apply_shared_year
@@ -2026,6 +2057,11 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 total_drug_cost += pc["annual_total"]
             else:
                 all_covered = False
+        cheapest = cheapest_pharmacy_year(results, carrier)
+        if cheapest is not None:
+            # 2026-10-29: the yearly drug cost is what the client pays at the cheapest nearby in-network
+            # pharmacy (the PDF names it), not the plan-level reference price. Same drugs counted either way.
+            total_drug_cost = cheapest
         premium_annual = round(plan["premium_monthly"] * len(months_remaining), 2)
         missing_list = not plan.get("formulary_id")
         plan_summaries[carrier] = {

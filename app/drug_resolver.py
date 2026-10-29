@@ -60,6 +60,7 @@ DEVICE_WORDS = {"ellipta", "solostar", "flexpen", "flextouch", "kwikpen", "tempo
                 "sensoready", "respimat", "diskus", "handihaler", "pressair", "aerosphere", "digihaler",
                 "redihaler", "twisthaler", "neohaler", "inhub", "max", "junior", "pen", "pens", "inhaler", "hfa",
                 "autoinjector", "vial", "cartridge"}
+_STRENGTH_GROUPS = re.compile(r"\d+(?:\.\d+)?\s*(?:mg|mcg|g|meq|units?|%)?(?:\s*/\s*(?:grams?|gm|g|ml)\b)?")
 SPELL_CUTOFF = 0.8           # difflib ratio a misspelling must reach
 SPELL_MARGIN = 0.04          # ... and beat the runner-up by
 
@@ -74,6 +75,8 @@ class Resolution:
     strength_matched: bool = True
     fix_from: str = ""                               # spelling: the word as written ...
     fix_to: str = ""                                 # ... and the real name it was read as
+    combo: str = ""                                  # read as a combination pill, e.g. "Triamterene / HCTZ"
+    combo_dose: str = ""                             # ... and its strengths in the same order, "37.5-25 mg"
 
     def __bool__(self):
         return bool(self.rxcuis)
@@ -149,8 +152,7 @@ def _narrow(products, text):
         if hit:
             # Every number written must be one of the product's strengths too, when that's possible:
             # Vytorin 10/40 is not the 10/10 tablet. (Soft: "1 tab" is a number but not a strength.)
-            groups = [numbers(g) for g in re.findall(r"\d+(?:\.\d+)?\s*(?:mg|mcg|g|meq|units?|%)?"
-                                                     r"(?:\s*/\s*(?:grams?|gm|g|ml)\b)?", text)]   # "100000 unit/g" = 100/mg too
+            groups = [numbers(g) for g in _STRENGTH_GROUPS.findall(text)]   # "100000 unit/g" = 100/mg too
             both = [p for p in hit if all(any(close(v, p["strengths"]) for v in g) for g in groups if g)]
             out = both or hit
             # 1% = 10 mg/mL for liquids and creams, = 0.01 MG/MG for ointments (2026-10-27: clobetasol 0.05%
@@ -260,9 +262,59 @@ def _by_ingredient(index, text, generic_only=False):
     if row_salts:                                                   # prednisolone ACETATE, not the plain one
         hits = [p for p in hits if p["salts"] and p["salts"] <= row_salts] or hits
     chosen, ok = _narrow(hits, text)
+    if not ok and not generic_only:
+        combo = _as_combination(index, text, drug_words, hits)
+        if combo:
+            return combo
     names = sorted({" + ".join(sorted(" ".join(sorted(k)) for k in p["ings"])) for p in chosen})
     return Resolution(rxcuis=sorted({p["rxcui"] for p in chosen}), matched=names[0] if names else "",
                       how="ingredient", strength_matched=ok)
+
+
+def _ings_name(p):
+    return " + ".join(sorted(" ".join(sorted(k)) for k in p["ings"]))
+
+
+def _as_combination(index, text, drug_words, single):
+    """A strength the drug alone isn't made in, that only exists as ONE combination pill containing it:
+    "Triamterene 37.5 mg" is triamterene/HCTZ 37.5-25 (2026-10-29: read as plain triamterene 50/100 mg, so
+    two plans showed "Not covered" and one "Tier 4 brand" for a Tier 1 generic). Every number written must
+    be one of the combination's strengths, and if two different combinations fit, nothing is guessed.
+    Always flagged so the agent confirms it."""
+    groups = [g for g in (numbers(x) for x in _STRENGTH_GROUPS.findall(text)) if g]   # each written strength
+    named = {w for w in drug_words if w not in EVERYDAY_WORDS}
+    if not groups or not named or named <= SALTS:          # "potassium chloride" is never read into a vitamin
+        return None
+    pool = None
+    for w in named:
+        ids = index.by_word.get(w, set())
+        pool = set(ids) if pool is None else pool & ids
+    seen = {p["rxcui"] for p in single}
+    combos = []
+    for i in pool or ():
+        p = index.products[i]
+        if p["rxcui"] in seen or not 2 <= len(p["ings"]) <= 3 or p["pack"] or not named <= p["ing_words"]:
+            continue
+        if any(w in p["name"].lower() for w in NOT_A_DRUG_INGREDIENT):
+            continue
+        if all(any(close(v, p["strengths"]) for v in g) for g in groups):
+            combos.append(p)
+    kinds = {_ings_name(p) for p in combos}
+    if len(kinds) != 1:
+        return None
+    chosen, _ = _narrow(combos, _STRENGTH_GROUPS.sub(" ", text))     # form / release only: strengths checked above
+    kind = kinds.pop()
+    parts = sorted(kind.split(" + "), key=lambda x: (not (set(x.split()) & named), x))   # the written drug first
+    short = {"hydrochlorothiazide": "HCTZ"}
+    combo = " / ".join(short.get(x, x[:1].upper() + x[1:]) for x in parts)
+    doses = set()
+    for p in chosen:            # "hydrochlorothiazide 25 MG / triamterene 37.5 MG Oral Tablet" -> 37.5-25 mg
+        got = dict((a.strip(), b) for a, b in re.findall(r"([a-z][a-z ,-]*?) (\d+(?:\.\d+)?) MG\b", p["name"]))
+        if all(x in got for x in parts):
+            doses.add("-".join(got[x] for x in parts) + " mg")
+    return Resolution(rxcuis=sorted({p["rxcui"] for p in chosen}), matched=kind, how="ingredient",
+                      strength_matched=True, combo=combo, combo_dose=doses.pop() if len(doses) == 1 else "",
+                      flag="only made as a combination at that strength - confirm")
 
 
 def _exact(index, text):

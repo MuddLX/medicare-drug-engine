@@ -222,4 +222,4 @@ def test_cost_rows_are_full_sentences():
     assert rows["first"] == ("Jan $203 · Feb $189", "deductible met February")
     assert rows["after"] == ("$58.78 a month", None)
     assert rows["mail"] == ("$957", "saves $23")
-    assert [k for k, _, _ in R.COST_ROWS] == ["year", "first", "after", "cap", "mail"]
+    assert [k for k, _, _ in R.COST_ROWS] == ["first", "after", "cap", "mail"]   # yearly cost lives in the Cost section

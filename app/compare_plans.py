@@ -73,6 +73,8 @@ def drug_status(drug, cell):
         return "list_not_out"
     if cell.get("injectable") or drug.get("is_injectable"):
         return "verify_injectable"
+    if drug.get("strength_not_found"):
+        return "not_identified"       # a strength that isn't made: verify (the app has no separate status yet)
     if not cell.get("covered", False):
         return "not_covered"          # compare() turns this into "not_on_list" while the list isn't CMS's
     return "covered"
@@ -191,7 +193,9 @@ def compare(data):
                 cap_reached = cap_reached or cell.get("cap_reached")
                 cells.append({
                     "written": d.get("original_name") or d.get("drug_name") or "",
-                    "drug": d.get("drug_name") or "", "dosage": d.get("dosage") or "",
+                    "drug": d.get("drug_name") or "",
+                    "dosage": IP.display_dose(f"{d.get('drug_name') or ''} {d.get('original_name') or ''}",
+                                              d.get("dosage") or ""),
                     "status": status, "tier": cell.get("tier") if status == "covered" else None,
                     "as_generic": bool(cell.get("as_generic")),
                     **(_restrictions(conn, formulary_of.get(k), cell.get("ndc"), have_flags) if status == "covered"
@@ -216,6 +220,7 @@ def compare(data):
                 "prices_available": bool(costs_ok),       # official prices -> dollar estimates below are real
                 "drug_list_official": list_ok,            # CMS's own 2027 list (else our reading of the carrier PDF)
                 "est_drug_cost_year": _money(summ.get("total_drug_cost")) if costs_ok else None,
+                "est_drug_cost_where": IP.pharmacy_where(pharm) if pharm else None,   # "Cub · 1.5 mi"
                 "est_total_year": _money(summ.get("total_drug_plus_premium")) if costs_ok else None,
                 "premium_year": _money(summ.get("premium_remaining_year")) if priced
                                 else round(p["premium_monthly"] * 12, 2),
