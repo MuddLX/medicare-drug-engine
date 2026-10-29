@@ -52,3 +52,21 @@ def test_yearly_cost_is_the_cheapest_pharmacy_with_every_drug():
                {"plans": {"P": {"annual_total": 100, "pharmacy_costs": [pc("Cub", 100, 1.5)]}}}]   # Walgreens lacks one
     assert M.cheapest_pharmacy_year(results, "P") == 580
     assert M.cheapest_pharmacy_year([{"plans": {"P": {"annual_total": 5, "pharmacy_costs": []}}}], "P") is None
+
+
+def test_cap_month_matches_medicare_gov_month_by_month():
+    """2026-10-29: plans with deductible-free tiers reach the $2,400 cap the way Medicare.gov does (each fill counts
+    the larger of what the client pays and the standard $700-deductible benefit). Cases are Medicare.gov's own
+    month-by-month tables from saved searches (tests/data/mgov_cap_cases.json)."""
+    import json, os
+    from app import drug_year as DY
+    cases = json.load(open(os.path.join(os.path.dirname(__file__), "data", "mgov_cap_cases.json")))
+    assert len(cases) >= 3
+    for c in cases:
+        out, info = DY.simulate_year_detail(c["terms"], 12, c["deductible"], cap=2400.0, gross_rule=True)
+        months = [sum(x[m] for x in out if x) for m in range(12)]
+        # within $15 a year (the old rule was ~$190 high on H3219-002); a small January (deductible-month) difference
+        # remains on some Blue Cross / HealthPartners searches and is tracked by tools/verify_against_mgov.py
+        assert abs(sum(months) - sum(c["mgov_monthly"])) <= 15, (c["plan"], round(sum(months), 2), sum(c["mgov_monthly"]))
+        assert info["cap_reached"] == next(i for i, v in enumerate(c["mgov_monthly"]) if v == 0) - (
+            1 if c["mgov_monthly"][next(i for i, v in enumerate(c["mgov_monthly"]) if v == 0) - 1] > 0 else 0)

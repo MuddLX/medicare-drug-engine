@@ -15,6 +15,16 @@ the report. Change it to 2027 when the 2027 CMS files are loaded; the cap follow
 """
 
 PART_D_OOP_CAP = {2025: 2000.0, 2026: 2100.0, 2027: 2400.0}
+# The STANDARD Part D deductible (CMS yearly parameters) - not the plan's own deductible. Medicare.gov uses it
+# to decide how fast a plan with deductible-free tiers reaches the cap (see simulate_year_detail).
+STANDARD_DEDUCTIBLE = {2025: 590.0, 2026: 615.0, 2027: 700.0}
+STD_CAP_RULE = True        # 2026-10-29 rule; False = the 2026-10-17 rule (kept for comparison runs)
+
+
+def standard_deductible(cap):
+    """The standard deductible for the year whose cap this is."""
+    year = next((y for y, c in PART_D_OOP_CAP.items() if abs(c - cap) < 0.01), None)
+    return STANDARD_DEDUCTIBLE.get(year, STANDARD_DEDUCTIBLE[max(STANDARD_DEDUCTIBLE)])
 DATA_YEAR = 2026
 
 
@@ -102,6 +112,7 @@ def simulate_year_detail(terms_list, n_months, deductible, cap=None, gross_rule=
         the deductible itself counts in full.
     """
     cap = oop_cap() if cap is None else cap
+    std_left = standard_deductible(cap)        # the standard benefit's deductible, used up by full prices
     ded = float(deductible or 0)
     start_ded = ded
     spent = 0.0                      # what counts toward the cap
@@ -132,6 +143,16 @@ def simulate_year_detail(terms_list, n_months, deductible, cap=None, gross_rule=
                 # with no 25% floor and not its full price.
                 ded = max(0.0, ded - cost) if in_ded else ded
                 add = cost
+            elif gross_rule and STD_CAP_RULE:
+                # 2026-10-29 (checked against Medicare.gov's month-by-month tables in 115 saved searches): each
+                # fill counts toward the cap the LARGER of what the client pays and what the STANDARD Part D
+                # benefit would charge for it (full price until the standard deductible - $700 in 2027 - is used
+                # up, then 25%). The old rule used the plan's own, lower deductible, so low-deductible plans
+                # (Aetna $300) reached the cap months late and the yearly cost came out up to ~$200 too high.
+                ded = max(0.0, ded - r) if in_ded else ded          # full price counts toward the deductible
+                std_part = min(r, std_left)
+                std_left = max(0.0, std_left - r)
+                add = max(cost, std_part + 0.25 * (r - std_part))
             elif gross_rule:
                 portion = min(r, ded) if in_ded else 0.0        # full price counts toward the deductible
                 ded = max(0.0, ded - r) if in_ded else ded
@@ -148,7 +169,8 @@ def simulate_year_detail(terms_list, n_months, deductible, cap=None, gross_rule=
                 ded_met = m
             room = cap - spent
             if add > room:
-                cost = max(0.0, cost - (add - room))
+                # the fill that crosses the cap: the client pays at most what is left under it
+                cost = min(cost, room) if (gross_rule and STD_CAP_RULE) else max(0.0, cost - (add - room))
                 add = room
             spent += add
             if cap_reached is None and spent >= cap - 0.005:

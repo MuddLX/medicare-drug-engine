@@ -1,0 +1,1064 @@
+[
+{
+"plan": "H3219-002",
+"file": "2027_recapture_FILL2/55303_H3219-002-0_batchS1_s7.json",
+"store": "Cub Pharmacy",
+"deductible": 300.0,
+"mgov_monthly": [
+437.8,
+256.91,
+256.91,
+256.91,
+256.91,
+22.49,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0
+],
+"terms": [
+{
+"ded_applies": false,
+"price": 2.63,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 5.0
+},
+{
+"ded_applies": false,
+"price": 1.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.44,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.43,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.47,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.64,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.45,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.13,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 255.43,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.18
+},
+{
+"ded_applies": false,
+"price": 3.98,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 5.0
+},
+{
+"ded_applies": true,
+"price": 186.5,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.18
+},
+{
+"ded_applies": false,
+"price": 1.11,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 17.89,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.18
+},
+{
+"ded_applies": true,
+"price": 76.9,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.18
+},
+{
+"ded_applies": false,
+"price": 0.08,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 209.33,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.18
+},
+{
+"ded_applies": false,
+"price": 2.17,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.6,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.73,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.73,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.66,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.73,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.06,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.09,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.05,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 7.43,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 5.0
+},
+{
+"ded_applies": false,
+"price": 0.25,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.32,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 9.0,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.43,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.33,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.45,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.15,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.39,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.65,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.67,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.25,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.28,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.09,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.14,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.13,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.09,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.15,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 0.21,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.14,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 616.71,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.18
+}
+]
+},
+{
+"plan": "H5959-019",
+"file": "2027_recapture_FILL2/55303_H5959-019-0_batchS1_s7.json",
+"store": "Cub Pharmacy",
+"deductible": 700.0,
+"mgov_monthly": [
+689.6,
+264.84,
+264.84,
+264.84,
+239.18,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0
+],
+"terms": [
+{
+"ded_applies": false,
+"price": 3.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.57,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.88,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.2,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.09,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.51,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 285.43,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.16
+},
+{
+"ded_applies": false,
+"price": 3.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 216.5,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.16
+},
+{
+"ded_applies": false,
+"price": 2.51,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 5.98,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 18.26,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.2,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 239.33,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.16
+},
+{
+"ded_applies": false,
+"price": 4.61,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.09,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.72,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 5.66,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.51,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.67,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.14,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 5.03,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.51,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 5.03,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.09,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 5.66,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 22.04,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.14,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.14,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.51,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.46,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.88,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 4.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.51,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.77,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 6.29,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 584.95,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.25
+}
+]
+},
+{
+"plan": "H4882-015",
+"file": "2027_recapture_FILL5/55303_H4882-015-0_batchG1_s20.json",
+"store": "Cub Pharmacy",
+"deductible": 700.0,
+"mgov_monthly": [
+736.89,
+374.12,
+374.12,
+374.12,
+151.15,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0
+],
+"terms": [
+{
+"ded_applies": true,
+"price": 25.4,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.25
+},
+{
+"ded_applies": false,
+"price": 1.96,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.6,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 10.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 6.2,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 35.0,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 12.2,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.25
+},
+{
+"ded_applies": false,
+"price": 3.2,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 12.2,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 7.1,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 11.0,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 7.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 18.2,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 11.0,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"flat": 21.54,
+"price": 86.15
+},
+{
+"ded_applies": true,
+"price": 1372.7,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.25
+},
+{
+"ded_applies": false,
+"price": 32.6,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.4,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.5,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.0,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 8.8,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 6.5,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+}
+]
+},
+{
+"plan": "S4802-158",
+"file": "2027_recapture_FILL5/55303_S4802-158-0_batchG1_s19.json",
+"store": "Cub Pharmacy",
+"deductible": 700.0,
+"mgov_monthly": [
+807.49,
+437.87,
+437.87,
+437.87,
+1.28,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0
+],
+"terms": [
+{
+"ded_applies": true,
+"price": 98.55,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.5
+},
+{
+"ded_applies": false,
+"price": 1.87,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.35,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": null,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 6.15,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 34.95,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 7.65,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.15,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": true,
+"price": 91.35,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.25
+},
+{
+"ded_applies": false,
+"price": 1.95,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 2.55,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 7.35,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 18.15,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 10.95,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"flat": 21.52,
+"price": 86.1
+},
+{
+"ded_applies": true,
+"price": 1371.75,
+"fee": 0.0,
+"cost_type": 2,
+"cost_amt": 0.25
+},
+{
+"ded_applies": false,
+"price": 22.65,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.35,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 3.45,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 1.95,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 6.35,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+},
+{
+"ded_applies": false,
+"price": 6.45,
+"fee": 0.0,
+"cost_type": 1,
+"cost_amt": 0.0
+}
+]
+}
+]
