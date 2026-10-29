@@ -640,6 +640,18 @@
     "clotrimazole 10 MG/ML Topical Cream"
    ]
   },
+  "Clotrimazole 10mg troche": {
+   "rxcuis": [
+    "309371",
+    "309367"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "clotrimazole 10 MG Oral Lozenge",
+    "clotrimazole 10 MG/ML Topical Cream"
+   ],
+   "added": "2026-10-29"
+  },
   "Colchicine 0.6mg tablet": {
    "rxcuis": [
     "197541"
@@ -2484,6 +2496,46 @@
    "names": [
     "prednisone 5 MG Oral Tablet"
    ]
+  },
+  "Pregabalin 100mg capsule": {
+   "rxcuis": [
+    "483438"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "pregabalin 100 MG Oral Capsule"
+   ],
+   "added": "2026-10-29"
+  },
+  "Pregabalin 150mg capsule": {
+   "rxcuis": [
+    "483440"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "pregabalin 150 MG Oral Capsule"
+   ],
+   "added": "2026-10-29"
+  },
+  "Pregabalin 25mg capsule": {
+   "rxcuis": [
+    "483442"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "pregabalin 25 MG Oral Capsule"
+   ],
+   "added": "2026-10-29"
+  },
+  "Pregabalin 50mg capsule": {
+   "rxcuis": [
+    "483448"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "pregabalin 50 MG Oral Capsule"
+   ],
+   "added": "2026-10-29"
   },
   "Pregabalin 75mg capsule": {
    "rxcuis": [
