@@ -70,3 +70,15 @@ def test_cap_month_matches_medicare_gov_month_by_month():
         assert abs(sum(months) - sum(c["mgov_monthly"])) <= 15, (c["plan"], round(sum(months), 2), sum(c["mgov_monthly"]))
         assert info["cap_reached"] == next(i for i, v in enumerate(c["mgov_monthly"]) if v == 0) - (
             1 if c["mgov_monthly"][next(i for i, v in enumerate(c["mgov_monthly"]) if v == 0) - 1] > 0 else 0)
+
+
+def test_written_route_that_the_drug_is_not_made_in_is_not_matched():
+    """2026-10-29: a compounded 'Cholesterol 2% / Lovastatin 2% ointment' was read as lovastatin 20 mg tablets."""
+    assert not R.resolve("Cholesterol 2%-Lovastatin 2% Ointment", "2%-2%", alternates=["lovastatin"])
+    assert R.resolve("Lovastatin", "20 mg")                         # the tablet itself still reads
+    assert R.resolve("Tacrolimus", "0.1% ointment")
+
+
+def test_plain_mg_prefers_the_mg_product_over_mg_per_ml():
+    names = [p["name"] for p in R._load()[0].products if p["rxcui"] in set(R.resolve("Clotrimazole", "10 mg").rxcuis)]
+    assert names and all("Lozenge" in n or "Troche" in n for n in names)

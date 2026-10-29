@@ -61,6 +61,7 @@ DEVICE_WORDS = {"ellipta", "solostar", "flexpen", "flextouch", "kwikpen", "tempo
                 "redihaler", "twisthaler", "neohaler", "inhub", "max", "junior", "pen", "pens", "inhaler", "hfa",
                 "autoinjector", "vial", "cartridge"}
 _STRENGTH_GROUPS = re.compile(r"\d+(?:\.\d+)?\s*(?:mg|mcg|g|meq|units?|%)?(?:\s*/\s*(?:grams?|gm|g|ml)\b)?")
+ROUTE_FORMS = {"topical", "ophth", "otic", "nasal", "inhal", "rectal", "vaginal", "patch"}
 SPELL_CUTOFF = 0.8           # difflib ratio a misspelling must reach
 SPELL_MARGIN = 0.04          # ... and beat the runner-up by
 
@@ -160,6 +161,10 @@ def _narrow(products, text):
             pct = {v for x in re.findall(r"(\d+(?:\.\d+)?)\s*%", text) for v in (float(x) * 10, float(x) / 100)}
             if pct:
                 out = [p for p in out if any(close(s, pct) for s in p["strengths"])] or out
+            # "10 mg" written as plain milligrams: the 10 MG troche, not a 10 MG/ML cream (2026-10-29: clotrimazole
+            # troche was read as OTC creams/solutions)
+            if re.search(r"\d\s*mg\b(?!\s*/)", text) and "%" not in text:
+                out = [p for p in out if re.search(r"\d MG(?!/)", p["name"])] or out
         else:
             strength_ok = False
     rel = release_of(text)
@@ -167,6 +172,13 @@ def _narrow(products, text):
         out = [p for p in out if p["rel"] == rel] or out     # delayed-release capsule everyone takes
                                                              # (2026-10-07: assuming plain release picked a rare tablet)
     form, sub = form_of(text)
+    if form in ROUTE_FORMS and sub != "powder" and out and not any(p["form"][0] in ROUTE_FORMS for p in out):
+        # ("powder" alone is a guess - "17 gram powder" is often the oral MiraLAX powder. Any non-oral form counts as
+        # a fit - an "ointment" may be the eye ointment, a "cream" the vaginal cream - only pills/liquids/shots don't.)
+        # 2026-10-29: "Cholesterol 2% / Lovastatin 2% ointment" (a compounded cream) was read as lovastatin 20 mg
+        # TABLETS. A written route (ointment, eye drops, inhaler, patch...) that this drug isn't made in means it
+        # isn't this product: no match, so the agent is asked to check the name.
+        return [], False
     if form:
         same = [p for p in out if p["form"][0] == form]
         if sub:
@@ -391,9 +403,16 @@ def resolve(name, dosage="", alternates=()):
     # The name read without its strength (or not at all): try the other names for the drug, and prefer one
     # that DOES match the strength (2026-10-19: "Micro-K 10 mEq" read as a potassium 80 mg OTC tablet -> "not
     # covered" everywhere; its ingredient "potassium chloride 10 mEq" is the real, covered drug).
+    route, route_sub = form_of(text)
     for alt in alternates or ():
         if alt and alt.strip() and alt.strip().lower() != (name or "").strip().lower():
-            alt_found = _exact(index, _prepare(alt, dosage))
+            alt_text = _prepare(alt, dosage)
+            if route in ROUTE_FORMS and form_of(alt_text)[0] != route:
+                # the sheet said ointment / eye drops / inhaler...: the other names must be read as that too
+                # (2026-10-29: "lovastatin" alone would be read as the tablet)
+                alt_text += " " + ({"topical": route_sub if route_sub not in ("", "other") else "topical",
+                                     "ophth": "ophthalmic", "inhal": "inhalation"}.get(route, route))
+            alt_found = _exact(index, alt_text)
             if alt_found and (alt_found.strength_matched or not found):
                 return alt_found
     if found:
