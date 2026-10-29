@@ -82,3 +82,11 @@ def test_written_route_that_the_drug_is_not_made_in_is_not_matched():
 def test_plain_mg_prefers_the_mg_product_over_mg_per_ml():
     names = [p["name"] for p in R._load()[0].products if p["rxcui"] in set(R.resolve("Clotrimazole", "10 mg").rxcuis)]
     assert names and all("Lozenge" in n or "Troche" in n for n in names)
+
+
+def test_cleaned_up_name_keeps_the_route_from_the_sheet():
+    """2026-10-29 second run: the cleaned-up name was just "Lovastatin" with "2%-2%"; the sheet said ointment."""
+    assert not R.resolve("Lovastatin", "2%-2%", alternates=["Cholesterol 2%-Lovastatin 2% Ointment", "lovastatin"])
+    assert not R.resolve("Lovastatin", "2%")                       # no tablet is "2%"
+    assert R.resolve("Tacrolimus", "0.1%", alternates=["Tacrolimus 0.1% Ointment"])
+    assert R.resolve("Timolol", "0.5%", alternates=["Timolol eye drops"])

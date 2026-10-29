@@ -172,6 +172,10 @@ def _narrow(products, text):
         out = [p for p in out if p["rel"] == rel] or out     # delayed-release capsule everyone takes
                                                              # (2026-10-07: assuming plain release picked a rare tablet)
     form, sub = form_of(text)
+    if "%" in text and out and all(p["form"][0] in ("tab", "cap") for p in out):
+        # a percent strength is a cream / drops / solution strength: no tablet or capsule is "2%" (2026-10-29:
+        # "Lovastatin 2%" from a compounded ointment was read as lovastatin 20 mg tablets)
+        return [], False
     if form in ROUTE_FORMS and sub != "powder" and out and not any(p["form"][0] in ROUTE_FORMS for p in out):
         # ("powder" alone is a guess - "17 gram powder" is often the oral MiraLAX powder. Any non-oral form counts as
         # a fit - an "ointment" may be the eye ointment, a "cream" the vaginal cream - only pills/liquids/shots don't.)
@@ -397,6 +401,14 @@ def resolve(name, dosage="", alternates=()):
         return Resolution()
     index, _ = _load()
     text = _prepare(name, dosage)
+    # The sheet's other names may say what the cleaned-up name dropped: "Lovastatin" + original "Cholesterol 2% -
+    # Lovastatin 2% Ointment" is an OINTMENT (2026-10-29). Read the name with that route too.
+    if form_of(text)[0] not in ROUTE_FORMS:
+        for alt in alternates or ():
+            r_alt, sub_alt = form_of(_prepare(alt or "", ""))
+            if r_alt in ROUTE_FORMS and sub_alt != "powder":
+                text += " " + _route_word(r_alt, sub_alt)
+                break
     found = _exact(index, text)
     if found and found.strength_matched:
         return found
@@ -410,14 +422,20 @@ def resolve(name, dosage="", alternates=()):
             if route in ROUTE_FORMS and form_of(alt_text)[0] != route:
                 # the sheet said ointment / eye drops / inhaler...: the other names must be read as that too
                 # (2026-10-29: "lovastatin" alone would be read as the tablet)
-                alt_text += " " + ({"topical": route_sub if route_sub not in ("", "other") else "topical",
-                                     "ophth": "ophthalmic", "inhal": "inhalation"}.get(route, route))
+                alt_text += " " + _route_word(route, route_sub)
             alt_found = _exact(index, alt_text)
             if alt_found and (alt_found.strength_matched or not found):
                 return alt_found
     if found:
         return found
     return _by_spelling(index, text) or Resolution()
+
+
+def _route_word(route, sub):
+    """A word that form_of() reads back as this route: ("topical", "ointment") -> "ointment"."""
+    if route == "topical":
+        return sub if sub not in ("", "other") else "topical"
+    return {"ophth": "ophthalmic", "inhal": "inhalation"}.get(route, route)
 
 
 def display_name(word):
