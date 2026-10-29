@@ -275,7 +275,8 @@ def compare(data):
     return {
         "zip_code": zip_code,
         "cost_section": {"title": "Costs & pharmacy",
-                         "rows": [{"key": k, "label": lab, "sub": sub} for k, lab, sub in IP.COST_ROWS],
+                         "rows": [{"key": k, "label": lab, "sub": sub, "strong": k in IP.STRONG_ROWS}
+                                  for k, lab, sub in IP.COST_ROWS],
                          "note": "Cheapest in-network pharmacy near the client, using Medicare.gov prices."},
         "not_counted_all": [{"drug": n, "why": w} for n, w in shared],
         "not_counted_all_note": ("Not counted on any plan: " + ", ".join(f"{n} ({w})" for n, w in shared)) if shared else "",

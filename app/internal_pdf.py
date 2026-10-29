@@ -243,6 +243,9 @@ COST_ROWS = [  # (key, label, sub) - the same rows on the PDF and the Roundabout
 ]
 
 
+STRONG_ROWS = {"after"}   # the number agents quote ("$51.74 a month") stands out - bold on the PDF and the app (2026-10-29)
+
+
 def cost_rows(sm):
     """{key: (value, detail)} for COST_ROWS from pharmacy_summary(); full-size values, short details."""
     if not sm:
@@ -537,7 +540,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
         for title, fn, bold in (
             ("Monthly premium", lambda s: _money(s.get("premium_monthly")), False),
             ("Drug deductible", lambda s: _money(s.get("deductible"), cents=False), False),
-            (drug_cost_label, lambda s: _money(s.get("total_drug_cost")), False),
+            (drug_cost_label, lambda s: _money(s.get("total_drug_cost")), True),
             (total_label, lambda s: _money(s.get("total_drug_plus_premium")), True),
         ):
             row = [Paragraph(escape(title), lab)]
@@ -546,7 +549,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                         Paragraph(escape("excludes " + ", ".join(excluded)), lab_sub)]]
             for l in cols:
                 s = plan_summaries[l]
-                extra = "drugs + premium only" if (bold and l in pd) else None
+                extra = "drugs + premium only" if (title == total_label and l in pd) else None
                 if s.get("drug_list_missing") and title in (drug_cost_label, total_label):
                     extra = "drug list not out yet"
                 if title in (drug_cost_label, total_label) and not prices_ok:
@@ -635,7 +638,7 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     value, detail = per_plan[l][key]
                     if key == "year" and not summaries[l]:
                         value = "No data"
-                    row.append(C(value, detail, cell_b if key == "year" else None))
+                    row.append(C(value, detail, cell_b if key in STRONG_ROWS else None))
                 rows.append(row)
 
         # doctors
