@@ -33,6 +33,7 @@ is in `_archive/FUTURE_IMPROVEMENTS_2026-05.md`; those provider databases were r
 |---|---|---|
 | Drugs/strengths not captured yet (outside ~top 250; e.g. pregabalin 50 mg + clotrimazole troche on Part D plans) | asterisk + "price not on file" — left out of that plan's total | fill searches 22–27 + later batches |
 | Small-town stores | 92.9% of top drugs (Oct 28) | fill searches 22–25 |
+| Search 22 (Bemidji) stops with "Could not tick pharmacy CVS…" even after the clear-on-new-ZIP fix (Oct 29, 6:19 pm) | small-town gaps stay open | diagnose the small-town pharmacy step, then re-run 22–25 |
 | 4 plans whose search-21 capture failed (H2001-124, H3219-005, H5959-018, H8889-009 — Hy-Vee no rows) | older prices only | re-run search 21 for those plans |
 | Pipestone Blue Cross H2461-010: yearly cost $80–$166 off Medicare.gov (first month) | — | investigate |
 | Coverage Medicare.gov already shows but the CMS file doesn't yet (Xarelto, alprazolam, ergocalciferol on UHC; ketoconazole cream Part D copay) | tier/coverage per the Oct CMS file | November CMS monthly file |
@@ -70,10 +71,12 @@ is in `_archive/FUTURE_IMPROVEMENTS_2026-05.md`; those provider databases were r
       clients.
 - [ ] **2027 Star Ratings** loaded (README_REFRESH §5). Since Oct 8 nothing shows last year's stars (client sheet
       says "2027 rating not out yet"), so this is about completeness, not wrong data.
-- [ ] **Oct 15 CMS drug lists + pharmacy networks** loaded (README_REFRESH §6) and checked against Medicare.gov for
+- [x] **Oct 15 CMS drug lists + pharmacy networks** loaded (README_REFRESH §6) — **done Oct 15–18** (★ Oct 31 update); checked against Medicare.gov for
       3–4 fake test clients. Turns on "Not covered" and pharmacy names automatically.
 - [ ] **Pharmacy names for 2027 networks** (NPI Registry lookup for pharmacies new in 2027).
-- [ ] Roundabout **Phase 43** (delete any sheet from In Progress) + version bump to 0.2.0 + release build.
+- [x] Roundabout **Phase 43** (delete any sheet from In Progress) + version bump to 0.2.0 + release build. — **Phase 43
+      done; app now v0.3.1** (★ Oct 31 update). v0.3.1 (Phases 48–49) was a *working* build: run a release build (full
+      test suite) before an exe goes to agents.
 - [ ] Delete `ANTHROPIC_API_KEY` from Railway (unused since Oct 8); after a few days, delete the disconnected old
       `Extract with Claude` node in n8n.
 - [ ] Rotate the Azure secret that was pasted in chat earlier (if not done).

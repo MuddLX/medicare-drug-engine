@@ -140,6 +140,10 @@ Review); **Save PDF…** asks which to make — **internal report (default)**, c
 - **Never work around Medicare.gov "Access Denied" blocks** — stop and wait hours.
 - Searches done: 1–21. Pending: 22–25 (small-town / SE Minnesota gaps), 26–27 (pregabalin strengths + clotrimazole troche
   on every Part D plan and the Anoka Advantage plans).
+- **Open bug (Oct 29, 6:19 pm):** search 22 (Bemidji, 56601) still stopped with "Could not tick pharmacy CVS Pharmacy
+  #10756" *after* the new-ZIP clear ran (the log shows "unticked 1 store(s) left over", then the small-town
+  nearest-store pick, then the stop). The clear-on-new-ZIP fix is not enough on the small-town path — diagnose before
+  re-running 22. Search 23 (Buffalo) was then blocked by Medicare.gov ("Access Denied"); 23–27 not attempted yet.
 - Loading: `python tools\mpf_load.py --dry-run`, then `python tools\mpf_load.py` → tests → upload → commit
   `app/data/mpf_drug_map.json` (README_REFRESH §10).
 
@@ -148,7 +152,7 @@ Review); **Save PDF…** asks which to make — **internal report (default)**, c
 **9. Still open (Oct 31)**
 - **Go-live blockers (unchanged):** move the engine to AWS (BAA); access key on the engine endpoints; turn off / move
   the street-address lookups; n8n Bedrock API key expiry decision; AWS written BAA confirmation for Bedrock.
-- Fill searches 22–27; ~10 realistic blind searches; the Pipestone H2461-010 first-month gap; 4 plans whose search-21
+- Fill searches 22–27 (search 22's small-town "Could not tick pharmacy" stop is open — §7); ~10 realistic blind searches; the Pipestone H2461-010 first-month gap; 4 plans whose search-21
   capture failed (H2001-124, H3219-005, H5959-018, H8889-009 — Hy-Vee showed no rows).
 - **OTC items** (vitamin D 1000, fish oil, baby aspirin, multivitamins): show a grey "OTC — not a Part D drug" instead of a
   red "Not covered", keep them out of totals without an asterisk; the AI clean-up turned "1000 units" into "1000 mg".
