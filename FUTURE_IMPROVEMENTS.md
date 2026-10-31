@@ -3,6 +3,54 @@
 is in `_archive/FUTURE_IMPROVEMENTS_2026-05.md`; those provider databases were retired on Oct 6 in favour of
 `providers_2027`.*
 
+
+## ★ Update — October 31, 2026 (read first; the sections below are kept as written on Oct 8)
+**Done since Oct 8**
+- [x] **Oct 15 CMS drug lists + pharmacy networks loaded** (all 18 lists from CMS; per-pharmacy preferred flag). "Not
+      covered" and pharmacy names/costs are on.
+- [x] **2027 drug prices** — not waiting for January: real prices from **Medicare.gov Plan Finder** (Jordon's saved
+      searches, `tools/mpf_load.py`): 330 labels, 62,852 prices on 46 plans (Oct 29). Missing drug/strength → left out
+      and marked, never estimated.
+- [x] **Yearly cost matches Medicare.gov's method** — incl. the Oct 29 $2,400-cap fix; `tools/verify_against_mgov.py`:
+      60 of 63 fully priced searches within $5, deductible month 131/131.
+- [x] Roundabout **Phase 43** (delete any sheet) and Phases 44–49 → **v0.3.1** (Submit opens the comparison; Save PDF
+      choice; "Lowest total" only with 2+ complete plans).
+- [x] Quartz + Align hidden from plan lists (`HIDDEN_CONTRACTS`).
+- [x] n8n: List Incoming (2) retries 3× / 5 s; Watch Incoming Folder (3) accepts any PDF.
+
+**1. Go-live blockers — still open (unchanged)**
+- [ ] Move the engine off Railway to AWS (BAA). Then point Roundabout's `engine_base_url` and n8n at it.
+- [ ] Access key on the engine endpoints (`/process-soa`, `/client-comparison`, `/compare-plans`, `/check-drugs`,
+      `/plans-for-zip`).
+- [ ] Street-address lookups (Census geocoder, OpenStreetMap) off or moved to AWS Location.
+- [ ] n8n Bedrock API key (no expiry) — upgrade n8n + AWS credential, or an expiring key + reminder.
+- [ ] AWS written confirmation that the BAA covers the Bedrock entrances used.
+- [ ] Housekeeping from Oct 8 still listed in §1 below (delete `ANTHROPIC_API_KEY` on Railway, old n8n Extract node,
+      Azure secret rotation, old `.env` copy in the claude.ai project) — check off when done.
+
+**2. Known data gaps (Oct 31)**
+| Gap | What agents see | Closes |
+|---|---|---|
+| Drugs/strengths not captured yet (outside ~top 250; e.g. pregabalin 50 mg + clotrimazole troche on Part D plans) | asterisk + "price not on file" — left out of that plan's total | fill searches 22–27 + later batches |
+| Small-town stores | 92.9% of top drugs (Oct 28) | fill searches 22–25 |
+| 4 plans whose search-21 capture failed (H2001-124, H3219-005, H5959-018, H8889-009 — Hy-Vee no rows) | older prices only | re-run search 21 for those plans |
+| Pipestone Blue Cross H2461-010: yearly cost $80–$166 off Medicare.gov (first month) | — | investigate |
+| Coverage Medicare.gov already shows but the CMS file doesn't yet (Xarelto, alprazolam, ergocalciferol on UHC; ketoconazole cream Part D copay) | tier/coverage per the Oct CMS file | November CMS monthly file |
+| Brands priced "as generic" (Entresto, Brilinta, Januvia…) | "Tier N · as generic" (Medicare.gov: brand not covered) | by design — tell agents |
+| OTC items (vitamin D 1000, fish oil, baby aspirin) | red "Not covered" + asterisk on every plan | planned: grey "OTC — not a Part D drug", no asterisk |
+| Injectables (Ozempic, insulin pens…) | "Verify coverage", not priced | not planned yet |
+| 2027 star ratings | "—" / "2027 rating not out yet" | CMS stars file |
+| Realistic proof: all Medicare.gov comparisons so far were 11–48 drug capture lists | — | ~10 realistic blind searches |
+
+**3. Next improvements (Oct 31)**
+- [ ] OTC handling (above) + keep "units" for vitamin D doses.
+- [ ] Realistic blind searches (5–10 drug lists, two that hit the cap) through `tools/verify_against_mgov.py`.
+- [ ] Jill's sign-off: one sheet checked by hand on Medicare.gov (suggested UHC MN-0001 H2001-116 at CVS).
+- [ ] Calcipotriene-type rows where the sheet writes the strength differently in name and dose still show the dose twice
+      (cosmetic).
+- [ ] January: decide whether CMS's quarterly prices replace or only fill gaps in the Medicare.gov prices.
+
+---
 ## 1. Must be done before any REAL client data (go-live blockers)
 - [x] ~~AI calls to Bedrock~~ — **done Oct 8**: engine `normalize_drugs` and the n8n reading step (nodes 6a/6b) use
       Claude Sonnet 4.6 on AWS Bedrock (us-east-2) under the agency's AWS BAA. Verified live.

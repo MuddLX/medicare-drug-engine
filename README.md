@@ -5,6 +5,24 @@
 Cloudflare R2 at boot and checks them), `Procfile`, `nixpacks.toml`, `requirements.txt`, `runtime.txt`.
 `tests/` — run `python -m pytest tests` before every push (847 tests on Oct 8).
 
+
+## ★ Added October 31, 2026
+`tests/` now holds **902** tests (Oct 29).
+| File / folder | What |
+|---|---|
+| `tools/mpf_load.py` | **loads Medicare.gov captures**: rebuilds `Plan jsons\_consolidated\mpf_prices_2027.db` (via `Plan jsons\_tools\mpf_consolidate.py`), matches new labels to RxNorm by reproducing Medicare.gov's copays, updates `app/data/mpf_drug_map.json`, runs `build_2027_db.py mpf_prices`. `--dry-run` changes nothing. Env `PLAN_JSONS`, `BUILD_2027_DB`. Backups → `_scratch\medicare_mn_2027.before_load_<date>.db` |
+| `tools/verify_against_mgov.py` | **accuracy check**: re-runs every saved Medicare.gov search through the real engine path and compares yearly cost + deductible month (`--report`; results in `_scratch\verify_mgov\`) |
+| `app/data/mpf_drug_map.json` | Medicare.gov drug label → RxNorm IDs (330 labels; commit after every load) |
+| `tests/data/mgov_cap_cases.json` | Medicare.gov month-by-month tables used by the $2,400-cap regression test |
+| `app/drug_year.py` | now also: Medicare.gov's yearly method, standard deductible ($700 in 2027) for the cap rule (`STD_CAP_RULE`) |
+| `app/main.py` | also: `request_drugs` (structured drug list), `mpf_price_key` (chain or `npi:<NPI>`), `cheapest_pharmacy_year`, `hidden_contracts` (`HIDDEN_CONTRACTS`) |
+| `build_2027_db.py` | new steps: `cms <monthly file>` (Oct 15 lists/networks), `mpf_prices <db>` (Medicare.gov prices; verified chains, store-level NPIs, one amount per drug) |
+
+**Outside the engine folder (Jordon's computer):**
+- `Desktop\Plan jsons\` — every saved Medicare.gov plan page (`2027_*\*.json` + `.txt` page text), `_tools\mpf_consolidate.py`, `_consolidated\mpf_prices_2027.db`, `labels_to_review.json`.
+- `Desktop\Med Search 6\` — the capture scripts: `medicare_drug_fill.py`, `medicare_monthly_route.py`, `Drug_Fill_Plan.xlsx`, `run_drug_fill.bat` (README.txt there).
+- `M:\Roundabout` — the desktop app (Claude Code only), v0.3.1.
+
 ## Engine code (`app/`)
 | File | What |
 |---|---|

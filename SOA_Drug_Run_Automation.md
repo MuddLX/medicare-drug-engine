@@ -1,13 +1,166 @@
 # SOA Drug Run Automation — Complete Project Documentation
-*Last updated: October 8, 2026*
+*Last updated: October 31, 2026* (previous update: October 8, 2026)
 
-> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. **On 2026-10-08 Claude moved to AWS Bedrock (engine name clean-up + the n8n reading step), the Plans page and client records shipped in Roundabout, and only official numbers are shown as fact — start with the ⭐ October 8 box.** Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
+> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. **On 2026-10-08 Claude moved to AWS Bedrock (engine name clean-up + the n8n reading step), the Plans page and client records shipped in Roundabout, and only official numbers are shown as fact — start with the ⭐ October 8 box.** **On 2026-10-31 this doc was brought up to date with Oct 15–31: the Oct 15 CMS drug lists and networks, real 2027 prices from Medicare.gov Plan Finder, Medicare.gov's yearly method (incl. the Oct 29 $2,400-cap fix, checked against Medicare.gov), the drug-name reader fixes, Roundabout Phases 43–49 (v0.3.1: Submit opens the comparison) and the n8n node 2/3 changes — start with the ⭐ October 15–31 box.** Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
 
 ---
 
 ## ═══ CURRENT ARCHITECTURE (October 2026) ═══
 
 *Live, authoritative description. Folds in the former Phase 8 review-loop and Human-Readable Filenames build docs.*
+
+### ⭐ October 15–31, 2026 — real 2027 Medicare.gov prices · Submit opens the comparison · checked against Medicare.gov (read this first)
+*Authoritative as of Oct 31, 2026. Where anything further down (including the Oct 8 and Oct 7 boxes) disagrees, this box
+wins. Go-live blockers and gaps: `FUTURE_IMPROVEMENTS.md` (vault: "SOA Engine - Open Items & Known Gaps"). Data and
+capture routine: `README_REFRESH.md` §10–11 (vault: "SOA Engine - Data Refresh & Go-Live Routine"). Day by day: roadmap →
+OCTOBER 2026 UPDATE → "Oct 15–31" entries.*
+
+**Where it stands (Oct 31):** the engine prices 2027 drugs with **Medicare.gov's own prices**, the yearly cost follows
+**Medicare.gov's yearly method** (checked against Medicare.gov's own numbers: 60 of 63 fully priced searches within $5),
+and Roundabout **v0.3.1** goes straight from Submit to the comparison of the picked plans. Jill tested it at her office
+on Oct 29 (test sheets only). **Still test data only** — the engine is on Railway (no BAA); go-live blockers unchanged
+(§9 below).
+
+**1. The data (official since Oct 15–29)**
+- **Oct 15 CMS monthly Formulary & Pharmacy Network file loaded** (`9ae4225`/`d46ff19`): all 18 drug lists now come
+  from CMS (`formulary.source = 'cms'`); the carrier-PDF lists are replaced. Each pharmacy's own **preferred flag** comes
+  from the CMS network file (the old "chain = preferred" guess mislabeled 2,829 plan–pharmacy pairs, e.g. Walgreens on
+  Allina/Aetna; the per-pharmacy flag matched Medicare.gov on all 634 saved pharmacy checks). Database `meta`:
+  `data_vintage = "CMS Oct 2026 file (2027 plans)"`, `network_estimated = 0`.
+- **Real 2027 drug prices from Medicare.gov Plan Finder** (`abec99a`, Oct 18 on): Jordon runs Medicare.gov searches
+  (manually at first, then the fill script — §7) and each plan page is saved as JSON in `Desktop\Plan jsons`. The
+  loader turns them into the `mpf_price` table. `meta`: `prices_source = mpf`, `prices_estimated = 0`,
+  `prices_vintage = "Medicare.gov Plan Finder, Oct 2026"` → the prices gate is **on**: dollar totals, monthly costs,
+  deductible-met and cap months are shown; footers say "Prices: Medicare.gov Plan Finder, Oct 2026".
+- **No estimated prices anywhere.** A drug or strength with no captured price is **left out of that plan's total and
+  marked** ("price not on file"), never counted as $0 and never priced at another strength (`4724368`).
+- **Store prices:** the verified chains — **Cub, Walgreens, CVS, Walmart, Costco, Hy-Vee** (+ mail order) — are priced
+  chain-wide. Every other store (small towns) is priced **store by store**, matched to its NPI by street address and
+  suite (price key `npi:<NPI>`) (`c24290a`, `275b316`). The nearest stores are chosen only among stores that have
+  captured prices, one store per price (two Costcos never push Cub off the list).
+- **One amount per drug** (`a32ae7c`): each drug label has one usual quantity; prices captured at another amount are
+  left out, never scaled.
+- **Label matcher** (`tools/mpf_load.py`, `f67cedc`): a new Medicare.gov label is accepted only when the engine's
+  reading of it reproduces Medicare.gov's copay on every row (at least 2 rows, at least 1 covered), the release type
+  matches (metformin IR ≠ ER) and tied products have the same ingredients (GoLYTELY ≠ NuLYTELY). Anything else goes to
+  `Plan jsons\_consolidated\labels_to_review.json`, not into the engine.
+- **Size (Oct 29):** 330 drug labels, **62,852** plan × drug × pharmacy prices on 46 plans. Captured prices vs the
+  engine's per-drug copay: **50,317 of 50,361** match (known misses: ergocalciferol on UHC, Xarelto + alprazolam
+  coverage changes due in the November CMS file, ketoconazole cream copay on Part D).
+- **Coverage of the top ~193 drugs (Oct 28):** Part D 100%, metro Medicare Advantage 99.6%, small-town 92.9% (fill
+  searches 22–25 still to run). Search 21 (Oct 29) added pregabalin 25/50/100/150 mg and the clotrimazole 10 mg troche
+  on 14 Hennepin Advantage plans.
+- **Carriers the agency doesn't sell are hidden** (`20834f9`): Quartz (H9834) and Align (H3186) — env
+  `HIDDEN_CONTRACTS` (default `H9834,H3186`; `none` shows all).
+- **2027 star ratings: still not loaded** (screens show "—" / "2027 rating not out yet").
+
+**2. How the yearly cost is worked out now (`app/drug_year.py`) — supersedes "How We Calculate Drug Costs" below**
+- **Medicare.gov's yearly method** (reverse-engineered Oct 17–18 from Medicare.gov's month-by-month view, `abec99a`,
+  `1cf1c28`): every month the drugs are filled cheapest first; one shared deductible; a copay is never more than the
+  drug's price; **insulin** = the lower of $35 and the plan's own insulin cost-share (CMS insulin file), and only what
+  the client pays counts toward the deductible and the cap.
+- **Plans with deductible-free tiers** ("gross rule" — most Advantage plans): every covered drug's full price counts
+  toward the plan deductible; toward the **$2,400 cap** each fill counts **the larger of what the client pays and what
+  the standard Part D benefit would charge** (full price until the standard deductible — **$700 in 2027** — is used up,
+  then 25%). The fill that crosses the cap costs at most what is left under it. **Fixed Oct 29 (`f315b0b`)**: the old
+  rule used the plan's own, lower deductible, so low-deductible plans (Aetna $300) reached the cap a month or two late
+  and heavy-drug clients' yearly cost came out up to ~$200 too high. Plans whose deductible applies to every tier keep
+  the classic rule (only what the client pays counts).
+- **"Est. yearly drug cost" = the cheapest nearby in-network pharmacy that has a price for every priced drug**
+  (`fce586b`, Oct 29), named under the number ("Cub · 1.5 mi" or "same at all nearby"). Until Oct 29 it was the
+  plan-level Cub reference price — this settles the open "Cub vs cheapest store" question.
+- **Checked against Medicare.gov** with `tools/verify_against_mgov.py` (new Oct 29): every saved search is re-run through
+  the real engine path for the same plan, drugs and store, and compared with Medicare.gov's own yearly cost and
+  deductible month. Results (Oct 29, after the cap fix):
+  - fully priced comparable searches: **60 of 63 within $5** (13 of 63 before the fix; 0 now off by $20–$100);
+  - deductible-met month: **131 of 131** agree; classic-rule plans 16 of 16 within $5;
+  - the 3 remaining misses are all one Pipestone Blue Cross search (H2461-010, first month) — open;
+  - coverage cross-check (~10,450 drug–plan pairs): 31 "engine not covered / Medicare.gov covers" (label wording + the
+    November CMS changes); brands the engine prices **"as generic"** (Entresto, Brilinta, Januvia, Restasis, Symbicort,
+    Vascepa, Myrbetriq…) show "not covered" on Medicare.gov — by design;
+  - **limitation:** every comparable search was a large price-capture list (11–48 drugs). Realistic 5–10 drug blind
+    searches (incl. heavy brand users who hit the cap) are the next proof.
+  - Regression test: `tests/data/mgov_cap_cases.json` (Medicare.gov month-by-month tables for 4 plans).
+
+**3. Reading drug names (`app/drug_resolver.py`, Oct 19–29)**
+- The drug list is sent **one drug at a time** (`drugs: [{name, dosage}]`, `d1edb81`): a comma inside a name
+  ("artificial tears, peg 400") or a dose ("100,000 unit/g") used to shift every later dose onto the wrong drug — this
+  was behind the "misread strengths" earlier blamed on n8n. Mismatched lists → no doses + a "Medication list:" note.
+- Creams, ointments, powders read at the right product (`b465ef6`): percent strengths (×10 for mg/mL, ÷100 for MG/MG
+  ointments), unit/gram, thousands commas.
+- A brand at a strength it isn't made in falls back to its ingredient (Micro-K 10 mEq → potassium chloride 10 mEq).
+- **Combination strengths** (`fce586b`): a strength made only as ONE combination pill is read as that combination and
+  flagged ("Triamterene 37.5 mg" → **Triamterene / HCTZ 37.5-25 mg**, "written: …" under it). A strength not made at
+  all shows **"Strength not found — verify the dose"** on every plan (never "Not covered" or another strength's tier)
+  and counts in the "excl." note.
+- **Route rule** (`8c00540`, `1380b7e`): if the sheet says ointment / cream / drops / inhaler / patch and the drug only
+  comes as a pill or shot, nothing is matched ("Check name") — the route is also taken from the sheet's written name
+  when the cleaned-up name dropped it, and no tablet is a "%" strength (a compounded cholesterol/lovastatin 2% ointment
+  had been read as lovastatin 20 mg tablets). Plain "mg" prefers the MG product over MG/mL (clotrimazole 10 mg → the
+  troche, not OTC creams).
+- Doses shown the way the bottle says them: levothyroxine / liothyronine / misoprostol in mcg ("75 mcg").
+- All 326 Medicare.gov labels were re-read after each change: no reading changed.
+
+**4. Reports and the Plans page (engine side)**
+- Internal PDF: "Est. yearly drug cost" (bold, names the pharmacy) and the yearly total; pharmacy section of full-size
+  labelled rows — **While paying the deductible** (month spans: "Jan–Feb $284/mo · Mar $170"), **After the deductible**
+  (bold), **$2,400 drug cap**, **Mail order instead**; the duplicate "Drug cost for the year" row is gone; "Medications
+  to verify" collapses per-plan strength/price notes into one line per drug ("on all N plans"); doctors collapse to one
+  "N doctors listed" row when none could be checked.
+- `POST /compare-plans`: per-plan `cost_rows`, `not_counted` notes, `est_drug_cost_where`, display doses; top-level
+  `cost_section` (rows carry `strong`, today "after"), `not_counted_all`. Plans-page wording comes from the engine
+  (`e526574`, Phase 44) so agents don't need a new app version for wording.
+
+**5. Roundabout (Claude Code) — Phases 43–49, now v0.3.1**
+43 delete any sheet from In Progress (stuck "Generating reports…" rows) · 44 Plans-page wording from the engine ·
+45 A CamScanner scans dropped straight into Incoming show in the app (foreign scans), B compact plan rows (deductible
+off line 2) · 46 (**v0.2.0**) drug list sent one drug at a time, Costs & pharmacy section, short notes · 47 one shared
+"Not counted on any plan" line · 48 (**v0.3.0**) **Submit opens the comparison** of the submitted plans (pick order,
+submitted county) and makes **no PDF by itself** (Submit still archives the scan, links the client and leaves Needs
+Review); **Save PDF…** asks which to make — **internal report (default)**, client sheet, or both; key numbers bold ·
+49 (**v0.3.1**) "Lowest total" only when at least two plans have complete totals, the dose never shown twice,
+"Deductible met" / "$2,400 cap" only in Costs & pharmacy. Prompts for 48–49: "Roundabout - Claude Code Prompts
+(Phases 48-49).md".
+
+**6. n8n (Oct 29)**
+- **List Incoming (2):** Retry On Fail — 3 tries, 5,000 ms apart (published "List Incoming retries"), so a brief
+  Microsoft OneDrive 504 "gateway timed out" doesn't fail the run.
+- **Watch Incoming Folder (3):** now picks up **any PDF** in Incoming (phone / CamScanner uploads with any name), not only
+  app-tagged `<ULID>__cis.*` or CamScanner-named files; still skips `__meta.json`, `claim__` markers, `.tmp` and `~`
+  files; oldest first; claim-on-pickup unchanged (published "Any PDF in Incoming"). **Every PDF in Incoming is read as a
+  client sheet** — keep other files out of that folder.
+
+**7. Capturing Medicare.gov prices (Jordon's computer)**
+- `Desktop\Med Search 6\medicare_drug_fill.py` (+ `medicare_monthly_route.py`), driven by `Drug_Fill_Plan.xlsx`
+  (tabs **Searches**: ZIP, plan type, batch, plan IDs or `ALL`; **Drugs**: batch lists, item syntax
+  `name | strength | qty=N`), started with `run_drug_fill.bat`. Small-town ZIPs pick the nearest stores; the county
+  comes from the engine database; when the ZIP changes the saved pharmacies are cleared (Medicare.gov allows 5).
+- Each plan is saved as JSON **plus the full page text** (`.txt`, includes Medicare.gov's month-by-month table) in
+  `Plan jsons\2027_recapture_FILL<n>\`. `_done_search<N>.txt` marks a finished search.
+- **Never work around Medicare.gov "Access Denied" blocks** — stop and wait hours.
+- Searches done: 1–21. Pending: 22–25 (small-town / SE Minnesota gaps), 26–27 (pregabalin strengths + clotrimazole troche
+  on every Part D plan and the Anoka Advantage plans).
+- Loading: `python tools\mpf_load.py --dry-run`, then `python tools\mpf_load.py` → tests → upload → commit
+  `app/data/mpf_drug_map.json` (README_REFRESH §10).
+
+**8. Tests:** 902 offline tests (Oct 29).
+
+**9. Still open (Oct 31)**
+- **Go-live blockers (unchanged):** move the engine to AWS (BAA); access key on the engine endpoints; turn off / move
+  the street-address lookups; n8n Bedrock API key expiry decision; AWS written BAA confirmation for Bedrock.
+- Fill searches 22–27; ~10 realistic blind searches; the Pipestone H2461-010 first-month gap; 4 plans whose search-21
+  capture failed (H2001-124, H3219-005, H5959-018, H8889-009 — Hy-Vee showed no rows).
+- **OTC items** (vitamin D 1000, fish oil, baby aspirin, multivitamins): show a grey "OTC — not a Part D drug" instead of a
+  red "Not covered", keep them out of totals without an asterisk; the AI clean-up turned "1000 units" into "1000 mg".
+- November CMS monthly file (Xarelto / alprazolam / ergocalciferol changes; ketoconazole cream Part D copay).
+- Injectables still show "Verify coverage" and aren't priced; 2027 star ratings.
+- Jill's own sign-off: one sheet checked against Medicare.gov by hand (suggested: UHC MN-0001 H2001-116 at CVS).
+
+**What agents should know (Oct 29):** an **asterisk** = a drug isn't counted in that plan's total (the line under the
+total says which and why) — compare totals only between plans with the same note; **"Check name"** = the engine couldn't
+match the drug exactly and doesn't guess; **"as generic"** = the brand isn't on that plan's list but its generic is, and
+the cost is the generic's; injectables say "Verify coverage"; less common drugs or small-town stores may have no price
+yet (an asterisk, never a wrong number).
 
 ### ⭐ October 8, 2026 — Claude moved to AWS Bedrock · Plans page + client records · only official numbers (read this first)
 *Authoritative as of Oct 8, 2026 (evening). Where anything further down (including the Oct 7 box) disagrees, this box
@@ -246,7 +399,26 @@ Confirm folder-based naming + resume twin, remove dead dedup nodes, main-path Fa
 > Quick capture so this lives outside a chat. The plan for getting the **internal** drug-run engine sharpened and AEP-ready (PY2027, ~Oct 15 – Dec 7, 2026). Naming note: this is really a "client information" engine now, but we're keeping the SOA name since we're far enough in.
 
 ### ═══ OCTOBER 2026 UPDATE ═══
-*Last updated: Oct 8, 2026 (Oct 8 detail: the ⭐ October 8 box at the top). The September section below is preserved as history; this section is the live picture (newest entries first).*
+*Last updated: Oct 8, 2026 (Oct 8 detail: the ⭐ October 8 box at the top). Oct 15–31 entries added Oct 31, 2026 (detail: the ⭐ October 15–31 box). The September section below is preserved as history; this section is the live picture (newest entries first).*
+
+#### Oct 15–31, 2026 — summary
+Full picture in the ⭐ October 15–31 box at the top. Day by day (engine commits; Roundabout phases in brackets):
+- **Oct 15** — `9ae4225`/`d46ff19` Oct 15 CMS monthly file loaded: official 2027 drug lists + pharmacy networks, per-pharmacy preferred status. `e526574` Plans-page wording sent by the engine (Phase 44).
+- **Oct 17–18** — Medicare.gov's yearly method reverse-engineered from its month-by-month view (matched to the penny on H2001-116 and H3219-001); blind test vs Medicare.gov. `abec99a` real 2027 prices from Medicare.gov Plan Finder, copay capped at price, per-plan insulin; `c6f4891` official-data tests; `1cf1c28` insulin counts only what the client pays. [Phase 45: CamScanner scans in Incoming shown in the app; compact plan rows.]
+- **Oct 19** — `4724368` missing strength/price left out of totals and marked, brand at wrong strength → ingredient (Micro-K); `c24290a` small-town stores priced store by store + nearest priced stores + one-command loader (`tools/mpf_load.py`); `275b316` right suite in shared buildings; `f67cedc` Part D fill loaded, lisinopril/HCTZ match fixed, one store per chain price, matcher requires same ingredients.
+- **Oct 20** — `a32ae7c` fill searches 7–8 (44 new strengths); one amount per drug; release type must match.
+- **Oct 24** — `d1edb81` drug list sent one drug at a time (commas no longer shift doses); readable pharmacy rows on the PDF; Plans-page cost rows + not-counted notes. [Phase 46 → v0.2.0.]
+- **Oct 27** — `73dc164`/`5bd97c1` fill searches 9–14 (40 new drugs); `b465ef6` creams/ointments/powders at the right product; `20834f9` Quartz + Align hidden (`HIDDEN_CONTRACTS`). Gap analysis aimed at the top ~200 drugs on the main carriers' plans.
+- **Oct 28** — `70eed31` search 16 (43 new drugs); `79b8b3f` searches 17–19: Part D top drugs complete. [Phase 47: shared "Not counted on any plan" line.]
+- **Oct 29** — test sheets through the app; `fce586b`/`6ac5600` triamterene/HCTZ combination strength, mcg doses, deductible month spans, one yearly cost row (cheapest pharmacy), doctors in one row, bold key rows; `f315b0b` **$2,400 cap fills the way Medicare.gov's does** + `tools/verify_against_mgov.py`; `8c00540`/`1380b7e` creams/ointments never read as tablets, plain mg prefers the mg product; `fc4c996` search 21 (pregabalin strengths, clotrimazole troche). n8n: node 2 retries, node 3 any PDF. [Phase 48 → v0.3.0 Submit opens the comparison + Save PDF choice; Phase 49 → v0.3.1.] Evening: Jill tested v0.3.1 at her office (test sheets).
+- **Oct 31** — vault + repo docs brought up to date (this entry).
+
+#### Remaining before AEP / real clients (as of Oct 31)
+1. **Go-live blockers** (unchanged since Oct 8): engine to AWS under the BAA · access key on the engine endpoints · street-address lookups off or on AWS · n8n Bedrock key expiry · AWS written BAA confirmation.
+2. Fill searches 22–27, then ~10 realistic blind searches (5–10 drug client-style lists, a couple that hit the cap) as proof on everyday lists.
+3. OTC items shown as "OTC — not a Part D drug" (no asterisk); the Pipestone H2461-010 first-month gap; the 4 failed search-21 plans.
+4. November CMS file; 2027 stars; injectables still unpriced.
+5. Jill's sign-off check against Medicare.gov.
 
 #### Oct 3, 2026 — Report clarity + ZIP safety (engine)
 - `20fc83d` **one shared deductible + the yearly Part D out-of-pocket cap** across all drugs (each drug used to pay its own deductible and nothing stopped at the cap: Harold Lindgren's test showed $2,928 in a $2,100-cap year). Month-by-month walk in `app/drug_year.py`.
@@ -1343,6 +1515,14 @@ See `FUTURE_IMPROVEMENTS.md` for full details on each provider-related item.
 
 This section explains exactly where every number in the report comes from, why our prices may differ slightly from medicare.gov, and what agents should know when utilizing this tool.
 
+> **Oct 31, 2026 update — read first.** Since Oct 15 the drug lists and pharmacy networks come from the **CMS monthly
+> Formulary & Pharmacy Network file** (2027), and since Oct 18 the 2027 drug prices come from **Medicare.gov Plan
+> Finder** itself (Jordon's saved searches → `mpf_price`), so the price gap described below ("Why Our Prices May
+> Differ") is essentially closed for captured drugs: the engine uses the same per-pharmacy price Medicare.gov shows.
+> Drugs/strengths not captured yet are left out and marked, never estimated. The yearly cost follows Medicare.gov's
+> yearly method and was checked against Medicare.gov's own totals (60 of 63 fully priced searches within $5, Oct 29).
+> Details: the ⭐ October 15–31 box. The text below is kept as the earlier (CMS-file) description.
+
 ---
 
 ### Where the Data Comes From
@@ -1381,6 +1561,15 @@ Each carrier's in-network provider list. Sources vary by carrier — see Provide
 
 ### How We Calculate Drug Costs
 
+> **Updated Oct 29, 2026 — supersedes the steps below where they differ.** Price = Medicare.gov's own price for that
+> plan, drug and pharmacy (chain-wide for Cub/Walgreens/CVS/Walmart/Costco/Hy-Vee, store by store elsewhere); no
+> price → left out and marked. The year: drugs filled cheapest first each month, one shared deductible, copay never
+> above the price, insulin = lower of $35 and the plan's insulin cost-share. On plans with deductible-free tiers every
+> covered drug's full price counts toward the deductible, and toward the **$2,400 cap** each fill counts the larger of
+> what the client pays and the standard benefit's charge (full price until the **$700** standard deductible, then 25%).
+> "Est. yearly drug cost" = the cheapest nearby in-network pharmacy that has every priced drug. The "2027 note" at the
+> end of this section (2026 prices as estimates) no longer applies.
+
 > **Updated Oct 7, 2026.**
 
 **Step 1: Identify the drug** — AI clean-up, then the local drug-name reader (see Drug Normalization Pipeline).
@@ -1413,6 +1602,12 @@ the cap is reached.
 ---
 
 ### Why Our Prices May Differ from Medicare.gov
+
+> **Oct 29, 2026:** with Medicare.gov's own prices loaded, the remaining differences are: drugs or strengths not
+> captured yet (left out and marked "price not on file"), brands priced "as generic" when only the generic is on the
+> plan's list (Medicare.gov shows the brand as not covered), coverage changes Medicare.gov already shows but the CMS
+> monthly file hasn't caught up with (e.g. Xarelto/alprazolam until November), and one small-town Blue Cross plan's
+> first month (H2461-010, open). The MFP/MTF explanation below applied to the CMS-file prices used until Oct 18.
 
 This is the most important thing for agents to understand. Our prices come from the same CMS data source as medicare.gov — but there is one layer of pricing data that CMS does not make publicly available.
 
@@ -1478,6 +1673,13 @@ A drug showing green regardless of its tier number means the copay is $0 — the
 
 ### What Agents Should Tell Clients
 
+> **Oct 29, 2026 — how to read the screens:** an **asterisk** means a drug isn't counted in that plan's total (the line
+> under the total says which and why) — compare totals only between plans with the same note. **"Check name"** = the
+> engine couldn't match that drug exactly (e.g. a mixed-to-order cream) and doesn't guess. **"as generic"** = the brand
+> isn't on that plan's list but its generic is; the cost shown is the generic's. **"Strength not found — verify the
+> dose"** = no product is made at the written strength. Injectables say "Verify coverage". Prices: "These come from
+> Medicare.gov's own plan finder for 2027 — always confirm on Medicare.gov or with the plan before enrolling."
+
 **"Where do these numbers come from?"**
 "These prices come from the same CMS database that powers medicare.gov — the official government source. We pull it every quarter when CMS releases updated data."
 
@@ -1511,6 +1713,10 @@ A drug showing green regardless of its tier number means the copay is $0 — the
 | August 29, 2026 | Restored the truncated Extract with Claude prompt in the live node; verified end-to-end on a real handwritten SOA (custom_plans + flags + providers) — see below |
 | September 19, 2026 | Engine health check (Goal A — all green) + agent-report visual refresh (Goal B pt.1): slate palette, best-plan highlight removed, two-up pharmacy grid, section spacing; plus repo hygiene — see below |
 | September 21, 2026 | Flags → PDF banner plumbing closed — **Goal B fully done**: n8n **Build Railway Body** now sends the `flags` array; the engine reads it and merges into the ⚠ Drug Verification banner. Proven engine-side (fake-flags POST) then end-to-end on a real flagged sheet — see below |
+| October 31, 2026 | Vault + repo docs brought up to date with Oct 15–31 (this master, Open Items, Data Refresh, Folder Map, session starter, Phases 48–49 prompts doc) |
+| October 29, 2026 | Test sheets through Roundabout + Jill's office test. Engine: combination strengths (triamterene/HCTZ), "Strength not found", mcg doses, deductible month spans, yearly cost = cheapest pharmacy, one cost row, doctors in one row, bold key rows; **$2,400 cap fixed to Medicare.gov's method** (60/63 within $5) + `tools/verify_against_mgov.py`; route rule (creams never read as tablets), plain mg → mg product; fill search 21 loaded. n8n node 2 retries + node 3 any PDF. Roundabout Phases 48–49 (v0.3.1) — see the ⭐ October 15–31 box |
+| October 24–28, 2026 | Drug list sent one drug at a time (comma fix); readable PDF pharmacy rows; Plans-page cost rows; fill searches 9–19 (Part D top drugs complete); creams/ointments/powders reader; Quartz + Align hidden; Roundabout Phases 46–47 (v0.2.0) |
+| October 15–20, 2026 | **Oct 15 CMS drug lists + networks** (per-pharmacy preferred flag); **real 2027 prices from Medicare.gov Plan Finder**; Medicare.gov yearly method (insulin rule, copay capped at price); missing prices left out and marked; small-town stores priced store by store; capture loader `tools/mpf_load.py`; one amount per drug; Roundabout Phases 43–45 |
 | October 8, 2026 | **Claude moved to AWS Bedrock** (engine `normalize_drugs` + n8n nodes 6a/6b, Sonnet 4.6; Sonnet 5.5 awaiting AWS account access); `POST /compare-plans` + pharmacy fast path; Medica 2027 lists; **only official numbers** shown as fact (`app/availability.py`); guesses never priced; client-sheet stars gated; Roundabout Phases 34–42 (client records, Plans page, compare) — see the ⭐ October 8 box |
 | October 7, 2026 | **2027 plan year switched live** (R2 backups `backup_2026/`); three fake-client tests (Margaret Ellison, Dorothy Halvorsen, Harold Brekke) found and fixed: CMS "not applicable" pharmacy columns read as $0, device names, brands gone generic, unpriced generics shown as $0, HCTZ combo rows; **local drug-name reader** scored on ~345 names; name clean-up on `claude-sonnet-5-5`; n8n Parse JSON (7) rewritten; `POST /check-drugs`; `/health` data year; docs rewritten (README_REFRESH, FUTURE_IMPROVEMENTS, this doc) — see roadmap Oct 7 |
 | October 3–6, 2026 | Shared deductible + out-of-pocket cap; deductible-met / cap months on the report; **2027 data built**: carrier drug-list PDF reader + offline RxNorm matcher (13 lists), `build_2027_db.py`, 2027 PBP benefits, 2026-price estimates, DB-driven plan year (`meta`), mail-order + negotiated-price cost fixes, counties for split ZIPs, `providers_2027` (Medica 2027 directory, health-system map, agency confirmations), folder tidy; Roundabout Phases 28–33 — see roadmap Oct 3–6 |
@@ -1867,3 +2073,23 @@ Summary lives in the roadmap blocks **"Oct 3"**, **"Oct 3–6"** and **"Oct 7"**
 - **Verification habits that paid off:** reproduce a report's numbers locally before guessing (Margaret's $0 months); score the drug reader on a list written *after* tuning (88.8% → real fixes); check every reading lands on a real drug list (caught omeprazole); compare against an independent source (1,832 carrier rows).
 - **Copies of this doc:** the repo copy is the master. On Oct 7 the claude.ai project copy was replaced with it; the Obsidian vault copy (`Projects/SOA Engine/`) is updated by Jordon copying the repo file over it (the vault isn't a folder Claude can reach).
 
+### October 15–31, 2026 Session Detail
+Summary lives in the ⭐ October 15–31 box and the roadmap "Oct 15–31" entry. Working notes:
+- **Division of work (unchanged):** engine, data, loader and docs by Claude through the linked computer; Roundabout by
+  Claude Code from one-block prompts written in chat (Claude may read `M:\Roundabout` but never edits it); n8n changes
+  by Jordon in the editor from exact code given in chat; Medicare.gov searches run by Jordon (manually, then
+  `run_drug_fill.bat`). Git: Claude can't commit on the linked computer (no git identity there) — Jordon runs the
+  `git add <files>` / `commit` / `push` lines given in chat, and the database upload
+  (`python r2_files.py upload medicare_mn_2027.db --as medicare_mn.db`).
+- **Verification habits that paid off:** reproduce Medicare.gov's month-by-month table before changing the year model
+  (the saved `.txt` page text has it for every fill search — that is what exposed the cap rule); re-read every captured
+  label after a reader change (no change allowed); test a fix on the real test sheet and render the PDF before calling
+  it done; never load a label that doesn't reproduce Medicare.gov's copay.
+- **Medicare.gov blocks:** "Access Denied" after fast restarts — wait hours; never work around it.
+- **Test sheets Oct 29 (fake clients):** the 8-drug ZIP 55437 sheet (Aetna Enhanced/Signature + Humana Basic Rx —
+  exposed triamterene), Peggy Haumersen (ZIP 55419, Hennepin — exposed the compounded lovastatin cream, pregabalin 50 mg
+  and clotrimazole troche gaps, the "Lowest total" on the most expensive plan), and the 5-plan test at Jill's (vitamin D
+  "1000 mg" → the OTC idea). Real client data still not allowed until the engine runs under the BAA.
+- **Docs:** on Oct 31 the vault docs were updated in place (nothing deleted) and copied byte-identical to the repo
+  (`SOA_Drug_Run_Automation.md`, `FUTURE_IMPROVEMENTS.md`, `README_REFRESH.md`, `README.md`). The vault is now a
+  linked folder Claude can reach directly.

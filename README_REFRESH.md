@@ -2,6 +2,11 @@
 *Rewritten October 7, 2026; updated Oct 8 (stars gate, Bedrock troubleshooting). Replaces the May 2026 quarterly-refresh guide (kept as `_archive/README_REFRESH_2026-05.md`;
 `quarterly_refresh.py` is retired).*
 
+> **Oct 31, 2026:** §6 (Oct 15 file) is **done**. 2027 prices now come from Medicare.gov captures (§10), so the
+> database says `prices_estimated = 0` and every screen shows dollar figures; §8 (January quarterly prices) is still
+> to be decided — see Open Items §3. Tests: 902 (Oct 29). New: §10 loading Medicare.gov captures, §11 checking
+> accuracy against Medicare.gov.
+
 Everything here is run by Jordon in **PowerShell, from the engine folder** (`C:\Users\Mudd\medicare_drug_engine`),
 because the steps that download need internet. Each step says what "done" looks like.
 
@@ -155,3 +160,42 @@ prices; then the switch (section 2) when ready. Provider sources for the new yea
 | Report still shows old data after upload | Railway wasn't restarted (Redeploy), or the upload used the wrong `--as` name (`r2_files.py list`). |
 | A drug "couldn't identify" | Add it to `tests\data\drug_cases.psv`, then ask Claude to fix the reader. |
 | `/health` `data_year` wrong | The wrong file is live under `medicare_mn.db` — check `r2_files.py list` sizes, re-upload, Redeploy. |
+
+---
+
+## 10. Medicare.gov price captures (fill runs) — added Oct 31, 2026
+1. **Plan the searches** in `Desktop\Med Search 6\Drug_Fill_Plan.xlsx`: tab **Drugs** = batch name + one drug per row
+   (`name | strength | qty=N`; strength and qty optional — qty must match the drug's usual amount or the price is left out);
+   tab **Searches** = search number, label (output folder `2027_recapture_<label>`), ZIP, plan type (`Medicare Advantage`
+   or `Drug plan (Part D)`), batch, plan IDs or `ALL`. Or ask Claude to set up the next batch.
+2. **Run** `run_drug_fill.bat` (Med Search 6). Finished searches are skipped on re-run (`_done_search<N>.txt`). If
+   Medicare.gov says "Access Denied", stop and wait hours — never work around it.
+3. **Check, then load** (engine folder, PowerShell):
+   ```
+   python tools\mpf_load.py --dry-run
+   python tools\mpf_load.py
+   python -m pytest tests -q
+   ```
+   The dry run lists new labels accepted (`+`, every row reproduces Medicare.gov's copay) and labels left for review
+   (`?`). Prices at a different amount than the drug's usual one are reported and left out.
+4. **Upload + commit:**
+   ```
+   python r2_files.py upload medicare_mn_2027.db --as medicare_mn.db
+   git add app/data/mpf_drug_map.json
+   git commit -m "Fill search <N> loaded: <what>"
+   git push
+   ```
+   The push restarts Railway, which downloads the new database.
+
+## 11. Accuracy check against Medicare.gov — added Oct 31, 2026
+After any change to pricing or the year model (and after big loads):
+```
+set PLAN_JSONS=C:\Users\Mudd\Desktop\Plan jsons
+set VERIFY_RESULTS=run_<date>.jsonl
+python tools\verify_against_mgov.py
+python tools\verify_against_mgov.py --report
+```
+The report shows yearly drug cost vs Medicare.gov in bands (within $5 / $5–20 / $20–100 / over $100), the
+deductible-month agreement, searches that can't be compared like-for-like (injectables, not-covered drugs, different
+amounts) and the worst misses. Oct 29 baseline: 60 of 63 fully priced searches within $5; deductible month 131/131.
+A long run can be split: `--start 0 --count 170`, then `--start 170 --count 200` (finished files are skipped).
