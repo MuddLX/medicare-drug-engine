@@ -20,6 +20,7 @@ app = Flask(__name__)
 
 from app import data_meta
 from app import drug_resolver   # local RxNorm drug-name reader (2026-10-07)
+from app import dose_defaults   # no dose on the sheet / unusual amounts (2026-10-31)
 DB_PATH           = data_meta.DB_PATH
 # Doctor/clinic networks: 2027 sources only (app/providers_2027.py, providers_2027.db). The 2026
 # carrier directory databases were retired 2026-10-06.
@@ -1576,6 +1577,17 @@ def lookup_rxcuis_release_form(drug_name, dosage=""):
     return out
 
 
+def _same_strength_generics(generic_rx, rxcuis):
+    """A brand's generic twins at the strength chosen for it (no dose on the sheet: Eliquis -> the 5 mg tablet's
+    generic only, never another strength's)."""
+    if not generic_rx:
+        return generic_rx
+    idx, _ = drug_resolver._load()
+    by = {p["rxcui"]: p for p in idx.products}
+    want = {tuple(sorted(by[r]["strengths"])) for r in rxcuis if r in by}
+    return [g for g in generic_rx if g in by and tuple(sorted(by[g]["strengths"])) in want]
+
+
 def generic_equivalents(rxcuis):
     """The generic (SCD) versions of brand products (2026-10-07, Dorothy Halvorsen test).
 
@@ -1854,7 +1866,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
 
         # Local RxNorm resolver first (2026-10-07: app/drug_resolver.py, scored by tests/data/drug_cases*.psv);
         # RxNav on the internet only as a backup for names it can't read.
-        resolved = drug_resolver.resolve(drug_name, dosage,
+        resolved = drug_resolver.resolve(drug_name, dose_defaults.strip_amounts(dosage),
                                          alternates=[original_name, item.get("ingredient", ""), item.get("brand", "")])
         if resolved:
             rxcuis = resolved.rxcuis
@@ -1871,6 +1883,31 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
         else:
             rxcuis = lookup_rxcuis(drug_name, dosage)
             generic_rx = None      # generic equivalents, looked up (RxNav) only if a plan lacks the brand
+
+        # No dose on the sheet (2026-10-31, Jill): price Medicare.gov's usual strength and say so; when two are
+        # equally likely, ask for the dose instead of guessing. app/dose_defaults.py.
+        dose_needed = False
+        if resolved and rxcuis and mpf_mode() and not dose_defaults.has_strength(drug_name, dosage, original_name):
+            choice = dose_defaults.choose(drug_name or original_name, rxcuis, generic_rx)
+            if choice is not None:
+                if choice.label:
+                    rxcuis = choice.rxcuis
+                    generic_rx = _same_strength_generics(generic_rx, rxcuis)
+                    drug_result["dosage"] = choice.strength + dose_defaults.ASSUMED_SUFFIX
+                    drug_result["dose_assumed"] = True
+                else:
+                    dose_needed = True
+                    drug_result["dose_needed"] = True
+                    drug_result["dosage"] = dose_defaults.NEEDED_TEXT
+                drug_result["dose_note"] = choice.flag()
+                warnings.append({"drug": original_name or drug_name, "normalized_to": read_as,
+                                 "flag": choice.flag()})
+        if resolved and rxcuis and mpf_mode() and not dose_needed:
+            note, priced_qty = dose_defaults.amount_check(conn, rxcuis, dosage)
+            if note:
+                drug_result["amount_note"] = note
+                drug_result["dosage"] = (drug_result.get("dosage") or dosage) + dose_defaults.priced_for_suffix(priced_qty)
+                warnings.append({"drug": original_name or drug_name, "normalized_to": read_as, "flag": note})
 
         if not rxcuis:
             drug_result["error"] = "Drug not found in formulary"
@@ -1913,10 +1950,16 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             # Real prices (mpf) exist only for the captured strength. A strength that doesn't exist / wasn't
             # found must not borrow another strength's price (2026-10-19: atorvastatin 250 mg showed the 40 mg price).
             if (mpf_mode() and plan_cost.get("covered") and not plan_cost.get("insulin_cap")
-                    and resolved and dosage and not resolved.strength_matched):
+                    and resolved and dose_defaults.strip_amounts(dosage) and not resolved.strength_matched):
                 plan_cost["price_unknown"] = True
                 plan_cost["strength_not_found"] = True
-            if plan_cost.get("price_unknown"):
+            if dose_needed and plan_cost.get("covered"):
+                # no dose and two strengths/forms equally likely: not priced (the "add the dose" note says why)
+                plan_cost["price_unknown"] = True
+                plan_cost["dose_needed"] = True
+                plan_cost["annual_total"] = None
+                plan_cost["pharmacy_costs"] = []
+            if plan_cost.get("price_unknown") and not plan_cost.get("dose_needed"):
                 why = "strength not found" if plan_cost.get("strength_not_found") else "no price on file"
                 warnings.append({"drug": original_name or drug_name, "normalized_to": "",
                                  "flag": f"{why} for {carrier} - its cost is left out, verify"})
@@ -2040,7 +2083,7 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
             drug_result["drug_name"] = resolved.combo
             drug_result["dosage"] = resolved.combo_dose or dosage
             drug_result["original_name"] = original_name or drug_name
-        if resolved and dosage and not resolved.strength_matched:
+        if resolved and dose_defaults.strip_amounts(dosage) and not resolved.strength_matched:
             drug_result["strength_not_found"] = True      # this strength isn't made: no plan's answer is reliable
         results.append(drug_result)
 

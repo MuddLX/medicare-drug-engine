@@ -590,6 +590,10 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
                     elif pcost.get("injectable") or d.get("is_injectable"):
                         row.append(C("Verify coverage", "injectable"))
                         tint(r, ci, AMBER_BG)
+                    elif pcost.get("dose_needed"):
+                        # 2026-10-31: no dose on the sheet and two strengths/forms equally likely - nothing guessed
+                        row.append(C("Dose needed", "not on the sheet"))
+                        tint(r, ci, AMBER_BG)
                     elif d.get("strength_not_found"):
                         # 2026-10-29: a strength that isn't made can't be looked up - never "Not covered" / a tier
                         # for some other strength

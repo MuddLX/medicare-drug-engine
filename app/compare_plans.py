@@ -201,6 +201,7 @@ def compare(data):
                     **(_restrictions(conn, formulary_of.get(k), cell.get("ndc"), have_flags) if status == "covered"
                        else dict(_NO_FLAGS)),
                     "price_unknown": bool(cell.get("price_unknown")) and prices_ok,
+                    "dose_needed": bool(cell.get("dose_needed")),     # no dose on the sheet, 2+ strengths (2026-10-31)
                     "insulin_cap": bool(cell.get("insulin_cap")),
                     # The plan's OFFICIAL 2027 copay / coinsurance for this drug's tier (CMS plan benefit files).
                     "cost_share": AV.cost_share(conn, k[0], k[1], cell.get("tier"), insulin=bool(cell.get("insulin_cap")))
@@ -259,7 +260,7 @@ def compare(data):
             why = {"not_covered": "not covered", "not_on_list": "not on carrier's list",
                    "verify_injectable": "verify", "not_identified": "not identified"}.get(c["status"])
             if why is None and c.get("price_unknown"):
-                why = "price not on file"
+                why = "dose needed" if c.get("dose_needed") else "price not on file"
             if why:
                 items.append((name, why))
         return items
