@@ -50,6 +50,11 @@ is in `_archive/FUTURE_IMPROVEMENTS_2026-05.md`; those provider databases were r
 - [ ] Calcipotriene-type rows where the sheet writes the strength differently in name and dose still show the dose twice
       (cosmetic).
 - [ ] January: decide whether CMS's quarterly prices replace or only fill gaps in the Medicare.gov prices.
+- [ ] **More than 3 Part D plans (Jordon, Nov 5).** The review plan picker caps picks at 7 Medicare Advantage + 3 Part D
+      (`src/engine/plans.py` MAX_MA, MAX_PD = 7, 3) because that is the internal PDF's layout limit
+      (`src/report_runs.py` "The internal report holds up to 3 Part D plans"; engine `app/internal_pdf.py` columns).
+      Raising it needs the engine's internal PDF to fit more Part D columns (or a second page) first, then the app limit.
+      The Compare view's 6-plan limit is separate.
 
 ---
 ## 1. Must be done before any REAL client data (go-live blockers)

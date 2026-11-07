@@ -1,6 +1,26 @@
 {
  "_about": "Medicare.gov Plan Finder drug labels -> RxCUIs. Each match confirmed 2026-10-17 by the engine reproducing Medicare.gov's copays on every captured row (Plan jsons/_tools/verify_2026-10-17).",
  "drugs": {
+  "Abiraterone acetate 250mg tablet": {
+   "rxcuis": [
+    "1100075"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "abiraterone acetate 250 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
+  "Acetaminophen / butalbital / caffeine 50-325-40mg tablet": {
+   "rxcuis": [
+    "238154"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "acetaminophen 325 MG / butalbital 50 MG / caffeine 40 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
   "Acetaminophen / codeine 300-30mg tablet": {
    "rxcuis": [
     "993781"
@@ -328,6 +348,16 @@
     "betamethasone 0.5 MG/ML Topical Lotion"
    ]
   },
+  "Bethanechol chloride 25mg tablet": {
+   "rxcuis": [
+    "857328"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "bethanechol chloride 25 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
   "Bicalutamide 50mg tablet": {
    "rxcuis": [
     "199123"
@@ -337,6 +367,16 @@
     "bicalutamide 50 MG Oral Tablet"
    ],
    "added": "2026-11-06"
+  },
+  "Bimatoprost 0.03% solution": {
+   "rxcuis": [
+    "308739"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "bimatoprost 0.3 MG/ML Ophthalmic Solution"
+   ],
+   "added": "2026-11-07"
   },
   "Bisoprolol fumarate 5mg tablet": {
    "rxcuis": [
@@ -359,6 +399,16 @@
     "30 ACTUAT fluticasone furoate 0.1 MG/ACTUAT / vilanterol 0.025 MG/ACTUAT Dry Powder Inhaler [Breo]"
    ]
   },
+  "Brimonidine / timolol 0.2-0.5% solution": {
+   "rxcuis": [
+    "861635"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "brimonidine tartrate 2 MG/ML / timolol 5 MG/ML Ophthalmic Solution"
+   ],
+   "added": "2026-11-07"
+  },
   "Brimonidine tartrate 0.2% solution": {
    "rxcuis": [
     "861200"
@@ -367,6 +417,16 @@
    "names": [
     "brimonidine tartrate 2 MG/ML Ophthalmic Solution"
    ]
+  },
+  "Budesonide / formoterol 160-4.5mcg/act aerosol": {
+   "rxcuis": [
+    "1246304"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "120 ACTUAT budesonide 0.16 MG/ACTUAT / formoterol fumarate 0.0045 MG/ACTUAT Metered Dose Inhaler"
+   ],
+   "added": "2026-11-07"
   },
   "Budesonide 3mg capsule delayed release particles": {
    "rxcuis": [
@@ -424,6 +484,16 @@
     "calcitriol 0.00025 MG Oral Capsule"
    ],
    "added": "2026-10-28"
+  },
+  "Candesartan cilexetil 32mg tablet": {
+   "rxcuis": [
+    "639537"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "candesartan cilexetil 32 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
   },
   "Carbamazepine 300mg capsule extended release 12 hour": {
    "rxcuis": [
@@ -577,6 +647,16 @@
    ],
    "added": "2026-11-06"
   },
+  "Ciprofloxacin / dexamethasone 0.3-0.1% suspension": {
+   "rxcuis": [
+    "403908"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "ciprofloxacin 3 MG/ML / dexamethasone 1 MG/ML Otic Suspension"
+   ],
+   "added": "2026-11-07"
+  },
   "Ciprofloxacin 0.3% solution": {
    "rxcuis": [
     "309307"
@@ -721,6 +801,16 @@
    ],
    "added": "2026-10-29"
   },
+  "Combivent 20-100mcg/act aerosol solution": {
+   "rxcuis": [
+    "1190225"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "120 ACTUAT albuterol 0.1 MG/ACTUAT / ipratropium bromide 0.02 MG/ACTUAT Inhalation Spray [Combivent]"
+   ],
+   "added": "2026-11-07"
+  },
   "Creon 36000-114000unit capsule delayed release particles": {
    "rxcuis": [
     "1113046",
@@ -746,6 +836,16 @@
    "names": [
     "cyclobenzaprine hydrochloride 10 MG Oral Tablet"
    ]
+  },
+  "Cyclosporine 0.05% emulsion": {
+   "rxcuis": [
+    "2572292"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "0.4 ML cyclosporine 0.5 MG/ML Ophthalmic Suspension"
+   ],
+   "added": "2026-11-07"
   },
   "Dabigatran etexilate 150mg capsule": {
    "rxcuis": [
@@ -1084,6 +1184,36 @@
    "names": [
     "estradiol 0.1 MG/ML Vaginal Cream"
    ]
+  },
+  "Eszopiclone 1mg tablet": {
+   "rxcuis": [
+    "485440"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "eszopiclone 1 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
+  "Eszopiclone 2mg tablet": {
+   "rxcuis": [
+    "485442"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "eszopiclone 2 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
+  "Eszopiclone 3mg tablet": {
+   "rxcuis": [
+    "485465"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "eszopiclone 3 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
   },
   "Etodolac 400mg tablet": {
    "rxcuis": [
@@ -2187,6 +2317,26 @@
    ],
    "added": "2026-10-28"
   },
+  "Mirabegron 25mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "1300791"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "24 HR mirabegron 25 MG Extended Release Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
+  "Mirabegron 50mg tablet extended release 24 hour": {
+   "rxcuis": [
+    "1300801"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "24 HR mirabegron 50 MG Extended Release Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
   "Mirtazapine 15mg tablet": {
    "rxcuis": [
     "311725"
@@ -2842,6 +2992,16 @@
     "promethazine hydrochloride 25 MG Oral Tablet"
    ]
   },
+  "Propafenone hydrochloride 150mg tablet": {
+   "rxcuis": [
+    "861424"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "propafenone hydrochloride 150 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
   "Propranolol hydrochloride 20mg tablet": {
    "rxcuis": [
     "856457"
@@ -3018,6 +3178,36 @@
    ],
    "added": "2026-10-20"
   },
+  "Sacubitril / valsartan 24-26mg tablet": {
+   "rxcuis": [
+    "1656340"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "sacubitril 24 MG / valsartan 26 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
+  "Sacubitril / valsartan 49-51mg tablet": {
+   "rxcuis": [
+    "1656349"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "sacubitril 49 MG / valsartan 51 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
+  "Sacubitril / valsartan 97-103mg tablet": {
+   "rxcuis": [
+    "1656354"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "sacubitril 97 MG / valsartan 103 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
+  },
   "Sertraline 100mg tablet": {
    "rxcuis": [
     "312938"
@@ -3105,6 +3295,16 @@
     "solifenacin succinate 10 MG Oral Tablet"
    ],
    "added": "2026-10-28"
+  },
+  "Sotalol hcl 80mg tablet": {
+   "rxcuis": [
+    "1923426"
+   ],
+   "rows_checked": 53,
+   "names": [
+    "sotalol hydrochloride 80 MG Oral Tablet"
+   ],
+   "added": "2026-11-07"
   },
   "Spiriva 2.5mcg/act aerosol solution": {
    "rxcuis": [
