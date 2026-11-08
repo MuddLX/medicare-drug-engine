@@ -4,7 +4,41 @@ is in `_archive/FUTURE_IMPROVEMENTS_2026-05.md`; those provider databases were r
 `providers_2027`.*
 
 
-## ★ Update — October 31, 2026 (read first; the sections below are kept as written on Oct 8)
+## ★ Update — November 7, 2026 (read first; the Oct 31 update and Oct 8 sections below are kept as written)
+**Done since Oct 31**
+- [x] **No dose on the sheet** → Medicare.gov's usual strength, labelled; two equally likely → "add the dose", left
+      out of totals; unusual amounts flagged only (`439bbc5`).
+- [x] **Part D ranked cheapest first** (yearly total, Medicare.gov's way; Part D only) in the Compare view's new
+      "Choose plans" window (Phase 50) and the review picker (Phase 51) → Roundabout **v0.4.0**.
+- [x] Stuck "in progress" scan / ghost row; plan icon disappearing on click (Phases 50–51).
+- [x] Oxybutynin, teriflunomide, colestipol loaded (Nov 5); Entresto/Lunesta/Myrbetriq/Symbicort generics + 16 more
+      (Nov 7). Now 384 labels, 69,988 prices.
+- [x] Search 22's "Could not tick pharmacy" — cause found (Medicare.gov's "5 of 5 selected" bar keeps the last ZIP's
+      stores) and fixed in `medicare_monthly_route.py` (Nov 7). Confirm on the re-run.
+
+**New open items (Nov 7)**
+- [ ] **Husband and wife on one sheet/email** (Jill). Decided: the reader spots two people, the app asks "Split into 2 /
+      Keep as one"; split → two sheets, two clients; shared address/phone copied to both; drugs and doctors stay with
+      whoever they're listed under; unclear items flagged on both; original scan kept until both are submitted.
+      First step: export the current n8n workflow.
+- [ ] **C-SNP plans — only the three Jill can sell:** UHC Complete Care MN-7 (H2001-133), UHC Complete Care Support
+      MN-8 (H2001-134), Allina Health Aetna Medicare Chronic (H3219-015). Today `build_2027_db.py` skips every SNP
+      plan; formularies 00027003 (UHC) and 00027016 (Allina) are in the Oct CMS file. Show that the client must
+      qualify (diabetes / heart failure / cardiovascular).
+- [ ] Fill searches **22, 23, 30–37** still to run (re-run started Nov 7 with the pharmacy fix), then load.
+- [ ] Drugs Medicare.gov didn't find by our name ("NOT FOUND exactly" in the log, e.g. Ciprodex) — re-queue under
+      Medicare.gov's spelling.
+- [ ] Unusual amounts on the sheet are only flagged — decide later whether to price them.
+- [ ] Incoming folder → "NEW FILES" rename — **paused** (Jordon, Nov 5).
+
+**Data gaps — changes since Oct 31**
+| Gap | What agents see | Closes |
+|---|---|---|
+| Small-town stores + Part D/Anoka for batch N8 | asterisk + "price not on file" | fill searches 22–23, 30–37 |
+| 17 labels held back (e.g. sitagliptin, tiotropium, Lovaza, folic acid) — not covered on any plan captured yet | "price not on file" | load themselves once a plan covering them is captured |
+| C-SNP plans | not offered at all | C-SNP build (above) |
+
+## ★ Update — October 31, 2026 (the sections below are kept as written on Oct 8)
 **Done since Oct 8**
 - [x] **Oct 15 CMS drug lists + pharmacy networks loaded** (all 18 lists from CMS; per-pharmacy preferred flag). "Not
       covered" and pharmacy names/costs are on.
@@ -33,7 +67,7 @@ is in `_archive/FUTURE_IMPROVEMENTS_2026-05.md`; those provider databases were r
 |---|---|---|
 | Drugs/strengths not captured yet (outside ~top 250; e.g. pregabalin 50 mg + clotrimazole troche on Part D plans) | asterisk + "price not on file" — left out of that plan's total | fill searches 22–27 + later batches |
 | Small-town stores | 92.9% of top drugs (Oct 28) | fill searches 22–25 |
-| Search 22 (Bemidji) stops with "Could not tick pharmacy CVS…" even after the clear-on-new-ZIP fix (Oct 29, 6:19 pm) | small-town gaps stay open | diagnose the small-town pharmacy step, then re-run 22–25 |
+| Search 22 (Bemidji) stops with "Could not tick pharmacy CVS…" even after the clear-on-new-ZIP fix (Oct 29, 6:19 pm) — **cause found + fixed Nov 7** (see ★ Nov 7) | small-town gaps stay open | diagnose the small-town pharmacy step, then re-run 22–25 |
 | 4 plans whose search-21 capture failed (H2001-124, H3219-005, H5959-018, H8889-009 — Hy-Vee no rows) | older prices only | re-run search 21 for those plans |
 | Pipestone Blue Cross H2461-010: yearly cost $80–$166 off Medicare.gov (first month) | — | investigate |
 | Coverage Medicare.gov already shows but the CMS file doesn't yet (Xarelto, alprazolam, ergocalciferol on UHC; ketoconazole cream Part D copay) | tier/coverage per the Oct CMS file | November CMS monthly file |

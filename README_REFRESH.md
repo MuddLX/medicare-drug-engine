@@ -187,6 +187,22 @@ prices; then the switch (section 2) when ready. Provider sources for the new yea
    ```
    The push restarts Railway, which downloads the new database.
 
+### 10a. Troubleshooting fill runs — added Nov 7, 2026
+- **"Could not tick pharmacy <store>" and the search stops.** Medicare.gov remembers up to 5 picked pharmacies on its
+  own side. Since Nov 7 the script clicks **remove** on every store in the "N of 5 selected" bar before picking, and
+  logs "cleared N store(s) left over from the last stop". If it still stops, look in
+  `Med Search 6\oneoff_output\drug_fill\search<N>_<ZIP>_b<batch>\` for `pharmacy_tick_<time>.png` (what the page
+  looked like) and `buttons_pharmacy_tick_<time>.json`.
+- **"NOT FOUND exactly: 'X'. Medicare.gov offered: [...]"** — Medicare.gov spells the drug differently. Not an error;
+  that drug is skipped. Put the drug back in a later batch under one of the offered names.
+- **Drugs being removed and added over and over** — normal. Each search first empties Medicare.gov's list from the
+  last search (2–4 minutes), then adds its own batch.
+- **Dry run lists a label under "?" (NOT loaded)** — usually the drug isn't covered on any plan captured yet (the
+  loader needs at least one covered row). It loads by itself once a later search finds a plan that covers it. Labels
+  with a stray " 1" on the end, or "no product found", are bad labels — never loaded.
+- **Commit after a load:** `git add app/data/mpf_drug_map.json` (plus any doc you changed — stage files by name, never
+  `git add .`).
+
 ## 11. Accuracy check against Medicare.gov — added Oct 31, 2026
 After any change to pricing or the year model (and after big loads):
 ```

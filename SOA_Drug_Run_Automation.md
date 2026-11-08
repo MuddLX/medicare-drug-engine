@@ -1,13 +1,101 @@
 # SOA Drug Run Automation — Complete Project Documentation
-*Last updated: October 31, 2026* (previous update: October 8, 2026)
+*Last updated: November 7, 2026* (previous updates: October 31, October 8, 2026)
 
-> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. **On 2026-10-08 Claude moved to AWS Bedrock (engine name clean-up + the n8n reading step), the Plans page and client records shipped in Roundabout, and only official numbers are shown as fact — start with the ⭐ October 8 box.** **On 2026-10-31 this doc was brought up to date with Oct 15–31: the Oct 15 CMS drug lists and networks, real 2027 prices from Medicare.gov Plan Finder, Medicare.gov's yearly method (incl. the Oct 29 $2,400-cap fix, checked against Medicare.gov), the drug-name reader fixes, Roundabout Phases 43–49 (v0.3.1: Submit opens the comparison) and the n8n node 2/3 changes — start with the ⭐ October 15–31 box.** Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
+> ⚠ **Read the CURRENT ARCHITECTURE section immediately below first — it is authoritative.** The detailed sections further down (What This Does, Architecture Overview, Node Map, etc.) are preserved reference from the pre-review-loop build (July 2026) and describe an earlier **single-pass** version of the pipeline. Where they differ from the Current Architecture section, this section wins. On 2026-09-10 this master doc absorbed the former standalone "CIS Review Loop (Phase 8)" and "Human-Readable Filenames (Option A)" build docs; those files were retired to keep the vault lean. On 2026-09-19 the **AEP Readiness Roadmap** was also merged into this doc (see the roadmap section below), so this is now the **single living document**. On 2026-09-23 all live project docs were consolidated into one vault folder, **`Projects/SOA Engine/`**: this master, the Phase 3 client-sheet doc (`Phase 3 — Client-Facing Plan Comparison PDF.md`), and its mockup. The used-up `Phase 3 — Pending Claude Code Prompts.md` moved to `Archive/`. The repo copy (`medicare_drug_engine\SOA_Drug_Run_Automation.md`) is still kept byte-identical to this vault master. **On 2026-10-02 the agent-chosen-plans architecture (decided with Jill Oct 1) was added — see the ⭐ October 2026 box at the top of Current Architecture and the OCTOBER 2026 UPDATE in the roadmap. It supersedes the system ranking plans and the high-confidence auto-report path.** **On 2026-10-07 the 2027 plan year went live (2027 database, county switch, new drug-name reader) — start with the ⭐ October 7 box; the reference sections on the API, databases, providers, drug names, refresh, cost calculation and the n8n Parse JSON node were rewritten the same day. **On 2026-10-08 Claude moved to AWS Bedrock (engine name clean-up + the n8n reading step), the Plans page and client records shipped in Roundabout, and only official numbers are shown as fact — start with the ⭐ October 8 box.** **On 2026-10-31 this doc was brought up to date with Oct 15–31: the Oct 15 CMS drug lists and networks, real 2027 prices from Medicare.gov Plan Finder, Medicare.gov's yearly method (incl. the Oct 29 $2,400-cap fix, checked against Medicare.gov), the drug-name reader fixes, Roundabout Phases 43–49 (v0.3.1: Submit opens the comparison) and the n8n node 2/3 changes — start with the ⭐ October 15–31 box.** **On 2026-11-07 the November 1–7 work was added: Jill's Oct 31 notes and the decisions on them, the no-dose rule, Roundabout Phases 50–51 (v0.4.0: Part D ranked cheapest first), two more drug loads (384 labels) and the capture-script pharmacy fix — start with the ⭐ November 1–7 box.** Companion docs in the repo: `README_REFRESH.md` (data routine) and `FUTURE_IMPROVEMENTS.md` (go-live blockers, known gaps).**
 
 ---
 
 ## ═══ CURRENT ARCHITECTURE (October 2026) ═══
 
 *Live, authoritative description. Folds in the former Phase 8 review-loop and Human-Readable Filenames build docs.*
+
+### ⭐ November 1–7, 2026 — Jill's notes · no-dose rule · Part D ranked · v0.4.0 · 384 drugs (read this first)
+*Authoritative as of Nov 7, 2026. Where anything further down (including the Oct 15–31 box) disagrees, this box wins.
+Everything in the Oct 15–31 box not mentioned here still stands.*
+
+**Where it stands (Nov 7):** Roundabout is at **v0.4.0** (release build, Nov 5). Part D plans are ranked cheapest first
+by yearly total in both plan pickers. A sheet with no dose is priced at Medicare.gov's usual strength and says so.
+The engine has **384** Medicare.gov drug labels and **69,988** prices on 46 plans. **Still test data only** (engine on
+Railway, no BAA) — the go-live blockers are unchanged.
+
+**1. Jill's notes (meeting Oct 31) — what was decided**
+| # | Jill's note | Decision (Jordon) | Status |
+|---|---|---|---|
+| 1 | Compare view: adding/removing plans is clunky, no prices in the add window, an icon disappears when clicked | New "Choose plans" window with prices | **Done** — Phase 50 |
+| 2 | Clients who write no dose | Price Medicare.gov's usual (default) strength and say so; unusual amounts are **flagged only** for now | **Done** — engine `439bbc5` |
+| 3 | Husband and wife on one sheet / one email | The reader spots two people and the app asks **"Split into 2 / Keep as one"**. Split = two sheets, two clients. Shared address and phone copied to both; drugs and doctors stay with the person they're listed under; anything unclear is flagged on **both**; the original scan is kept until **both** are submitted | **Not built** — needs the current n8n workflow export first |
+| 4 | A scan stuck "in progress" + a ghost row | Fix | **Done** — Phases 50–51 |
+| 5 | C-SNP plans | Only the three Jill can sell: **UHC Complete Care MN-7 (H2001-133)**, **UHC Complete Care Support MN-8 (H2001-134)**, **Allina Health Aetna Medicare Chronic (H3219-015)**. Nothing else she can't sell | **Not built** (see 5 below) |
+| 6 | Rank Part D cheapest to most expensive | Medicare.gov's way (yearly total), **Part D only** — Medicare Advantage keeps its order | **Done** — Phases 50–51 |
+| 7 | Missing drugs: oxybutynin, teriflunomide, colestipol | Capture and load | **Done** — loaded Nov 5 |
+
+**2. No dose on the sheet (engine, `439bbc5`, Oct 31)** — new `app/dose_defaults.py`
+- A drug written with **no strength** is priced at the strength Medicare.gov picks by default (the Medicare.gov labels
+  that weren't added by us count as its defaults). The cell says "(usual dose, none on sheet)".
+- If two strengths are equally likely, the engine **does not guess**: "no dose on sheet - add it". That drug is left
+  out of every total (amber "Dose needed / not on the sheet" on the internal PDF; `dose_needed` on `/compare-plans`).
+- Amount words ("1 tab", "2 times a day") are taken off before the drug is matched. An amount different from the
+  usual one is **flagged** (note), not re-priced.
+- 11 new tests (`tests/test_dose_defaults_20261031.py`).
+
+**3. Roundabout (Claude Code) — Phases 50–51, now v0.4.0**
+- **Phase 50 (v0.3.2):** on the Compare view, "+ Add a plan" opens **"Choose plans for this comparison"** — every
+  plan for the ZIP with checkboxes and prices, Part D ranked cheapest first; complete plans first, then a "Missing a
+  drug price — not ranked" divider. Fixed the plan icon that disappeared on click and the scan-matching rules behind the
+  ghost "in progress" row.
+- **Phase 51 (v0.4.0, release build, Nov 5):** the **review screen's plan picker** prices its plans in the background
+  (`POST /compare-plans` with the sheet's current drugs) and ranks Part D the same way. The picker never waits; if
+  pricing fails it lists the plans unranked with Retry. Editing a drug marks the ranking out of date ("Update costs").
+  A scan only counts as "already here" if the matching copy was changed in the **last 30 minutes** (a months-old file of
+  the same size no longer hides a new scan). Full suite: 1,831 passed after 8 pre-Phase-48 tests were updated.
+- `M:\Roundabout\CLAUDE.md` is kept up to date by Claude in chat (agreed Oct 31); code changes stay Claude Code only.
+- One known limit: pricing is asked once per plan list, so switching county on a two-county ZIP keeps the same totals
+  (the engine prices by ZIP).
+
+**4. Medicare.gov drug captures (Nov 5–7)**
+- **Nov 5 (`52ceeb5`):** searches 24–28 loaded — 33 new labels incl. **oxybutynin** (5 mg, 5 mg ER, 15 mg ER),
+  **teriflunomide** 7/14 mg, **colestipol** tablets + granules.
+- **Nov 7 (`f8610b5`):** searches 26 and 29 (Hennepin Advantage plans, batches N7 + N8) — 20 new labels: the generics
+  of **Entresto** (sacubitril/valsartan, 3 strengths), **Lunesta** (eszopiclone 1/2/3 mg), **Myrbetriq** (mirabegron
+  25/50), **Symbicort**, **Ciprodex**, **Restasis**, **Combigan**, **Lumigan**; Combivent, abiraterone, sotalol,
+  propafenone, candesartan 32, bethanechol, butalbital/APAP/caffeine. Tests: 923 passed.
+- **Now:** 384 labels, 69,988 prices, 46 plans.
+- **Held back on purpose (17 labels, "need a look"):** most are simply **not covered on any plan captured so far**
+  (e.g. sitagliptin, tiotropium, Lovaza, folic acid on the Hennepin plans; benzonatate, desvenlafaxine, Invokana on all
+  25 plans). The loader needs at least one covered row, so these load by themselves once a search finds a plan that
+  covers them. A few are bad labels (a stray " 1" on the end, a bowel-prep kit) — never loaded.
+- **Brands gone generic:** plans now list only the generic for Januvia, Entresto, Symbicort, Restasis, Myrbetriq,
+  Combigan, Spiriva, Tradjenta, Lumigan, Ventolin — the generics were added as batch N8.
+- **Lunesta:** not covered on Aetna, Medica and Wellcare Value Script (official CMS list); covered on 20 plans.
+  Eszopiclone (the generic) is now loaded.
+- **Medica Tier 6** = a $0 "select care" tier, and the deductible doesn't apply to it (checked on Medicare.gov, Nov 5).
+
+**5. C-SNP plans — what building it involves (not started)**
+`build_2027_db.py` `step_plans` skips all Special Needs Plan rows today. The drug lists are already in the Oct CMS file
+(`Monthly Prescription Drug Plan Formulary and Pharmacy Network Information/2026-10/2027_20261008.zip`): formulary
+**00027003** (UHC) and **00027016** (Allina/Aetna). Needs: load only those three plans, their prices captured on
+Medicare.gov, and a note that the client must qualify (diabetes, chronic heart failure or cardiovascular disease).
+
+**6. Capture script fixes (Med Search 6, Nov 5–7)**
+- **ZIP first** on the landing page, then the county (retries); stops if the ZIP box shows a different ZIP.
+- **"Could not tick pharmacy" — cause found and fixed (Nov 7).** Medicare.gov keeps up to 5 picked pharmacies **on its
+  side**, even after the script clears the browser's saved list. When the ZIP changed, the last ZIP's 5 stores stayed
+  in the "5 of 5 selected" bar, so the new ZIP's store (e.g. Coborn's #2033 at 55303) couldn't be ticked. This is the
+  same bug as search 22 (Oct 29). Fix: before picking, the script clicks **remove** on every store in the selection bar,
+  then unticks any checked box, and stops with a clear message if slots are still full. Mail Order is picked again
+  normally. Backup: `oneoff_output\medicare_monthly_route.before_chipclear.py`.
+- When a tick fails the script now saves a full-page screenshot (`pharmacy_tick_<time>.png`) and the page's buttons.
+- **Run order (Nov 5):** newest drugs at metro plans first, small towns later. Done: 5–21, 24–29. **Pending: 22, 23,
+  30–37** (Part D N8, Anoka N8, Buffalo, SE Minnesota, Bemidji, Pipestone). Re-run started Nov 7 1:29 pm with the fix.
+- **"NOT FOUND exactly"** in the log = Medicare.gov spells the drug differently (e.g. "Ciprodex" → it offers
+  "ciprofloxacin", "Cipro HC"). Not an error; the drug is skipped for that search. Each search also removes the last
+  search's drugs and adds the new list (2–4 minutes) — normal.
+
+**7. Still open (Nov 7)** — in addition to the Oct 15–31 box §9
+- Husband/wife split (needs the n8n workflow export) · Jill's three C-SNP plans · confirm the pharmacy fix on the
+  re-run, then load searches 30–37 (and 22–23) · rename the not-found drugs to Medicare.gov's spelling · **more than 3
+  Part D plans** in the picker (needs the internal PDF to fit more columns first) · Incoming folder rename to
+  "NEW FILES" — **paused** (Jordon, Nov 5).
 
 ### ⭐ October 15–31, 2026 — real 2027 Medicare.gov prices · Submit opens the comparison · checked against Medicare.gov (read this first)
 *Authoritative as of Oct 31, 2026. Where anything further down (including the Oct 8 and Oct 7 boxes) disagrees, this box
@@ -140,7 +228,7 @@ Review); **Save PDF…** asks which to make — **internal report (default)**, c
 - **Never work around Medicare.gov "Access Denied" blocks** — stop and wait hours.
 - Searches done: 1–21. Pending: 22–25 (small-town / SE Minnesota gaps), 26–27 (pregabalin strengths + clotrimazole troche
   on every Part D plan and the Anoka Advantage plans).
-- **Open bug (Oct 29, 6:19 pm):** search 22 (Bemidji, 56601) still stopped with "Could not tick pharmacy CVS Pharmacy
+- **Open bug (Oct 29, 6:19 pm) — cause found and fixed Nov 7, see the ⭐ November 1–7 box §6:** search 22 (Bemidji, 56601) still stopped with "Could not tick pharmacy CVS Pharmacy
   #10756" *after* the new-ZIP clear ran (the log shows "unticked 1 store(s) left over", then the small-town
   nearest-store pick, then the stop). The clear-on-new-ZIP fix is not enough on the small-town path — diagnose before
   re-running 22. Search 23 (Buffalo) was then blocked by Medicare.gov ("Access Denied"); 23–27 not attempted yet.
@@ -401,6 +489,29 @@ Confirm folder-based naming + resume twin, remove dead dedup nodes, main-path Fa
 *Created: August 27, 2026 · Owner: Jordon (MuddLX). Merged into this master doc on Sept 19, 2026 — the roadmap and the as-built doc are now a single living document.*
 
 > Quick capture so this lives outside a chat. The plan for getting the **internal** drug-run engine sharpened and AEP-ready (PY2027, ~Oct 15 – Dec 7, 2026). Naming note: this is really a "client information" engine now, but we're keeping the SOA name since we're far enough in.
+
+### ═══ NOVEMBER 2026 UPDATE ═══
+*Added Nov 7, 2026 (detail: the ⭐ November 1–7 box at the top). Newest entries first.*
+
+#### Nov 1–7, 2026 — summary
+- **Oct 31 (late)** — Jill's notes reviewed and decided (box §1). Engine `439bbc5` no-dose rule. Docs + Roundabout
+  CLAUDE.md brought up to date.
+- **Nov 1** — [Phase 50 → v0.3.2: "Choose plans" window with prices, Part D ranked; icon + ghost-row fixes.]
+- **Nov 5** — `52ceeb5` searches 24–28 loaded (33 labels: oxybutynin, teriflunomide, colestipol…). Batches N7 (49
+  drugs) and N8 (generics of brands gone generic + retries; 28 drugs) planned; searches re-ordered metro first.
+  [Phase 51 → **v0.4.0** release build: review picker priced in the background, Part D ranked; 30-minute scan rule.]
+  Couples and C-SNP decisions made (box §1).
+- **Nov 7** — `f8610b5` searches 26 + 29 loaded (20 labels: Entresto, Lunesta, Myrbetriq, Symbicort generics…).
+  Pharmacy "Could not tick" cause found (Medicare.gov's 5-store bar keeps the last ZIP's picks) and fixed; fill
+  re-run started. Docs updated (this entry).
+
+#### Remaining before AEP / real clients (as of Nov 7)
+1. **Go-live blockers** (unchanged since Oct 8): engine to AWS under the BAA · access key on the engine endpoints ·
+   street-address lookups off or on AWS · n8n Bedrock key expiry · AWS written BAA confirmation.
+2. Finish fill searches 22–23 and 30–37, then ~10 realistic blind searches as proof on everyday lists.
+3. Husband/wife split · Jill's three C-SNP plans.
+4. OTC items as "OTC — not a Part D drug"; Pipestone H2461-010 first-month gap; the 4 failed search-21 plans.
+5. November CMS file; 2027 stars; injectables still unpriced; Jill's sign-off check against Medicare.gov.
 
 ### ═══ OCTOBER 2026 UPDATE ═══
 *Last updated: Oct 8, 2026 (Oct 8 detail: the ⭐ October 8 box at the top). Oct 15–31 entries added Oct 31, 2026 (detail: the ⭐ October 15–31 box). The September section below is preserved as history; this section is the live picture (newest entries first).*
