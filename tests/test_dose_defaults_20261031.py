@@ -74,7 +74,9 @@ def test_blank_gabapentin_priced_as_the_usual_300mg_and_flagged(engine):
     written, _ = engine("Gabapentin", "300 mg")
     assert blank["dose_assumed"] and blank["dosage"].startswith("300mg")
     assert blank["plans"]["P"]["annual_total"] == written["plans"]["P"]["annual_total"]
-    assert any("no dose on the sheet" in w["flag"] for w in warns)
+    # 2026-11-08 (Jordon): a priced usual strength is not a top-of-report warning any more; the note stays on the drug
+    assert not any("no dose on the sheet" in w["flag"] for w in warns)
+    assert "usual strength" in blank["dose_note"]
 
 
 @needs_db
@@ -122,3 +124,12 @@ def test_the_dose_column_says_what_was_assumed(engine):
     assert engine("Gabapentin", "")[0]["dosage"] == "300mg capsule" + D.ASSUMED_SUFFIX
     assert engine("Ketoconazole", "")[0]["dosage"] == D.NEEDED_TEXT
     assert engine("Atorvastatin", "40 mg twice daily")[0]["dosage"] == "40 mg twice daily (priced for 30 a month)"
+
+
+@needs_db
+def test_only_strength_on_file_says_so_and_is_not_a_top_warning(engine):
+    """2026-11-08: dorzolamide came in from a later fill search, so Medicare.gov's own pick isn't known - the dose
+    column says it's the only strength on file (not "usual dose"), and nothing goes in the top box."""
+    d, warns = engine("Dorzolamide", "")
+    assert d["dose_assumed"] and d["dosage"] == "2% solution" + D.ONLY_SUFFIX
+    assert not any("no dose on the sheet" in w["flag"] for w in warns)

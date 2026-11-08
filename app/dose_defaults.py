@@ -167,6 +167,7 @@ def amount_check(conn, rxcuis, dosage):
 
 # What the report and the app show in the dose column (engine-side wording, so no new app version is needed).
 ASSUMED_SUFFIX = " (usual dose, none on sheet)"
+ONLY_SUFFIX = " (only strength on file, none on sheet)"     # not Medicare.gov's pick: the one strength we have prices for
 NEEDED_TEXT = "no dose on sheet - add it"
 
 

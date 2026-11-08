@@ -168,7 +168,8 @@ def pharmacy_summary(label, drug_detail, months):
     for drug in drug_detail or []:
         for pc in drug.get("plans", {}).get(label, {}).get("pharmacy_costs", []) or []:
             t = totals.setdefault(pc["name"], {"annual": 0.0, "distance": pc.get("distance_miles", 99),
-                                               "approx": pc.get("dist_approximate", False), "monthly": {}})
+                                               "approx": pc.get("dist_approximate", False), "monthly": {},
+                                               "preferred": bool(pc.get("preferred"))})
             t["annual"] += pc.get("annual_total", 0) or 0
             for m in pc.get("monthly_costs", []) or []:
                 t["monthly"][m["month"]] = t["monthly"].get(m["month"], 0) + (m["cost"] or 0)
@@ -213,7 +214,16 @@ def pharmacy_summary(label, drug_detail, months):
             mail_month[m["month"]] = mail_month.get(m["month"], 0) + (m["cost"] or 0)
     mail_series = [mail_month.get(mn, 0) for mn in months] if months else []
     mail_annual = None if (mail_partial or not mail_month) else sum(mail_month.values())   # $0 by mail is a real answer
+    # Every nearby store's own price (2026-11-08: the pharmacy grid shows each one, not only the cheapest)
+    stores = []
+    for nm, t in totals.items():
+        series = [t["monthly"].get(mn, 0) for mn in months] if months else []
+        stores.append({"full": nm, "chain": _short_pharmacy(nm), "distance": t["distance"], "approx": t["approx"],
+                       "annual": t["annual"], "preferred": t["preferred"],
+                       "month": _typical_month(series) if series else t["annual"] / 12})
+    stores.sort(key=lambda st: (st["distance"], st["chain"]))
     return {
+        "stores": stores,
         "name": _short_pharmacy(cheapest),
         "distance": ("~" if c["approx"] else "") + f"{c['distance']} mi",
         "steady": steady,
@@ -280,6 +290,107 @@ def pharmacy_where(sm):
     if not sm:
         return None
     return "same at all nearby" if sm["all_same"] else f"{sm['name']} · {sm['distance']}"
+
+
+GRID_NOTE = ("Each nearby in-network pharmacy's price, from Medicare.gov; the cheapest for each plan is in bold. "
+             "The deductible rows are at that cheapest pharmacy.")
+GRID_MAX_STORES = 4        # nearest stores shown, plus any plan's cheapest store if it's farther out
+
+
+def _dist(miles, approx=False):
+    return ("~" if approx else "") + f"{miles:g} mi"
+
+
+def pharmacy_grid(summaries, deductibles=None, narrow=None):
+    """The pharmacy section as a grid (2026-11-08, Jordon: "what's the price at each pharmacy, and which is cheapest").
+
+    summaries:   {plan label: pharmacy_summary() or None}
+    deductibles: {plan label: the plan's drug deductible in dollars, or None if unknown}
+    Returns (rows, cells):
+      rows  = [(key, label, sub)] in display order - one row per nearby store (nearest first), mail order, then the
+              deductible story at that plan's cheapest store (when it's met, the monthly cost until then and after),
+              and the yearly cap
+      cells = {plan label: {key: (value, detail, cheapest)}}; a plan with no prices gets {} (the caller shows a dash).
+    Stores are grouped by chain: "Walgreens" is one row even if two plans' nearest Walgreens differ (the farther one
+    says its own distance)."""
+    deductibles = deductibles or {}
+    if narrow is None:          # 7+ plans side by side: "$5.00/mo" alone, or the price wraps and 10 plans miss one page
+        narrow = len(summaries) > 6
+    nearest = {}
+    for sm in summaries.values():
+        for st in (sm or {}).get("stores") or []:
+            if st["chain"] not in nearest or st["distance"] < nearest[st["chain"]]["distance"]:
+                nearest[st["chain"]] = st
+    order = sorted(nearest, key=lambda ch: (nearest[ch]["distance"], ch))[:GRID_MAX_STORES]
+    for sm in summaries.values():           # never hide the store a plan's yearly cost is priced at
+        if sm and sm["stores"]:
+            low = min(round(st["annual"], 2) for st in sm["stores"])
+            for st in sm["stores"]:
+                if round(st["annual"], 2) == low and st["chain"] not in order:
+                    order.append(st["chain"])
+                    break
+    # "CVS · 1 mi" on one line (a second label line makes every store row two lines tall)
+    rows = [("store:" + ch, f"{ch} · {_dist(nearest[ch]['distance'], nearest[ch]['approx'])}", "") for ch in order]
+    # One page matters (10 plans): the deductible month rides under the "until" cost, and the cap row only shows
+    # when some plan reaches it.
+    rows += [("mail", "Mail order", ""),
+             ("until", "Until the deductible is met", "at the cheapest pharmacy"),
+             ("after", "After the deductible", "")]
+    if any(sm and sm.get("cap_reached") for sm in summaries.values()):
+        rows.append(("cap", f"{_money(DY.oop_cap(), cents=False)} drug cap", "yearly limit"))
+
+    cells = {}
+    for label, sm in summaries.items():
+        if not sm or not sm.get("stores"):
+            cells[label] = {}
+            continue
+        c = {}
+        mine = {}
+        for st in sm["stores"]:
+            if st["chain"] not in mine or st["distance"] < mine[st["chain"]]["distance"]:
+                mine[st["chain"]] = st
+        low = min(round(st["annual"], 2) for st in sm["stores"])
+        all_same = len({round(st["annual"], 2) for st in sm["stores"]}) <= 1
+        for ch in order:
+            st = mine.get(ch)
+            if not st:
+                c["store:" + ch] = ("—", "not nearby in network", False)
+                continue
+            cheapest = (not all_same) and round(st["annual"], 2) == low
+            # one line ("$5.00/mo · $60/yr") so 10 plans still fit one page; the cheapest is bold, not a word
+            parts = []
+            if abs(st["distance"] - nearest[ch]["distance"]) > 0.25:
+                parts.append(_dist(st["distance"], st["approx"]))
+            if st["preferred"]:
+                parts.append("preferred")
+            price = f"{_money(st['month'])}/mo" + ("" if narrow else f" · {_money(st['annual'], cents=False)}/yr")
+            c["store:" + ch] = (price, " · ".join(parts), cheapest)
+        if sm.get("mail_annual") is not None:
+            diff = sm["mail_saves"]
+            vs = (f"saves {_money(diff, cents=False)}" if diff > 1 else
+                  f"{_money(-diff, cents=False)} more" if diff < -1 else "about the same")
+            c["mail"] = (f"{_money(sm['mail_monthly'])}/mo · {_money(sm['mail_annual'], cents=False)}/yr", vs, diff > 1)
+        elif sm.get("mail_partial"):
+            c["mail"] = ("—", "no mail order" if sm.get("mail_none") else "not all drugs by mail", False)
+        else:
+            c["mail"] = ("—", "", False)
+        steady = f"{_money(sm['steady'])} a month"
+        ramp = sm.get("ramp_spans") or sm.get("ramp") or []
+        until = cost_rows(sm)["first"][0] if ramp else steady
+        ded = deductibles.get(label)
+        if ded is not None and ded <= 0:
+            c["until"] = ("No deductible", "", False)
+            c["after"] = (steady, "", False)
+        elif sm.get("ded_met"):
+            c["until"] = (until, f"met in {sm['ded_met']}", False)
+            c["after"] = (steady, "", False)
+        else:
+            c["until"] = (until, "not met this year", False)
+            c["after"] = ("—", "", False)          # the row above already says "not met this year"
+        cap_value, cap_detail = cost_rows(sm)["cap"]
+        c["cap"] = (cap_value, cap_detail or "", False)
+        cells[label] = c
+    return rows, cells
 
 
 def _cheapest_field(label, drug_detail, pharmacy_name, key):
@@ -632,17 +743,14 @@ def render(client_name, dob, zip_code, soa_date, plan_summaries, drug_detail, mo
             group(f"PHARMACY — NEAREST IN-NETWORK TO {where.upper()}")
             summaries = {l: pharmacy_summary(l, drug_detail, months) for l in cols}
             # Lacey (2026-10-03): yearly cost first, and WHEN the deductible is met / the cap is reached.
-            # 2026-10-24: one labelled full-size row per fact (the month detail used to be tiny grey text).
-            per_plan = {l: cost_rows(summaries[l]) for l in cols}
-            for key, label_txt, sub_txt in COST_ROWS:
-                if key == "cap":
-                    label_txt = f"{_money(DY.oop_cap(), cents=False)} drug cap"
-                row = [[Paragraph(label_txt, lab)] + ([Paragraph(sub_txt, lab_sub)] if sub_txt else [])]
+            # 2026-11-08 (Jordon): a grid - every nearby store's price per plan, the cheapest in bold, mail order,
+            # then the deductible story (when it's met, the monthly cost until then and after) at the cheapest store.
+            grid_rows, grid = pharmacy_grid(summaries, {l: (plan_summaries.get(l) or {}).get("deductible") for l in cols})
+            for key, label_txt, sub_txt in grid_rows:
+                row = [[Paragraph(escape(label_txt), lab)] + ([Paragraph(escape(sub_txt), lab_sub)] if sub_txt else [])]
                 for l in cols:
-                    value, detail = per_plan[l][key]
-                    if key == "year" and not summaries[l]:
-                        value = "No data"
-                    row.append(C(value, detail, cell_b if key in STRONG_ROWS else None))
+                    value, detail, cheapest = grid[l].get(key) or ("—", "", False)
+                    row.append(C(value, detail or None, cell_b if cheapest else None))
                 rows.append(row)
 
         # doctors

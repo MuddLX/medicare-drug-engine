@@ -166,6 +166,7 @@ def compare(data):
 
         from app.client_benefits import lookup_benefits, format_benefits
         out_plans = []
+        grid_in, grid_ded = {}, {}       # plan label -> pharmacy summary / drug deductible, for the pharmacy grid
         for p in listed:
             k = (p["contract_id"], p["plan_id"])
             label = label_of[k]
@@ -178,6 +179,8 @@ def compare(data):
             except Exception:
                 benefits = {}
             pharm = pharmacy_summary(label, detail, months) if (costs_ok and networks_ok) else None
+            grid_in[label] = pharm
+            grid_ded[label] = p.get("drug_deductible")
             cells, counts = [], {"covered": 0, "not_covered": 0, "list_not_out": 0, "not_identified": 0,
                                  "verify_injectable": 0, "price_unknown": 0}
             ded_met = cap_reached = None
@@ -234,11 +237,10 @@ def compare(data):
                     "typical_month": _money(pharm["steady"]),
                     "mail_order_year": _money(pharm["mail_annual"]),
                     "mail_order_saves": _money(pharm["mail_saves"]) if pharm["mail_annual"] is not None else None},
-                # Costs & pharmacy section (2026-10-24): the same labelled rows as the internal PDF, already worded,
-                # in COST_ROWS order (labels in the top-level "cost_section"). Blank when there are no real prices.
-                "cost_rows": ([{"key": key, "value": v, "detail": d or ""}
-                               for key, (v, d) in ((kk, IP.cost_rows(pharm)[kk]) for kk, _, _ in IP.COST_ROWS)]
-                              if pharm else []),
+                # Costs & pharmacy section: the same grid as the internal PDF (2026-11-08), already worded. Filled
+                # in below, once every plan's stores are known (the rows are the stores across all plans).
+                "cost_rows": [],
+                "_grid_label": label,
                 "star_rating": benefits.get("star_rating") if stars_ok else None,
                 "benefits": {k2: v for k2, v in benefits.items() if k2 != "star_rating"} or None,
                 "doctors": [{"name": _written_name(doc), "system": doc.get("system") or "",
@@ -248,6 +250,16 @@ def compare(data):
             })
     finally:
         conn.close()
+
+    # Pharmacy grid (2026-11-08): rows are every nearby store across the plans, so it's built after the loop.
+    grid_rows, grid = IP.pharmacy_grid(grid_in, grid_ded, narrow=False)   # the app has room for "$x/mo · $y/yr"
+    for p in out_plans:
+        cells = grid.get(p.pop("_grid_label"), {})
+        # the PDF bolds a plan's cheapest store; the app can't, so it says so in the small line
+        p["cost_rows"] = [{"key": key, "value": cells[key][0],
+                           "detail": " · ".join(x for x in (cells[key][1],
+                                                            "cheapest" if cells[key][2] and key.startswith("store:") else "") if x)}
+                          for key, _, _ in grid_rows if key in cells]
 
     # "Not counted" (2026-10-24): what's left out of each plan's estimate. Drugs left out of EVERY priced plan are
     # said once ("not_counted_all"); each plan's note names only the rest, so the plan cards stay short.
@@ -276,9 +288,8 @@ def compare(data):
     return {
         "zip_code": zip_code,
         "cost_section": {"title": "Costs & pharmacy",
-                         "rows": [{"key": k, "label": lab, "sub": sub, "strong": k in IP.STRONG_ROWS}
-                                  for k, lab, sub in IP.COST_ROWS],
-                         "note": "Cheapest in-network pharmacy near the client, using Medicare.gov prices."},
+                         "rows": [{"key": k, "label": lab, "sub": sub, "strong": False} for k, lab, sub in grid_rows],
+                         "note": IP.GRID_NOTE},
         "not_counted_all": [{"drug": n, "why": w} for n, w in shared],
         "not_counted_all_note": ("Not counted on any plan: " + ", ".join(f"{n} ({w})" for n, w in shared)) if shared else "",
         "county": choice["county"], "county_exact": bool(choice["exact"]),

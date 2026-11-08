@@ -1893,15 +1893,19 @@ def compute_drug_costs(drugs, zip_code, soa_date, client_address=None, client_ci
                 if choice.label:
                     rxcuis = choice.rxcuis
                     generic_rx = _same_strength_generics(generic_rx, rxcuis)
-                    drug_result["dosage"] = choice.strength + dose_defaults.ASSUMED_SUFFIX
+                    drug_result["dosage"] = choice.strength + (dose_defaults.ONLY_SUFFIX if choice.kind == "only"
+                                                               else dose_defaults.ASSUMED_SUFFIX)
                     drug_result["dose_assumed"] = True
                 else:
                     dose_needed = True
                     drug_result["dose_needed"] = True
                     drug_result["dosage"] = dose_defaults.NEEDED_TEXT
                 drug_result["dose_note"] = choice.flag()
-                warnings.append({"drug": original_name or drug_name, "normalized_to": read_as,
-                                 "flag": choice.flag()})
+                # 2026-11-08 (Jordon): most sheets have no dose, so a priced strength isn't a warning - the dose
+                # column already says "usual dose, none on sheet". Only "add the dose" (nothing priced) goes up top.
+                if not choice.label:
+                    warnings.append({"drug": original_name or drug_name, "normalized_to": read_as,
+                                     "flag": choice.flag()})
         if resolved and rxcuis and mpf_mode() and not dose_needed:
             note, priced_qty = dose_defaults.amount_check(conn, rxcuis, dosage)
             if note:
